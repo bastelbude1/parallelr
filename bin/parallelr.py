@@ -727,27 +727,28 @@ class ParallelTaskManager:
         self.executor = None
         self.futures = {}
         self.shutdown_requested = False
-        
+
+        # Create timestamp for this session (used across all log files)
+        self.timestamp = self.config.get_custom_timestamp()
+
         self.logger = self._setup_logging()
-        
-        timestamp = self.config.get_custom_timestamp()
-        self.summary_log_file = self.log_dir / f"parallelr_{self.process_id}_{timestamp}_summary.csv"
+
+        self.summary_log_file = self.log_dir / f"parallelr_{self.process_id}_{self.timestamp}_summary.csv"
         self._log_lock = threading.Lock()
         self._init_summary_log()
 
         self.log_task_output = log_task_output
-        self.task_results_file = self.log_dir / f"parallelr_{self.process_id}_{timestamp}_output.txt"
+        self.task_results_file = self.log_dir / f"parallelr_{self.process_id}_{self.timestamp}_output.txt"
 
     def _setup_logging(self):
         """Set up logging with size-based rotation."""
         import logging.handlers
 
-        logger = logging.getLogger(f'parallelr_{self.process_id}')
+        logger = logging.getLogger(f'parallelr_{self.process_id}_{self.timestamp}')
         logger.setLevel(getattr(logging, self.config.logging.level.upper()))
         logger.handlers.clear()
-        
-        log_prefix = self.config.get_process_log_prefix(self.process_id)
-        log_filename = f'{log_prefix}.log'
+
+        log_filename = f'parallelr_{self.process_id}_{self.timestamp}.log'
         max_bytes = self.config.logging.max_log_size_mb * 1024 * 1024
         
         file_handler = logging.handlers.RotatingFileHandler(
@@ -1044,7 +1045,7 @@ Auto-Stop Protection:
 - Stop Limits: {stop_enabled}{stop_details}
 
 Log Files:
-- Main Log: {self.log_dir / f'parallelr_{self.process_id}.log'} (rotating)
+- Main Log: {self.log_dir / f'parallelr_{self.process_id}_{self.timestamp}.log'} (rotating)
 - Summary: {self.summary_log_file} (session-specific)
 - Output: {self.task_results_file} (disable with --no-task-output-log)
 
@@ -1157,15 +1158,23 @@ def list_workers(script_path):
                     start_time = "unknown"
             
             log_dir = config.get_log_directory()
-            log_file = f"parallelr_{pid}.log"
 
+            # Find most recent log file for this PID
+            log_pattern = f"parallelr_{pid}_*.log"
+            log_files = list(log_dir.glob(log_pattern))
+            if log_files:
+                log_file = max(log_files, key=lambda f: f.stat().st_mtime).name
+            else:
+                log_file = "no log found"
+
+            # Find most recent summary file for this PID
             summary_pattern = f"parallelr_{pid}_*_summary.csv"
             summary_files = list(log_dir.glob(summary_pattern))
             if summary_files:
                 summary_file = max(summary_files, key=lambda f: f.stat().st_mtime).name
             else:
                 summary_file = "no summary found"
-            
+
             print(f"{pid:<8} {status:<10} {start_time:<20} {log_file:<30} {summary_file}")
             
         except Exception as e:
@@ -1173,7 +1182,7 @@ def list_workers(script_path):
     
     print()
     print("Commands:")
-    print(f"  View logs:        tail -f {config.get_log_directory()}/parallelr_<PID>.log")
+    print(f"  View logs:        tail -f {config.get_log_directory()}/parallelr_<PID>_*.log")
     print(f"  View progress:    tail -f {config.get_log_directory()}/parallelr_<PID>_*_summary.csv")
     print(f"  Kill specific:    python {script_name} -k <PID>")
     print(f"  Kill all:         python {script_name} -k")
