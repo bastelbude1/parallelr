@@ -1,0 +1,45 @@
+# Parallel Task Executor Configuration - Script Defaults
+# This file defines system limits and defaults for all users
+
+# Core execution limits with maximum allowed values
+
+limits:
+  max_workers: 20              # Default number of parallel workers
+  timeout_seconds: 600         # Default task timeout in seconds (10 minutes)
+  wait_time: 0.1               # Polling interval in seconds
+  max_output_capture: 1000     # Maximum characters of output to capture
+
+  # Maximum values users are allowed to override
+  max_allowed_workers: 100     # Users cannot exceed this worker count
+  max_allowed_timeout: 3600    # Users cannot exceed 1 hour timeout
+  max_allowed_output: 10000    # Users cannot exceed this output capture
+
+  # Auto-stop protection (disabled by default - must be explicitly enabled)
+  stop_limits_enabled: false     # Enable with --enable-stop-limits or config
+  max_consecutive_failures: 5    # Stop after N consecutive task failures
+  max_failure_rate: 0.5          # Stop if >50% of tasks fail
+  min_tasks_for_rate_check: 10   # Need at least N tasks before checking failure rate
+
+# Security settings
+security:
+  max_argument_length: 1000    # Maximum length for command arguments
+
+# Task execution settings
+execution:
+  workspace_isolation: false  # Default: shared workspace, true: isolated per worker
+  use_process_groups: true    # Enable process group management
+
+# Logging configuration
+logging:
+  level: "INFO"               # Log level: DEBUG, INFO, WARNING, ERROR, CRITICAL
+  console_format: "%(asctime)s - %(levelname)s - %(message)s"
+  file_format: "%(asctime)s - %(name)s - %(levelname)s - [%(threadName)s] - %(message)s"
+  custom_date_format: "%d%b%y_%H%M%S"  # Format: 17Jun25_181623
+  max_log_size_mb: 10         # Log file size before rotation (MB)
+  backup_count: 5             # Number of backup log files to keep
+
+# Advanced settings (optional)
+advanced:
+  max_file_size: 1048576      # Maximum task file size (1MB)
+  memory_limit_mb: null       # Memory limit per worker (MB) - null means no limit
+  retry_failed_tasks: false   # Whether to retry failed tasks

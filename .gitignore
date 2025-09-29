@@ -1,0 +1,43 @@
+# Claude Code files
+.claude/
+*.claude
+
+# Credentials and sensitive data
+*.pem
+*.key
+*_rsa
+*_ed25519
+*.pub
+credentials.json
+secrets.yaml
+.env
+.env.*
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info/
+dist/
+build/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Logs and runtime data
+*.log
+*.csv
+*.txt
+logs/
+pids/
+workspace/
+
+# OS
+.DS_Store
+Thumbs.db

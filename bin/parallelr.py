@@ -1,0 +1,1532 @@
+#!/usr/bin/env python3
+"""
+Parallel Task Executor - Python 3.6.8 Compatible
+
+A robust parallel task execution framework with simplified configuration
+and practical security measures.
+"""
+
+import os
+import sys
+from pathlib import Path
+
+# Add custom library path if configured
+def add_custom_lib_path():
+    """Add custom library path if configured."""
+    # Add project lib path first
+    script_dir = Path(__file__).resolve().parent
+    project_lib = script_dir.parent / 'lib'
+    if project_lib.exists() and str(project_lib) not in sys.path:
+        sys.path.insert(0, str(project_lib))
+
+    # Then add custom path from environment variable
+    custom_path = os.getenv('PARALLELR_LIB_PATH', '/app/COOL/lib')
+    if custom_path and Path(custom_path).exists():
+        if custom_path not in sys.path:
+            sys.path.insert(0, custom_path)
+
+add_custom_lib_path()
+
+import argparse
+import time
+import logging
+import signal
+import threading
+import subprocess
+import queue
+import csv
+import json
+import shlex
+import select
+import errno
+import fcntl
+from pathlib import Path
+from datetime import datetime
+from concurrent.futures import ThreadPoolExecutor, Future, as_completed
+from enum import Enum
+
+# Optional imports with fallbacks
+try:
+    import yaml # type: ignore
+    HAS_YAML = True
+except ImportError:
+    HAS_YAML = False
+
+try:
+    import psutil # type: ignore
+    HAS_PSUTIL = True
+except ImportError:
+    HAS_PSUTIL = False
+
+class TaskStatus(Enum):
+    PENDING = "PENDING"
+    RUNNING = "RUNNING"
+    SUCCESS = "SUCCESS"
+    TIMEOUT = "TIMEOUT"
+    ERROR = "ERROR"
+    CANCELLED = "CANCELLED"
+    FAILED = "FAILED"
+
+class TaskResult:
+    """Data class for task execution results."""
+    def __init__(self, task_file, command, start_time, end_time=None, status=None, 
+                 exit_code=None, stdout="", stderr="", error_message="", duration=0.0,
+                 worker_id=0, memory_usage=0.0, cpu_usage=0.0):
+        self.task_file = task_file
+        self.command = command
+        self.start_time = start_time
+        self.end_time = end_time
+        self.status = status
+        self.exit_code = exit_code
+        self.stdout = stdout
+        self.stderr = stderr
+        self.error_message = error_message
+        self.duration = duration
+        self.worker_id = worker_id
+        self.memory_usage = memory_usage
+        self.cpu_usage = cpu_usage
+
+    def to_log_line(self):
+        """Convert task result to CSV log line with process info."""
+        end_time_str = self.end_time.isoformat() if self.end_time else ''
+        exit_code_str = self.exit_code if self.exit_code is not None else ''
+        error_msg_str = self.error_message.replace(';', '|') if self.error_message else ''
+        
+        return f"{self.start_time.isoformat()};{end_time_str};{self.status.value};{os.getpid()};{self.worker_id};{self.task_file};{self.command};{exit_code_str};{self.duration:.2f};{self.memory_usage:.2f};{self.cpu_usage:.2f};{error_msg_str}"
+
+class ParallelTaskExecutorError(Exception):
+    pass
+
+class SecurityError(ParallelTaskExecutorError):
+    pass
+
+class ConfigurationError(ParallelTaskExecutorError):
+    pass
+
+class LimitsConfig:
+    """Core execution limits with user override protection."""
+    def __init__(self):
+        self.max_workers = 20
+        self.timeout_seconds = 600
+        self.wait_time = 0.1
+        self.max_output_capture = 1000
+        self.max_allowed_workers = 100
+        self.max_allowed_timeout = 3600
+        self.max_allowed_output = 10000
+        self.stop_limits_enabled = False
+        self.max_consecutive_failures = 5
+        self.max_failure_rate = 0.5
+        self.min_tasks_for_rate_check = 10
+
+class SecurityConfig:
+    """Basic security settings."""
+    def __init__(self):
+        self.max_argument_length = 1000
+
+class ExecutionConfig:
+    """Task execution settings."""
+    def __init__(self):
+        self.workspace_isolation = False
+        self.use_process_groups = True
+
+class LoggingConfig:
+    """Logging configuration."""
+    def __init__(self):
+        self.level = "INFO"
+        self.console_format = "%(asctime)s - %(levelname)s - %(message)s"
+        self.file_format = "%(asctime)s - %(name)s - %(levelname)s - [%(threadName)s] - %(message)s"
+        self.custom_date_format = "%d%b%y_%H%M%S"
+        self.max_log_size_mb = 10
+        self.backup_count = 5
+
+class AdvancedConfig:
+    """Optional advanced settings."""
+    def __init__(self):
+        self.max_file_size = 1048576
+        self.memory_limit_mb = None
+        self.retry_failed_tasks = False
+
+class Configuration:
+    """Configuration manager with script defaults and optional user overrides."""
+    
+    def __init__(self, script_path):
+        self.script_name = Path(script_path).stem
+        self.script_config_path = self._get_script_config_path(script_path)
+        self.user_config_path = self._get_user_config_path()
+        
+        # Initialize with defaults
+        self.limits = LimitsConfig()
+        self.security = SecurityConfig()
+        self.execution = ExecutionConfig()
+        self.logging = LoggingConfig()
+        self.advanced = AdvancedConfig()
+        
+        # Load script config first, then user config
+        self._load_script_config()
+        self._load_user_config()
+
+    def _get_script_config_path(self, script_path):
+        """Get script config path: ../cfg/<script_name>.yaml"""
+        script_dir = Path(script_path).resolve().parent
+        cfg_dir = script_dir.parent / 'cfg'
+        return cfg_dir / f"{self.script_name}.yaml"
+
+    def _get_user_config_path(self):
+        """Get user config path: ~/<script_name>/cfg/<script_name>.yaml"""
+        home_dir = Path.home()
+        user_cfg_dir = home_dir / self.script_name / 'cfg'
+        return user_cfg_dir / f"{self.script_name}.yaml"
+
+    def _load_script_config(self):
+        """Load script configuration with system limits."""
+        try:
+            if not self.script_config_path.exists():
+                return
+                
+            with open(str(self.script_config_path), 'r') as f:
+                if self.script_config_path.suffix in ['.yaml', '.yml']:
+                    if not HAS_YAML:
+                        return
+                    config_data = yaml.safe_load(f)
+                else:
+                    return
+            
+            self._apply_config(config_data or {})
+            
+        except (FileNotFoundError, PermissionError) as e:
+            print(f"Warning: Cannot access script config: {e}")
+        except Exception as e:
+            print(f"Warning: Script config load failed, using defaults: {e}")
+
+    def _load_user_config(self):
+        """Load user configuration with validation against limits."""
+        try:
+            if not self.user_config_path.exists():
+                return
+                
+            with open(str(self.user_config_path), 'r') as f:
+                if self.user_config_path.suffix in ['.yaml', '.yml']:
+                    if not HAS_YAML:
+                        return
+                    user_config = yaml.safe_load(f)
+                else:
+                    return
+            
+            self._apply_user_config(user_config or {})
+            
+        except (FileNotFoundError, PermissionError) as e:
+            print(f"Warning: Cannot access user config: {e}")
+        except Exception as e:
+            print(f"Warning: User config load failed, using script defaults: {e}")
+
+    def _apply_config(self, config_data):
+        """Apply configuration data to instances."""
+        sections = {
+            'limits': self.limits,
+            'security': self.security,
+            'execution': self.execution,
+            'logging': self.logging,
+            'advanced': self.advanced
+        }
+
+        for section_name, section_instance in sections.items():
+            if section_name in config_data:
+                self._update_instance(section_instance, config_data[section_name])
+
+    def _apply_user_config(self, config_data):
+        """Apply user configuration with limits validation."""
+        allowed_sections = {
+            'limits': self.limits,
+            'execution': self.execution,
+            'logging': self.logging,
+            'advanced': self.advanced
+        }
+
+        for section_name, section_instance in allowed_sections.items():
+            if section_name in config_data:
+                if section_name == 'limits':
+                    self._update_limits_with_validation(section_instance, config_data[section_name])
+                else:
+                    self._update_instance(section_instance, config_data[section_name])
+
+    def _update_instance(self, instance, data):
+        """Update instance with dictionary data."""
+        for key, value in data.items():
+            if hasattr(instance, key):
+                current_value = getattr(instance, key)
+                if current_value is not None:
+                    expected_type = type(current_value)
+                    if not isinstance(value, expected_type):
+                        try:
+                            if expected_type == bool and isinstance(value, str):
+                                value = value.lower() in ('true', '1', 'yes', 'on')
+                            else:
+                                value = expected_type(value)
+                        except (ValueError, TypeError):
+                            raise ConfigurationError(f"Invalid type for {key}: expected {expected_type.__name__}, got {type(value).__name__}")
+                setattr(instance, key, value)
+
+    def _update_limits_with_validation(self, limits_instance, data):
+        """Update limits with validation against maximum allowed values."""
+        for key, value in data.items():
+            if hasattr(limits_instance, key) and not key.startswith('max_allowed_'):
+                # Validate against max_allowed_* values
+                if key == 'max_workers' and value > limits_instance.max_allowed_workers:
+                    print(f"Warning: User max_workers ({value}) exceeds limit ({limits_instance.max_allowed_workers}), using limit")
+                    value = limits_instance.max_allowed_workers
+                elif key == 'timeout_seconds' and value > limits_instance.max_allowed_timeout:
+                    print(f"Warning: User timeout_seconds ({value}) exceeds limit ({limits_instance.max_allowed_timeout}), using limit")
+                    value = limits_instance.max_allowed_timeout
+                elif key == 'max_output_capture' and value > limits_instance.max_allowed_output:
+                    print(f"Warning: User max_output_capture ({value}) exceeds limit ({limits_instance.max_allowed_output}), using limit")
+                    value = limits_instance.max_allowed_output
+                
+                setattr(limits_instance, key, value)
+
+    def validate(self):
+        """Validate configuration settings."""
+        errors = []
+        
+        if self.limits.max_workers <= 0:
+            errors.append("max_workers must be positive")
+        if self.limits.timeout_seconds <= 0:
+            errors.append("timeout_seconds must be positive")
+        if self.limits.wait_time < 0:
+            errors.append("wait_time cannot be negative")
+        
+        valid_levels = ['DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL']
+        if self.logging.level.upper() not in valid_levels:
+            errors.append(f"Invalid log level: {self.logging.level}")
+        
+        if self.advanced.max_file_size <= 0:
+            errors.append("max_file_size must be positive")
+        
+        try:
+            self.get_custom_timestamp()
+        except Exception:
+            errors.append("custom_date_format is invalid")
+        
+        if errors:
+            error_list = "\n".join(f"  - {error}" for error in errors)
+            raise ConfigurationError(f"Configuration validation failed:\n{error_list}")
+
+    def get_working_directory(self, worker_id=None, process_id=None):
+        """Get working directory - shared or isolated based on config."""
+        home_dir = Path.home()
+        base_workspace = home_dir / self.script_name / "workspace"
+        
+        if self.execution.workspace_isolation and worker_id is not None and process_id is not None:
+            worker_workspace = base_workspace / f"pid{process_id}_worker{worker_id}"
+            worker_workspace.mkdir(parents=True, exist_ok=True)
+            return worker_workspace
+        else:
+            base_workspace.mkdir(parents=True, exist_ok=True)
+            return base_workspace
+
+    def get_worker_workspace(self, worker_id, process_id):
+        """Get workspace for specific worker."""
+        return self.get_working_directory(worker_id, process_id)
+
+    def get_log_directory(self):
+        """Get log directory in user's home: ~/<script_name>/logs"""
+        home_dir = Path.home()
+        log_dir = home_dir / self.script_name / "logs"
+        log_dir.mkdir(parents=True, exist_ok=True)
+        return log_dir
+
+    def get_pidfile_path(self):
+        """Get path for PID file."""
+        home_dir = Path.home()
+        pid_dir = home_dir / self.script_name / "pids"
+        pid_dir.mkdir(parents=True, exist_ok=True)
+        return pid_dir / f"{self.script_name}.pids"
+
+    def register_process(self, process_id):
+        """Register this process in the PID file."""
+        pidfile = self.get_pidfile_path()
+        try:
+            existing_pids = set()
+            if pidfile.exists():
+                with open(str(pidfile), 'r') as f:
+                    for line in f:
+                        pid = line.strip()
+                        if pid.isdigit():
+                            existing_pids.add(int(pid))
+            
+            existing_pids.add(process_id)
+            
+            with open(str(pidfile), 'w') as f:
+                for pid in sorted(existing_pids):
+                    f.write(f"{pid}\n")
+                    
+        except Exception as e:
+            print(f"Warning: Could not register process: {e}")
+
+    def unregister_process(self, process_id):
+        """Remove this process from the PID file."""
+        pidfile = self.get_pidfile_path()
+        try:
+            if not pidfile.exists():
+                return
+                
+            existing_pids = set()
+            with open(str(pidfile), 'r') as f:
+                for line in f:
+                    pid = line.strip()
+                    if pid.isdigit():
+                        existing_pids.add(int(pid))
+            
+            existing_pids.discard(process_id)
+            
+            if existing_pids:
+                with open(str(pidfile), 'w') as f:
+                    for pid in sorted(existing_pids):
+                        f.write(f"{pid}\n")
+            else:
+                pidfile.unlink()
+                
+        except Exception as e:
+            print(f"Warning: Could not unregister process: {e}")
+
+    def get_running_processes(self):
+        """Get list of registered running processes."""
+        pidfile = self.get_pidfile_path()
+        if not pidfile.exists():
+            return []
+            
+        try:
+            pids = []
+            with open(str(pidfile), 'r') as f:
+                for line in f:
+                    pid = line.strip()
+                    if pid.isdigit():
+                        try:
+                            if HAS_PSUTIL:
+                                if psutil.pid_exists(int(pid)):
+                                    pids.append(int(pid))
+                            else:
+                                os.kill(int(pid), 0)
+                                pids.append(int(pid))
+                        except (OSError, ProcessLookupError):
+                            pass
+            return pids
+        except Exception:
+            return []
+
+    def get_custom_timestamp(self):
+        """Get custom formatted timestamp."""
+        return datetime.now().strftime(self.logging.custom_date_format)
+
+    def get_process_log_prefix(self, process_id):
+        """Get simplified log file prefix."""
+        return f"tasker_{process_id}"
+
+    @classmethod
+    def from_script(cls, script_path):
+        """Create configuration for given script."""
+        return cls(script_path)
+
+    def __str__(self):
+        """String representation of configuration."""
+        workspace_type = "isolated per worker" if self.execution.workspace_isolation else "shared"
+        return f"""Configuration for {self.script_name}:
+  Workers: {self.limits.max_workers} (max allowed: {self.limits.max_allowed_workers})
+  Timeout: {self.limits.timeout_seconds}s (max allowed: {self.limits.max_allowed_timeout}s)
+  Log Level: {self.logging.level}
+  Workspace: {workspace_type}
+  Working Dir: {self.get_working_directory()}
+  Log Dir: {self.get_log_directory()}
+  Stop Limits: {"Enabled" if self.limits.stop_limits_enabled else "Disabled"}
+  Script Config: {self.script_config_path} (exists: {self.script_config_path.exists()})
+  User Config: {self.user_config_path} (exists: {self.user_config_path.exists()})"""
+
+class SecureTaskExecutor:
+    """Simplified task executor with basic security validation."""
+    
+    def __init__(self, task_file, command_template, timeout, worker_id, logger, config):
+        self.task_file = task_file
+        self.command_template = command_template
+        self.timeout = timeout
+        self.worker_id = worker_id
+        self.logger = logger
+        self.config = config
+        self._process = None
+        self._cancelled = False
+
+    def _validate_task_file_security(self, task_file):
+        """Basic security validation for task file."""
+        try:
+            if os.path.getsize(task_file) > self.config.advanced.max_file_size:
+                raise SecurityError(f"Task file too large: {task_file}")
+        except OSError:
+            raise SecurityError(f"Cannot access task file: {task_file}")
+
+    def _build_secure_command(self, task_file):
+        """Build command arguments with basic security validation."""
+        abs_task_file = str(Path(task_file).resolve())
+        command_str = self.command_template.replace("@TASK@", abs_task_file)
+        #command_str = self.command_template.replace("@TASK@", task_file)
+        
+        try:
+            args = shlex.split(command_str)
+        except ValueError as e:
+            raise SecurityError(f"Invalid command syntax: {e}")
+        
+        if not args:
+            raise SecurityError("Empty command after parsing")
+        
+        for arg in args:
+            if len(arg) > self.config.security.max_argument_length:
+                raise SecurityError(f"Argument too long: {len(arg)} characters")
+        
+        return args
+
+    def _monitor_process(self):
+        """Monitor process resource usage."""
+        if not HAS_PSUTIL or not self._process:
+            return 0.0, 0.0
+            
+        try:
+            process = psutil.Process(self._process.pid)
+            memory_mb = process.memory_info().rss / 1024 / 1024
+            cpu_percent = process.cpu_percent()
+            return memory_mb, cpu_percent
+        except:
+            return 0.0, 0.0
+
+    def execute(self):
+        """Execute task with basic security and monitoring."""
+        start_time = datetime.now()
+        
+        result = TaskResult(
+            task_file=self.task_file,
+            command="",
+            start_time=start_time,
+            end_time=None,
+            status=TaskStatus.PENDING,
+            exit_code=None,
+            stdout="",
+            stderr="",
+            error_message="",
+            duration=0.0,
+            worker_id=self.worker_id,
+            memory_usage=0.0,
+            cpu_usage=0.0
+        )
+
+        # fix buffer issue 
+        stdout_lines = []
+        stderr_lines = []
+         
+        try:
+            self._validate_task_file_security(self.task_file)
+            command_args = self._build_secure_command(self.task_file)
+            result.command = ' '.join(command_args)
+            
+            self.logger.info(f"Worker {self.worker_id}: Starting task {self.task_file}")
+            result.status = TaskStatus.RUNNING
+            
+            if self._cancelled:
+                result.status = TaskStatus.CANCELLED
+                result.error_message = "Task cancelled"
+                return result
+            
+            if self.config.execution.workspace_isolation:
+                work_dir = self.config.get_worker_workspace(self.worker_id, os.getpid())
+            else:
+                work_dir = self.config.get_working_directory()
+            
+            self._process = subprocess.Popen(
+                command_args,
+                shell=False,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                universal_newlines=True,
+                bufsize=0,  # Unbuffered
+                cwd=str(work_dir)
+            )
+            
+            try:
+                # Real-time output capture with timeout handling
+                stdout_fd = self._process.stdout.fileno()
+                stderr_fd = self._process.stderr.fileno()
+
+                # Make file descriptors non-blocking
+                fl = fcntl.fcntl(stdout_fd, fcntl.F_GETFL)
+                fcntl.fcntl(stdout_fd, fcntl.F_SETFL, fl | os.O_NONBLOCK)
+                fl = fcntl.fcntl(stderr_fd, fcntl.F_GETFL)
+                fcntl.fcntl(stderr_fd, fcntl.F_SETFL, fl | os.O_NONBLOCK)
+                timeout_time = time.time() + self.timeout
+
+                while self._process.poll() is None:
+                    if time.time() > timeout_time:
+                        raise subprocess.TimeoutExpired(command_args, self.timeout)
+
+                    # Monitor resource usage during execution
+                    current_memory, current_cpu = self._monitor_process()
+                    if current_memory > result.memory_usage:
+                        result.memory_usage = current_memory
+                    if current_cpu > result.cpu_usage:
+                        result.cpu_usage = current_cpu
+
+                    # Check for available data
+                    ready, _, _ = select.select([stdout_fd, stderr_fd], [], [], 0.1)
+
+                    for fd in ready:
+                        try:
+                            if fd == stdout_fd:
+                                data = os.read(fd, 4096).decode('utf-8', errors='replace')
+                                if data:
+                                    stdout_lines.append(data)
+                            elif fd == stderr_fd:
+                                data = os.read(fd, 4096).decode('utf-8', errors='replace')
+                                if data:
+                                    stderr_lines.append(data)
+                        except OSError as e:
+                            if e.errno != errno.EAGAIN:
+                                break
+
+                # Read any remaining output
+                try:
+                    remaining_stdout = self._process.stdout.read()
+                    if remaining_stdout:
+                        stdout_lines.append(remaining_stdout)
+                except:
+                    pass
+
+                try:
+                    remaining_stderr = self._process.stderr.read()
+                    if remaining_stderr:
+                        stderr_lines.append(remaining_stderr)
+                except:
+                    pass
+
+                # Get resource uage before process completion 
+                memory_usage, cpu_usage = self._monitor_process()
+                result.memory_usage = memory_usage
+                result.cpu_usage = cpu_usage
+
+                # Wait for process completion
+                self._process.wait()
+                result.exit_code = self._process.returncode
+
+                # Combine captured output
+                stdout = ''.join(stdout_lines)
+                stderr = ''.join(stderr_lines)
+                max_capture = self.config.limits.max_output_capture
+                result.stdout = stdout[:max_capture]
+                result.stderr = stderr[:max_capture]
+                if result.exit_code == 0:
+                    result.status = TaskStatus.SUCCESS
+                    self.logger.info("Worker {}: Task completed successfully".format(self.worker_id))
+                else:
+                    result.status = TaskStatus.FAILED
+                    result.error_message = "Exit code {}".format(result.exit_code)
+
+            except subprocess.TimeoutExpired:
+                result.status = TaskStatus.TIMEOUT
+                result.error_message = "Timeout after {}s".format(self.timeout)
+
+                # Capture any output before terminating
+                stdout = ''.join(stdout_lines)
+                stderr = ''.join(stderr_lines)
+                max_capture = self.config.limits.max_output_capture
+                result.stdout = stdout[:max_capture]
+                result.stderr = stderr[:max_capture]
+                self._terminate_process()
+                 
+            except subprocess.TimeoutExpired:
+                result.status = TaskStatus.TIMEOUT
+                result.error_message = f"Timeout after {self.timeout}s"
+                self._terminate_process()
+        
+        except SecurityError as e:
+            result.status = TaskStatus.ERROR
+            result.error_message = f"Security error: {e}"
+        except Exception as e:
+            result.status = TaskStatus.ERROR
+            result.error_message = f"Error: {e}"
+            # Capture any partial output
+            stdout = ''.join(stdout_lines)
+            stderr = ''.join(stderr_lines)
+            max_capture = self.config.limits.max_output_capture
+            result.stdout = stdout[:max_capture]
+            result.stderr = stderr[:max_capture]
+        
+        finally:
+            result.end_time = datetime.now()
+            result.duration = (result.end_time - result.start_time).total_seconds()
+            self._process = None
+        
+        return result
+
+    def _terminate_process(self):
+        """Safely terminate the running process."""
+        if self._process:
+            try:
+                self._process.terminate()
+                try:
+                    self._process.wait(timeout=5)
+                except subprocess.TimeoutExpired:
+                    self._process.kill()
+            except:
+                pass
+
+    def cancel(self):
+        """Cancel the running task."""
+        self._cancelled = True
+        self._terminate_process()
+
+class ParallelTaskManager:
+    """Main parallel task execution manager."""
+    
+    def __init__(self, max_workers, timeout, wait_time, tasks_dir, command_template, 
+                 script_path, dry_run=False, enable_stop_limits=False, log_task_output=False):
+        
+        self.config = Configuration.from_script(script_path)
+        self.config.validate()
+        
+        if max_workers is not None:
+            self.config.limits.max_workers = max_workers
+        if timeout is not None:
+            self.config.limits.timeout_seconds = timeout
+        if wait_time is not None:
+            self.config.limits.wait_time = wait_time
+        
+        if enable_stop_limits:
+            self.config.limits.stop_limits_enabled = True
+        
+        self.max_workers = self.config.limits.max_workers
+        self.timeout = self.config.limits.timeout_seconds
+        self.wait_time = self.config.limits.wait_time
+        self.tasks_dir = Path(tasks_dir)
+        self.command_template = command_template
+        self.dry_run = dry_run
+        
+        self.log_dir = self.config.get_log_directory()
+        self.process_id = os.getpid()
+        
+        self.config.register_process(self.process_id)
+        
+        self.consecutive_failures = 0
+        self.total_completed = 0
+        
+        self.task_files = []
+        self.completed_tasks = []
+        self.failed_tasks = []
+        self.running_tasks = {}
+        self.executor = None
+        self.futures = {}
+        self.shutdown_requested = False
+        
+        self.logger = self._setup_logging()
+        
+        timestamp = self.config.get_custom_timestamp()
+        self.summary_log_file = self.log_dir / f"summary_{self.process_id}_{timestamp}.csv"
+        self._log_lock = threading.Lock()
+        self._init_summary_log()
+
+        self.log_task_output = log_task_output
+        self.task_results_file = self.log_dir / f"TaskResults_{self.process_id}_{timestamp}.txt"
+
+    def _setup_logging(self):
+        """Set up logging with size-based rotation."""
+        import logging.handlers
+        
+        logger = logging.getLogger(f'tasker_{self.process_id}')
+        logger.setLevel(getattr(logging, self.config.logging.level.upper()))
+        logger.handlers.clear()
+        
+        log_prefix = self.config.get_process_log_prefix(self.process_id)
+        log_filename = f'{log_prefix}.log'
+        max_bytes = self.config.logging.max_log_size_mb * 1024 * 1024
+        
+        file_handler = logging.handlers.RotatingFileHandler(
+            str(self.log_dir / log_filename),
+            maxBytes=max_bytes,
+            backupCount=self.config.logging.backup_count
+        )
+        
+        enhanced_format = f"%(asctime)s - P{self.process_id} - %(levelname)s - [%(threadName)s] - %(message)s"
+        file_handler.setFormatter(logging.Formatter(enhanced_format))
+        logger.addHandler(file_handler)
+        
+        # Console handler only if not daemon
+        if os.getppid() != 1:
+            console_format = f"%(asctime)s - P{self.process_id} - %(levelname)s - %(message)s"
+            console_handler = logging.StreamHandler(sys.stdout)
+            console_handler.setFormatter(logging.Formatter(console_format))
+            logger.addHandler(console_handler)
+        
+        return logger
+
+    def _init_summary_log(self):
+        """Initialize the summary CSV log file."""
+        if not self.dry_run:
+            try:
+                with self._log_lock:
+                    with open(str(self.summary_log_file), 'w', newline='', encoding='utf-8') as f:
+                        writer = csv.writer(f, delimiter=';')
+                        writer.writerow([
+                            'start_time', 'end_time', 'status', 'process_id', 'worker_id', 
+                            'task_file', 'command', 'exit_code', 'duration_seconds', 
+                            'memory_mb', 'cpu_percent', 'error_message'
+                        ])
+            except Exception as e:
+                raise ParallelTaskExecutorError(f"Failed to init summary log: {e}")
+
+    def _discover_tasks(self):
+        """Discover task files with basic validation."""
+        task_files = []
+        
+        try:
+            if not self.tasks_dir.exists():
+                raise ParallelTaskExecutorError(f"Tasks directory does not exist: {self.tasks_dir}")
+            
+            for file_path in self.tasks_dir.iterdir():
+                if file_path.is_file():
+                    task_files.append(str(file_path))
+            
+            if not task_files:
+                raise ParallelTaskExecutorError(f"No task files found in {self.tasks_dir}")
+            
+            task_files.sort()
+            self.logger.info(f"Discovered {len(task_files)} task files")
+            return task_files
+            
+        except Exception as e:
+            raise ParallelTaskExecutorError(f"Failed to discover task files: {e}")
+
+    def _check_error_limits(self):
+        """Check if error limits are exceeded."""
+        if not self.config.limits.stop_limits_enabled:
+            return False
+        
+        if self.consecutive_failures >= self.config.limits.max_consecutive_failures:
+            self.logger.error(f"Auto-stop: {self.consecutive_failures} consecutive failures (limit: {self.config.limits.max_consecutive_failures})")
+            return True
+        
+        if self.total_completed >= self.config.limits.min_tasks_for_rate_check:
+            failure_rate = len(self.failed_tasks) / self.total_completed
+            if failure_rate > self.config.limits.max_failure_rate:
+                self.logger.error(f"Auto-stop: {failure_rate:.1%} failure rate exceeds limit ({self.config.limits.max_failure_rate:.0%})")
+                return True
+        
+        return False
+
+    def _handle_completed_task(self, future, task_file):
+        """Handle completion of a task with error tracking."""
+        try:
+            result = future.result()
+            self._log_task_result(result)
+            self.total_completed += 1
+            
+            if result.status == TaskStatus.SUCCESS:
+                self.completed_tasks.append(result)
+                self.consecutive_failures = 0
+                self.logger.info(f"Task completed: {task_file}")
+            else:
+                self.failed_tasks.append(result)
+                if self.config.limits.stop_limits_enabled:
+                    self.consecutive_failures += 1
+                    
+                if result.status == TaskStatus.TIMEOUT:
+                    self.logger.warning(f"Task timed out after {self.timeout}s: {task_file}")
+                else:
+                    self.logger.warning(f"Task failed: {task_file} - {result.error_message}")
+                
+                if self.config.limits.stop_limits_enabled and self._check_error_limits():
+                    self.shutdown_requested = True
+            
+            if task_file in self.running_tasks:
+                del self.running_tasks[task_file]
+            if future in self.futures:
+                del self.futures[future]
+                
+        except Exception as e:
+            self.logger.error(f"Error handling task {task_file}: {e}")
+            if self.config.limits.stop_limits_enabled:
+                self.consecutive_failures += 1
+
+    def _log_task_result(self, result):
+        """Log task result to summary file."""
+        if not self.dry_run:
+            try:
+                with self._log_lock:
+                    with open(str(self.summary_log_file), 'a', newline='', encoding='utf-8') as f:
+                        f.write(result.to_log_line() + '\n')
+            except Exception as e:
+                self.logger.error(f"Log write failed: {e}")
+
+        if self.log_task_output and not self.dry_run:
+            try:
+                timestamp = self.config.get_custom_timestamp()
+                #task_results_file = self.log_dir / f"TaskResults_{self.process_id}_{timestamp}.txt"
+                with self._log_lock:
+                    with open(str(self.task_results_file), 'a', encoding='utf-8') as f:
+                        f.write(f"\n{'='*80}\n")
+                        f.write(f"Task: {result.task_file}\n")
+                        f.write(f"Worker: {result.worker_id}\n")
+                        f.write(f"Command: {result.command}\n")
+                        f.write(f"Status: {result.status.value}\n")
+                        f.write(f"Exit Code: {result.exit_code}\n")
+                        f.write(f"Duration: {result.duration:.2f}s\n")
+                        f.write(f"Memory: {result.memory_usage:.2f}MB\n")
+                        f.write(f"Start: {result.start_time}\n")
+                        f.write(f"End: {result.end_time}\n")
+                        if result.stdout:
+                            f.write(f"\nSTDOUT:\n{result.stdout}\n")
+                        if result.stderr:
+                            f.write(f"\nSTDERR:\n{result.stderr}\n")
+                        if result.error_message:
+                            f.write(f"\nERROR: {result.error_message}\n")
+            except Exception as e:
+                self.logger.error(f"TaskResults log write failed: {e}")
+
+    def _setup_signal_handlers(self):
+        """Set up signal handlers for graceful shutdown."""
+        def signal_handler(signum, frame):
+            self.logger.info(f"Received signal {signum}, initiating graceful shutdown...")
+            self.shutdown_requested = True
+        
+        signal.signal(signal.SIGTERM, signal_handler)
+        signal.signal(signal.SIGINT, signal_handler)
+        signal.signal(signal.SIGHUP, signal.SIG_IGN)
+
+    def execute_tasks(self):
+        """Execute all tasks."""
+        self.logger.info("Starting parallel execution")
+        
+        try:
+            self.task_files = self._discover_tasks()
+            total_tasks = len(self.task_files)
+            
+            self.logger.info(f"Executing {total_tasks} tasks with {self.max_workers} workers")
+            
+            if self.dry_run:
+                self.logger.info("DRY RUN MODE")
+                for i, task_file in enumerate(self.task_files, 1):
+                    command = self.command_template.replace("@TASK@", task_file)
+                    self.logger.info(f"[{i}/{total_tasks}]: {command}")
+                return {'total': total_tasks, 'completed': 0, 'failed': 0, 'cancelled': 0}
+            
+            with ThreadPoolExecutor(max_workers=self.max_workers) as executor:
+                task_queue = queue.Queue()
+                for task_file in self.task_files:
+                    task_queue.put(task_file)
+                
+                worker_counter = 0
+                
+                while not task_queue.empty() or self.futures:
+                    if self.shutdown_requested:
+                        if self.config.limits.stop_limits_enabled:
+                            self.logger.info("Auto-stop triggered due to error limits")
+                        else:
+                            self.logger.info("Shutdown requested")
+                        break
+                    
+                    while len(self.futures) < self.max_workers and not task_queue.empty():
+                        if self.shutdown_requested:
+                            break
+                            
+                        task_file = task_queue.get()
+                        worker_counter += 1
+                        
+                        task_executor = SecureTaskExecutor(
+                            task_file, self.command_template, self.timeout,
+                            worker_counter, self.logger, self.config
+                        )
+                        
+                        future = executor.submit(task_executor.execute)
+                        self.futures[future] = task_file
+                        self.running_tasks[task_file] = task_executor
+                    
+                    if self.futures:
+                        try:
+                            for future in as_completed(self.futures.keys(), timeout=self.wait_time):
+                                task_file = self.futures[future]
+                                self._handle_completed_task(future, task_file)
+                                break
+                        except:
+                            time.sleep(self.wait_time)
+                
+                if self.shutdown_requested:
+                    self.logger.info("Cancelling remaining tasks...")
+                    for task_executor in self.running_tasks.values():
+                        task_executor.cancel()
+
+            self.config.unregister_process(self.process_id)
+            
+            stats = {
+                'total': total_tasks,
+                'completed': len(self.completed_tasks),
+                'failed': len(self.failed_tasks),
+                'cancelled': total_tasks - len(self.completed_tasks) - len(self.failed_tasks)
+            }
+            
+            self.logger.info(f"Execution completed: {stats}")
+            return stats
+            
+        except Exception as e:
+            self.logger.error(f"Fatal error during task execution: {e}")
+            raise
+
+    def get_summary_report(self):
+        """Generate a summary report of the execution."""
+        total = len(self.task_files) if self.task_files else 0
+        completed = len(self.completed_tasks)
+        failed = len(self.failed_tasks)
+        
+        if not self.completed_tasks and not self.failed_tasks:
+            return "No tasks were executed."
+        
+        if self.completed_tasks:
+            durations = [task.duration for task in self.completed_tasks]
+            avg_duration = sum(durations) / len(durations)
+            max_duration = max(durations)
+            min_duration = min(durations)
+            
+            memory_usage = [task.memory_usage for task in self.completed_tasks]
+            avg_memory = sum(memory_usage) / len(memory_usage)
+            max_memory = max(memory_usage)
+        else:
+            avg_duration = max_duration = min_duration = 0
+            avg_memory = max_memory = 0
+        
+        success_rate = (completed / total * 100) if total > 0 else 0
+
+        workspace_type = "Isolated per worker" if self.config.execution.workspace_isolation else "Shared"
+        stop_enabled = "Enabled" if self.config.limits.stop_limits_enabled else "Disabled"
+
+        stop_details = ""
+        if self.config.limits.stop_limits_enabled:
+            stop_details = f"\n- Max Consecutive Failures: {self.config.limits.max_consecutive_failures}"
+            stop_details += f"\n- Max Failure Rate: {self.config.limits.max_failure_rate:.0%}"
+
+        # Resource monitoring info
+        resource_info = ""
+        if HAS_PSUTIL:
+            resource_info = f"""- Average Memory Usage: {avg_memory:.2f}MB
+- Peak Memory Usage: {max_memory:.2f}MB"""
+        else:
+            resource_info = "- Memory/CPU monitoring: Not available (psutil not installed)"
+
+        report = f"""
+Parallel Task Execution Summary
+===============================
+Total Tasks: {total}
+Completed Successfully: {completed}
+Failed: {failed}
+Cancelled: {total - completed - failed}
+Success Rate: {success_rate:.1f}%
+
+Performance Statistics:
+- Average Duration: {avg_duration:.2f}s
+- Maximum Duration: {max_duration:.2f}s
+- Minimum Duration: {min_duration:.2f}s
+{resource_info}
+
+Directories:
+- Working Dir: {self.config.get_working_directory()}
+- Workspace Type: {workspace_type}
+- Log Dir: {self.log_dir}
+
+Auto-Stop Protection:
+- Stop Limits: {stop_enabled}{stop_details}
+
+Log Files:
+- Main Log: {self.log_dir / f'tasker_{self.process_id}.log'} (rotating)
+- Summary: {self.summary_log_file} (session-specific)
+- TaskResults: {self.task_results_file} (only with --log-task-output)
+
+Process Info:
+- Process ID: {self.process_id}
+- Workers: {self.max_workers}
+"""
+        return report
+
+# Helper functions for daemon mode
+def daemonize():
+    """Daemonize the current process using double-fork technique."""
+    try:
+        pid = os.fork()
+        if pid > 0:
+            sys.exit(0)
+    except OSError as e:
+        print(f"Fork #1 failed: {e}", file=sys.stderr)
+        sys.exit(1)
+
+    os.chdir('/')
+    os.setsid()
+    os.umask(0)
+
+    try:
+        pid = os.fork()
+        if pid > 0:
+            sys.exit(0)
+    except OSError as e:
+        print(f"Fork #2 failed: {e}", file=sys.stderr)
+        sys.exit(1)
+
+    sys.stdout.flush()
+    sys.stderr.flush()
+    
+    with open(os.devnull, 'r') as dev_null_r:
+        os.dup2(dev_null_r.fileno(), sys.stdin.fileno())
+    
+    with open(os.devnull, 'w') as dev_null_w:
+        os.dup2(dev_null_w.fileno(), sys.stdout.fileno())
+        os.dup2(dev_null_w.fileno(), sys.stderr.fileno())
+
+    return True
+
+def is_daemon_supported():
+    """Check if daemon mode is supported."""
+    return hasattr(os, 'fork') and os.name != 'nt'
+
+def start_daemon_process(script_path, args):
+    """Start the parallel tasker as a daemon process."""
+    if not is_daemon_supported():
+        print("Error: Daemon mode not supported on this platform (Windows)", file=sys.stderr)
+        return 1
+    
+    print("Starting parallel-tasker as daemon...")
+    print(f"Task directory: {args.TasksDir}")
+    print(f"Command template: {args.Command}")
+    print(f"Workers: {args.max or 'default'}")
+    print(f"Timeout: {args.timeout or 'default'}")
+    print(f"Stop limits: {'enabled' if args.enable_stop_limits else 'disabled'}")
+    
+    config = Configuration.from_script(script_path)
+    log_dir = config.get_log_directory()
+    pid_file = config.get_pidfile_path()
+    
+    print(f"Logs will be written to: {log_dir}")
+    print(f"PID tracking: {pid_file}")
+    print()
+    print("Daemonizing...")
+    
+    if daemonize():
+        return None
+    
+    return 1
+
+def list_workers(script_path):
+    """List running parallel-tasker processes."""
+    config = Configuration.from_script(script_path)
+    running_pids = config.get_running_processes()
+    
+    if not running_pids:
+        print("No running parallel-tasker processes found.")
+        return
+    
+    print(f"Found {len(running_pids)} running parallel-tasker process(es):")
+    print()
+    print(f"{'PID':<8} {'Status':<10} {'Start Time':<20} {'Log File':<30} {'Summary File'}")
+    print("-" * 100)
+    
+    for pid in running_pids:
+        try:
+            if HAS_PSUTIL:
+                try:
+                    proc = psutil.Process(pid)
+                    status = proc.status()
+                    start_time = datetime.fromtimestamp(proc.create_time()).strftime("%Y-%m-%d %H:%M:%S")
+                except (psutil.NoSuchProcess, psutil.AccessDenied):
+                    status = "unknown"
+                    start_time = "unknown"
+            else:
+                try:
+                    os.kill(pid, 0)
+                    status = "running"
+                    start_time = "unknown"
+                except OSError:
+                    status = "dead"
+                    start_time = "unknown"
+            
+            log_dir = config.get_log_directory()
+            log_file = f"tasker_{pid}.log"
+            
+            summary_pattern = f"summary_{pid}_*.csv"
+            summary_files = list(log_dir.glob(summary_pattern))
+            if summary_files:
+                summary_file = max(summary_files, key=lambda f: f.stat().st_mtime).name
+            else:
+                summary_file = "no summary found"
+            
+            print(f"{pid:<8} {status:<10} {start_time:<20} {log_file:<30} {summary_file}")
+            
+        except Exception as e:
+            print(f"{pid:<8} {'error':<10} {'unknown':<20} {'error reading info':<30} {str(e)}")
+    
+    print()
+    print("Commands:")
+    print(f"  View logs:        tail -f {config.get_log_directory()}/tasker_<PID>.log")
+    print(f"  View progress:    tail -f {config.get_log_directory()}/summary_<PID>_*.csv")
+    print(f"  Kill specific:    python {os.path.basename(script_path)} -k <PID>")
+    print(f"  Kill all:         python {os.path.basename(script_path)} -k")
+
+def kill_processes(script_path, target_pid=None):
+    """Kill parallel-tasker processes - DANGEROUS OPERATION."""
+    config = Configuration.from_script(script_path)
+    running_pids = config.get_running_processes()
+    
+    if not running_pids:
+        print("No running parallel-tasker processes found to kill.")
+        return
+    
+    if target_pid is None:
+        print(f"⚠️  WARNING: This will kill ALL {len(running_pids)} running parallel-tasker processes!")
+        print(f"PIDs to be killed: {running_pids}")
+        response = input("Are you sure? Type 'yes' to confirm: ")
+        if response.lower() != 'yes':
+            print("Kill operation cancelled.")
+            return
+    
+    if target_pid:
+        if target_pid in running_pids:
+            try:
+                os.kill(target_pid, signal.SIGTERM)
+                print(f"✓ Sent termination signal to process {target_pid}")
+                
+                time.sleep(2)
+                try:
+                    os.kill(target_pid, 0)
+                    os.kill(target_pid, signal.SIGKILL)
+                    print(f"✓ Force killed process {target_pid}")
+                except OSError:
+                    print(f"✓ Process {target_pid} terminated gracefully")
+                    
+                config.unregister_process(target_pid)
+                    
+            except OSError as e:
+                print(f"✗ Failed to kill process {target_pid}: {e}")
+        else:
+            print(f"✗ Process {target_pid} not found in running processes.")
+            print(f"Use --list-workers to see current processes: {running_pids}")
+    else:
+        print(f"Killing {len(running_pids)} processes...")
+        killed_count = 0
+        
+        for pid in running_pids:
+            try:
+                os.kill(pid, signal.SIGTERM)
+                print(f"✓ Sent termination signal to process {pid}")
+                killed_count += 1
+            except OSError as e:
+                print(f"✗ Failed to signal process {pid}: {e}")
+        
+        if killed_count > 0:
+            print("Waiting 3 seconds for graceful shutdown...")
+            time.sleep(3)
+            
+            for pid in running_pids:
+                try:
+                    os.kill(pid, 0)
+                    os.kill(pid, signal.SIGKILL)
+                    print(f"✓ Force killed process {pid}")
+                except OSError:
+                    pass
+            
+            pidfile = config.get_pidfile_path()
+            if pidfile.exists():
+                pidfile.unlink()
+                print("✓ Cleaned up PID file")
+        
+        print(f"✓ Kill operation completed for {killed_count} processes")
+
+def parse_arguments():
+    """Parse and validate command line arguments."""
+    parser = argparse.ArgumentParser(
+        description="Parallel Task Executor - Python 3.6.8 Compatible",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+Examples:
+  # Execute tasks (foreground)
+  python parallel-tasker.py -T ./tasks -C "python3 @TASK@" -r
+  
+  # Execute tasks (background/detached)
+  python parallel-tasker.py -T ./tasks -C "python3 @TASK@" -r -d
+  
+  # List running workers (safe)
+  python parallel-tasker.py --list-workers
+  
+  # Kill all running instances (dangerous)
+  python parallel-tasker.py -k
+        """
+    )
+    
+    parser.add_argument('-m', '--max', type=int, default=None,
+                       help='Maximum parallel tasks (overrides config)')
+    
+    parser.add_argument('-t', '--timeout', type=int, default=None,
+                       help='Task timeout in seconds (overrides config)')
+    
+    parser.add_argument('-w', '--wait', type=float, default=None,
+                       help='Wait time before checking for free slots (overrides config)')
+    
+    parser.add_argument('-T', '--TasksDir',
+                       help='Directory containing task files')
+    
+    parser.add_argument('-C', '--Command', 
+                       help='Command template with @TASK@ pattern to execute')
+    
+    parser.add_argument('-r', '--run', action='store_true',
+                       help='Execute tasks (default is dry-run)')
+
+    parser.add_argument('-d', '--daemon', action='store_true',
+                       help='Run as background daemon (detached from user session)')
+
+    parser.add_argument('--enable-stop-limits', action='store_true',
+                       help='Enable auto-stop on consecutive failures or high failure rate')
+
+    parser.add_argument('--list-workers', action='store_true',
+                       help='List running parallel-tasker processes (safe)')
+
+    parser.add_argument('-k', '--kill', nargs='?', const='all', metavar='PID',
+                       help='Kill processes: -k (all) or -k PID (specific) - DANGEROUS!')
+    
+    parser.add_argument('--validate-config', action='store_true',
+                       help='Validate configuration file and exit')
+
+    parser.add_argument('--show-config', action='store_true',
+                       help='Show current configuration and recommended location')
+
+    parser.add_argument('--log-task-output', action='store_true',
+                       help='Enable detailed task output logging to TaskResults file')
+
+    args = parser.parse_args()
+
+    if args.list_workers or args.kill is not None:
+        return args
+
+    if not args.validate_config and not args.show_config:
+        missing_args = []
+        if not args.TasksDir:
+            missing_args.append("--TasksDir")
+        if not args.Command:
+            missing_args.append("--Command")
+        if missing_args:
+            parser.error(f"The following arguments are required: {', '.join(missing_args)}")
+
+    return args
+
+def get_default_config_content():
+    """Get default script configuration file content."""
+    return """# Parallel Task Executor Configuration - Script Defaults
+# This file defines system limits and defaults for all users
+
+# Core execution limits with maximum allowed values
+limits:
+  max_workers: 20              # Default number of parallel workers
+  timeout_seconds: 600         # Default task timeout in seconds (10 minutes)
+  wait_time: 0.1              # Polling interval in seconds
+  max_output_capture: 1000    # Maximum characters of output to capture
+  
+  # Maximum values users are allowed to override
+  max_allowed_workers: 100     # Users cannot exceed this worker count
+  max_allowed_timeout: 3600    # Users cannot exceed 1 hour timeout
+  max_allowed_output: 10000    # Users cannot exceed this output capture
+  
+  # Auto-stop protection (disabled by default - must be explicitly enabled)
+  stop_limits_enabled: false     # Enable with --enable-stop-limits or config
+  max_consecutive_failures: 5    # Stop after N consecutive task failures
+  max_failure_rate: 0.5          # Stop if >50% of tasks fail
+  min_tasks_for_rate_check: 10   # Need at least N tasks before checking failure rate
+
+# Task execution settings
+execution:
+  workspace_isolation: false  # Default: shared workspace, true: isolated per worker
+  use_process_groups: true    # Enable process group management
+
+# Logging configuration
+logging:
+  level: "INFO"               # Log level: DEBUG, INFO, WARNING, ERROR, CRITICAL
+  console_format: "%(asctime)s - %(levelname)s - %(message)s"
+  file_format: "%(asctime)s - %(name)s - %(levelname)s - [%(threadName)s] - %(message)s"
+  custom_date_format: "%d%b%y_%H%M%S"  # Format: 17Jun25_181623
+  max_log_size_mb: 10         # Log file size before rotation (MB)
+  backup_count: 5             # Number of backup log files to keep
+
+# Advanced settings (optional)
+# advanced:
+#   max_file_size: 1048576      # Maximum task file size (1MB)
+#   memory_limit_mb: 1024       # Memory limit per worker (MB)
+#   retry_failed_tasks: false   # Whether to retry failed tasks
+"""
+
+def show_configuration(script_path):
+    """Show current configuration and recommended locations."""
+    config = Configuration.from_script(script_path)
+    
+    print("=" * 60)
+    print("PARALLEL TASK EXECUTOR CONFIGURATION")
+    print("=" * 60)
+    print()
+    print(config)
+    print()
+    
+    print("SCRIPT CONFIGURATION:")
+    print("-" * 40)
+    if config.script_config_path.exists():
+        print(f"Location: {config.script_config_path}")
+        try:
+            with open(str(config.script_config_path), 'r') as f:
+                content = f.read()
+                # print(content[:500] + ("..." if len(content) > 500 else ""))
+                print(content)
+        except Exception as e:
+            print(f"Error reading: {e}")
+    else:
+        print(f"No script config at: {config.script_config_path}")
+        print("To create script config:")
+        print(get_default_config_content()[:300] + "...")
+    
+    print()
+    print("USER CONFIGURATION:")
+    print("-" * 40)
+    if config.user_config_path.exists():
+        print(f"Location: {config.user_config_path}")
+        try:
+            with open(str(config.user_config_path), 'r') as f:
+                print(f.read())
+        except Exception as e:
+            print(f"Error reading: {e}")
+    else:
+        print(f"No user config found at: {config.user_config_path}")
+
+def validate_configuration(script_path):
+    """Validate configuration files."""
+    try:
+        config = Configuration.from_script(script_path)
+        config.validate()
+        
+        print("✓ Configuration is valid")
+        print(f"✓ Script config: {config.script_config_path} (exists: {config.script_config_path.exists()})")
+        print(f"✓ User config: {config.user_config_path} (exists: {config.user_config_path.exists()})")
+        print(f"✓ Working dir: {config.get_working_directory()}")
+        print(f"✓ Log dir: {config.get_log_directory()}")
+        print(f"✓ Workspace mode: {'Isolated' if config.execution.workspace_isolation else 'Shared'}")
+        print(f"✓ Workers: {config.limits.max_workers} (max allowed: {config.limits.max_allowed_workers})")
+        print(f"✓ Timeout: {config.limits.timeout_seconds}s (max allowed: {config.limits.max_allowed_timeout}s)")
+        print(f"✓ Custom timestamp: {config.get_custom_timestamp()}")
+        return True
+        
+    except ConfigurationError as e:
+        print(f"✗ Configuration validation failed: {e}")
+        return False
+    except Exception as e:
+        print(f"✗ Unexpected error validating configuration: {e}")
+        return False
+
+def main():
+    """Main function with daemon support and kill handling."""
+    script_path = __file__
+    
+    try:
+        args = parse_arguments()
+
+        if args.list_workers:
+            list_workers(script_path)
+            sys.exit(0)
+
+        if args.kill is not None:
+            if args.kill == 'all':
+                kill_processes(script_path)
+            else:
+                try:
+                    target_pid = int(args.kill)
+                    kill_processes(script_path, target_pid)
+                except ValueError:
+                    print(f"✗ Invalid PID: {args.kill}")
+                    sys.exit(1)
+            sys.exit(0)
+
+        if args.show_config:
+            show_configuration(script_path)
+            sys.exit(0)
+
+        if args.validate_config:
+            if validate_configuration(script_path):
+                sys.exit(0)
+            else:
+                sys.exit(1)
+
+        if args.daemon:
+            daemon_result = start_daemon_process(script_path, args)
+            if daemon_result is not None:
+                sys.exit(daemon_result)
+
+        if args.timeout and args.timeout <= 0:
+            raise ParallelTaskExecutorError("Timeout must be positive")
+        
+        if args.wait and args.wait < 0:
+            raise ParallelTaskExecutorError("Wait time cannot be negative")
+        
+        manager = ParallelTaskManager(
+            max_workers=args.max,
+            timeout=args.timeout,
+            wait_time=args.wait,
+            tasks_dir=args.TasksDir,
+            command_template=args.Command,
+            script_path=script_path,
+            dry_run=not args.run,
+            enable_stop_limits=args.enable_stop_limits,
+            log_task_output=args.log_task_output
+        )
+        
+        if args.daemon:
+            manager.logger.info(f"Daemon started successfully - PID: {os.getpid()}")
+            manager.logger.info(f"Task directory: {args.TasksDir}")
+            manager.logger.info(f"Command template: {args.Command}")
+            manager.logger.info(f"Workers: {manager.max_workers}, Timeout: {manager.timeout}s")
+            manager.logger.info(f"Stop limits: {'enabled' if args.enable_stop_limits else 'disabled'}")
+        
+        manager._setup_signal_handlers()
+        stats = manager.execute_tasks()
+        
+        summary = manager.get_summary_report()
+        if args.daemon:
+            manager.logger.info(f"Execution completed:\n{summary}")
+        else:
+            print(f"\n{summary}")
+        
+        if stats['failed'] > 0:
+            sys.exit(1)
+        
+    except ParallelTaskExecutorError as e:
+        if 'args' in locals() and args.daemon:
+            logging.getLogger().error(f"Task Executor Error: {e}")
+        else:
+            print(f"Task Executor Error: {e}", file=sys.stderr)
+        sys.exit(1)
+    
+    except SecurityError as e:
+        if 'args' in locals() and args.daemon:
+            logging.getLogger().error(f"Security Error: {e}")
+        else:
+            print(f"Security Error: {e}", file=sys.stderr)
+        sys.exit(1)
+    
+    except ConfigurationError as e:
+        if 'args' in locals() and args.daemon:
+            logging.getLogger().error(f"Configuration Error: {e}")
+        else:
+            print(f"Configuration Error: {e}", file=sys.stderr)
+        sys.exit(1)
+    
+    except KeyboardInterrupt:
+        if not ('args' in locals() and args.daemon):
+            print("\nExecution interrupted by user", file=sys.stderr)
+        sys.exit(130)
+    
+    except Exception as e:
+        if 'args' in locals() and args.daemon:
+            logging.getLogger().error(f"Unexpected error: {e}")
+        else:
+            print(f"Unexpected error: {e}", file=sys.stderr)
+        sys.exit(1)
+
+if __name__ == "__main__":
+    main()
+
