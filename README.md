@@ -35,12 +35,14 @@ Perfect for batch processing, data pipelines, test suites, or any scenario where
 ## Key Features
 
 - ✓ **Parallel Execution**: Execute tasks concurrently with configurable worker pools (1-100 workers)
+- ✓ **Flexible Task Selection**: Support for directories, files, glob patterns, and multiple sources
+- ✓ **File Type Filtering**: Filter tasks by extension(s) with `--file-extension`
 - ✓ **Flexible Configuration**: Two-tier YAML configuration system with user overrides
 - ✓ **Resource Monitoring**: Track memory and CPU usage per task (requires psutil)
 - ✓ **Workspace Management**: Shared or isolated workspace modes
 - ✓ **Auto-Stop Protection**: Automatic halt on consecutive failures or high error rates
 - ✓ **Daemon Mode**: Background execution with process tracking
-- ✓ **Comprehensive Logging**: Rotating logs, CSV summaries, and detailed task output
+- ✓ **Comprehensive Logging**: Rotating logs with timestamp-based naming to prevent conflicts
 - ✓ **Timeout Management**: Per-task timeout with graceful termination
 - ✓ **Security Validation**: Input validation and argument length checking
 - ✓ **Graceful Shutdown**: Signal handling for clean termination
@@ -73,10 +75,16 @@ The `ptasker` symlink provides a simplified interface specifically for running T
 # 1. Execute TASKER tests with auto-generated project ID
 python bin/ptasker -T /path/to/test_cases -r
 
-# 2. Execute with custom project name
+# 2. Execute only .txt test cases
+python bin/ptasker -T /path/to/test_cases --file-extension txt -r
+
+# 3. Execute specific test files using glob patterns
+python bin/ptasker -T /path/to/test_cases/*.txt -r
+
+# 4. Execute with custom project name
 python bin/ptasker -T /path/to/test_cases -p myproject -r
 
-# 3. Run as daemon
+# 5. Run as daemon
 python bin/ptasker -T /path/to/test_cases -p myproject -r -d
 ```
 
@@ -121,7 +129,7 @@ python bin/parallelr.py --check-dependencies
 
 | Argument | Description |
 |----------|-------------|
-| `-T, --TasksDir DIR` | Directory containing task files to execute |
+| `-T, --TasksDir PATHS...` | Directory, file paths, or glob patterns. Can be used multiple times:<br>• Directory: `-T /path/to/dir`<br>• Specific files: `-T /path/*.txt` (shell expansion)<br>• Multiple sources: `-T /dir1 -T /dir2 -T file.txt` |
 | `-C, --Command CMD` | Command template with `@TASK@` placeholder for task file path |
 
 #### Execution Control
@@ -132,6 +140,7 @@ python bin/parallelr.py --check-dependencies
 | `-m, --max N` | Maximum parallel workers (default: 20, max: 100, overrides config) |
 | `-t, --timeout N` | Task timeout in seconds (default: 600, max: 3600, overrides config) |
 | `-w, --wait N` | Wait time between slot checks in seconds (default: 0.1, overrides config) |
+| `--file-extension EXT` | Filter task files by extension(s). Single: `txt`, Multiple: `txt,log,dat` |
 
 #### Advanced Execution
 
@@ -164,6 +173,18 @@ python bin/parallelr.py -T ./tasks -C "python3 @TASK@"
 
 # Execute Python scripts with 5 workers
 python bin/parallelr.py -T ./tasks -C "python3 @TASK@" -r -m 5
+
+# Execute only .txt files from a directory
+python bin/parallelr.py -T ./tasks --file-extension txt -C "process @TASK@" -r
+
+# Execute specific files using shell glob patterns
+python bin/parallelr.py -T ./tasks/*.py -C "python3 @TASK@" -r
+
+# Execute from multiple sources
+python bin/parallelr.py -T ./scripts -T ./tests -T config.json -C "process @TASK@" -r
+
+# Filter multiple extensions
+python bin/parallelr.py -T ./data --file-extension "csv,tsv,txt" -C "analyze @TASK@" -r
 
 # Execute bash scripts with 600s timeout
 python bin/parallelr.py -T ./scripts -C "bash @TASK@" -r -t 600
@@ -538,25 +559,32 @@ python bin/parallelr.py -k
 
 Located in `~/parallelr/logs/`:
 
-#### 1. Main Log (`tasker_{PID}.log`)
+All log files use a consistent naming pattern with timestamps to prevent PID reuse conflicts:
+- `parallelr_{PID}_{TIMESTAMP}.log` - Main execution log
+- `parallelr_{PID}_{TIMESTAMP}_summary.csv` - CSV summary of task results
+- `parallelr_{PID}_{TIMESTAMP}_output.txt` - Captured task output
+
+#### 1. Main Log (`parallelr_{PID}_{TIMESTAMP}.log`)
 - **Purpose**: Detailed execution log for debugging
 - **Format**: Timestamped entries with log levels
 - **Rotation**: Rotates at 10MB (configurable)
 - **Backups**: Keeps 5 old logs (`.log.1`, `.log.2`, etc.)
 - **Content**: Task starts, completions, errors, warnings
+- **Example name**: `parallelr_3916638_29Sep25_215848.log`
 
-**Example**:
+**Example content**:
 ```
 2025-09-29 14:30:15,123 - P12345 - INFO - [MainThread] - Starting parallel execution
 2025-09-29 14:30:15,145 - P12345 - INFO - [ThreadPoolExecutor-0_0] - Worker 1: Starting task ./tasks/task1.sh
 2025-09-29 14:30:17,892 - P12345 - INFO - [ThreadPoolExecutor-0_0] - Task completed: ./tasks/task1.sh
 ```
 
-#### 2. Summary CSV (`summary_{PID}_{timestamp}.csv`)
+#### 2. Summary CSV (`parallelr_{PID}_{TIMESTAMP}_summary.csv`)
 - **Purpose**: Machine-readable task results
 - **Format**: Semicolon-delimited CSV
 - **Use**: Analysis, monitoring, reports
 - **One row per task**
+- **Example name**: `parallelr_3916638_29Sep25_215848_summary.csv`
 
 **Columns**:
 ```
@@ -569,11 +597,12 @@ start_time;end_time;status;process_id;worker_id;task_file;command;exit_code;dura
 2025-09-29T14:30:15;2025-09-29T14:30:45;TIMEOUT;12345;2;./tasks/task2.sh;bash ./tasks/task2.sh;;;45.00;128.45;8.3;Timeout after 45s
 ```
 
-#### 3. Task Results (`TaskResults_{PID}_{timestamp}.txt`)
+#### 3. Task Output (`parallelr_{PID}_{TIMESTAMP}_output.txt`)
 - **Purpose**: Detailed stdout/stderr for each task
 - **Enabled**: By default (disable with `--no-task-output-log` flag)
 - **Format**: Human-readable with separators
 - **Use**: Debugging task failures, verifying output
+- **Example name**: `parallelr_3916638_29Sep25_215848_output.txt`
 
 **Example**:
 ```
@@ -626,9 +655,9 @@ Auto-Stop Protection:
 - Stop Limits: Disabled
 
 Log Files:
-- Main Log: /home/user/parallelr/logs/tasker_12345.log (rotating)
-- Summary: /home/user/parallelr/logs/summary_12345_29Sep25_143015.csv (session-specific)
-- TaskResults: /home/user/parallelr/logs/TaskResults_12345_29Sep25_143015.txt (enabled by default, disable with --no-task-output-log)
+- Main Log: /home/user/parallelr/logs/parallelr_12345_29Sep25_143015.log (rotating)
+- Summary: /home/user/parallelr/logs/parallelr_12345_29Sep25_143015_summary.csv (session-specific)
+- Output: /home/user/parallelr/logs/parallelr_12345_29Sep25_143015_output.txt (enabled by default, disable with --no-task-output-log)
 
 Process Info:
 - Process ID: 12345
@@ -637,11 +666,18 @@ Process Info:
 
 ## Task File Format
 
-Task files are any files in the specified directory. The framework:
+Task files can be specified in multiple ways:
 
-1. Discovers all files (non-recursive) in `--TasksDir`
-2. Sorts them alphabetically
-3. Executes each using the command template
+1. **Directory**: Discovers all files (non-recursive) in the directory
+2. **Specific files**: Using shell glob patterns (e.g., `*.txt`)
+3. **Multiple sources**: Combine directories and individual files
+4. **Extension filtering**: Use `--file-extension` to filter by type
+
+The framework:
+- Accepts files from all specified sources
+- Applies extension filters if provided
+- Removes duplicates and sorts alphabetically
+- Executes each using the command template
 
 **Command Template**:
 - Use `@TASK@` as placeholder for task file path
