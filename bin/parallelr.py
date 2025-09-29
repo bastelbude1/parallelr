@@ -109,6 +109,7 @@ class LimitsConfig:
         self.max_workers = 20
         self.timeout_seconds = 600
         self.wait_time = 0.1
+        self.task_start_delay = 0.0  # Delay between starting new tasks (seconds)
         self.max_output_capture = 1000
         self.max_allowed_workers = 100
         self.max_allowed_timeout = 3600
@@ -296,7 +297,13 @@ class Configuration:
             errors.append("wait_time must be at least 0.01 seconds (10ms)")
         if self.limits.wait_time > 10.0:
             errors.append("wait_time cannot exceed 10.0 seconds")
-        
+
+        # Task start delay must be between 0 and 60 seconds
+        if self.limits.task_start_delay < 0:
+            errors.append("task_start_delay cannot be negative")
+        if self.limits.task_start_delay > 60.0:
+            errors.append("task_start_delay cannot exceed 60.0 seconds")
+
         valid_levels = ['DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL']
         if self.logging.level.upper() not in valid_levels:
             errors.append(f"Invalid log level: {self.logging.level}")
@@ -692,7 +699,7 @@ class SecureTaskExecutor:
 class ParallelTaskManager:
     """Main parallel task execution manager."""
     
-    def __init__(self, max_workers, timeout, wait_time, tasks_paths, command_template,
+    def __init__(self, max_workers, timeout, task_start_delay, tasks_paths, command_template,
                  script_path, dry_run=False, enable_stop_limits=False, log_task_output=True,
                  file_extension=None):
 
@@ -703,15 +710,16 @@ class ParallelTaskManager:
             self.config.limits.max_workers = max_workers
         if timeout is not None:
             self.config.limits.timeout_seconds = timeout
-        if wait_time is not None:
-            self.config.limits.wait_time = wait_time
+        if task_start_delay is not None:
+            self.config.limits.task_start_delay = task_start_delay
 
         if enable_stop_limits:
             self.config.limits.stop_limits_enabled = True
 
         self.max_workers = self.config.limits.max_workers
         self.timeout = self.config.limits.timeout_seconds
-        self.wait_time = self.config.limits.wait_time
+        self.wait_time = self.config.limits.wait_time  # Always from config
+        self.task_start_delay = self.config.limits.task_start_delay
         # Handle both single path (string) and multiple paths (list)
         if isinstance(tasks_paths, str):
             self.tasks_paths = [tasks_paths]
@@ -977,7 +985,9 @@ class ParallelTaskManager:
             total_tasks = len(self.task_files)
             
             self.logger.info(f"Executing {total_tasks} tasks with {self.max_workers} workers")
-            
+            if self.task_start_delay > 0:
+                self.logger.info(f"Task start delay: {self.task_start_delay} seconds between new tasks")
+
             if self.dry_run:
                 self.logger.info("DRY RUN MODE")
                 for i, task_file in enumerate(self.task_files, 1):
@@ -991,7 +1001,8 @@ class ParallelTaskManager:
                     task_queue.put(task_file)
                 
                 worker_counter = 0
-                
+                tasks_started = 0  # Track number of tasks started for delay
+
                 while not task_queue.empty() or self.futures:
                     if self.shutdown_requested:
                         if self.config.limits.stop_limits_enabled:
@@ -999,19 +1010,24 @@ class ParallelTaskManager:
                         else:
                             self.logger.info("Shutdown requested")
                         break
-                    
+
                     while len(self.futures) < self.max_workers and not task_queue.empty():
                         if self.shutdown_requested:
                             break
-                            
+
+                        # Apply task start delay (except for first task)
+                        if self.task_start_delay > 0 and tasks_started > 0:
+                            time.sleep(self.task_start_delay)
+
                         task_file = task_queue.get()
                         worker_counter += 1
-                        
+                        tasks_started += 1
+
                         task_executor = SecureTaskExecutor(
                             task_file, self.command_template, self.timeout,
                             worker_counter, self.logger, self.config
                         )
-                        
+
                         future = executor.submit(task_executor.execute)
                         self.futures[future] = task_file
                         self.running_tasks[task_file] = task_executor
@@ -1409,10 +1425,10 @@ Examples:
     
     parser.add_argument('-t', '--timeout', type=int, default=None,
                        help='Task timeout in seconds (overrides config)')
-    
-    parser.add_argument('-w', '--wait', type=float, default=None,
-                       help='Polling interval when all workers busy (0.01-10.0 seconds, default: 0.1). How often to check if running tasks completed')
-    
+
+    parser.add_argument('-s', '--sleep', type=float, default=None,
+                       help='Delay between starting new tasks (0-60 seconds, default: 0). Use to throttle resource consumption')
+
     parser.add_argument('-T', '--TasksDir', nargs='+', action='append',
                        help='Directory containing task files or specific file paths (can be used multiple times)')
 
@@ -1500,7 +1516,8 @@ def get_default_config_content():
 limits:
   max_workers: 20              # Default number of parallel workers
   timeout_seconds: 600         # Default task timeout in seconds (10 minutes)
-  wait_time: 0.1              # Polling interval in seconds
+  wait_time: 0.1              # Polling interval in seconds (system responsiveness)
+  task_start_delay: 0.0       # Delay between starting new tasks (0-60 seconds)
   max_output_capture: 1000    # Maximum characters of output to capture (last N chars)
   
   # Maximum values users are allowed to override
@@ -1701,17 +1718,17 @@ def main():
 
         if args.timeout and args.timeout <= 0:
             raise ParallelTaskExecutorError("Timeout must be positive")
-        
-        if args.wait:
-            if args.wait < 0.01:
-                raise ParallelTaskExecutorError("Wait time must be at least 0.01 seconds (10ms)")
-            if args.wait > 10.0:
-                raise ParallelTaskExecutorError("Wait time cannot exceed 10.0 seconds")
-        
+
+        if args.sleep:
+            if args.sleep < 0:
+                raise ParallelTaskExecutorError("Task start delay cannot be negative")
+            if args.sleep > 60.0:
+                raise ParallelTaskExecutorError("Task start delay cannot exceed 60 seconds")
+
         manager = ParallelTaskManager(
             max_workers=args.max,
             timeout=args.timeout,
-            wait_time=args.wait,
+            task_start_delay=args.sleep,
             tasks_paths=args.TasksDir,  # Now a list from action='append'
             command_template=args.Command,
             script_path=script_path,
