@@ -34,17 +34,17 @@ Perfect for batch processing, data pipelines, test suites, or any scenario where
 
 ## Key Features
 
-✓ **Parallel Execution**: Execute tasks concurrently with configurable worker pools (1-100 workers)
-✓ **Flexible Configuration**: Two-tier YAML configuration system with user overrides
-✓ **Resource Monitoring**: Track memory and CPU usage per task (requires psutil)
-✓ **Workspace Management**: Shared or isolated workspace modes
-✓ **Auto-Stop Protection**: Automatic halt on consecutive failures or high error rates
-✓ **Daemon Mode**: Background execution with process tracking
-✓ **Comprehensive Logging**: Rotating logs, CSV summaries, and detailed task output
-✓ **Timeout Management**: Per-task timeout with graceful termination
-✓ **Security Validation**: Input validation and argument length checking
-✓ **Graceful Shutdown**: Signal handling for clean termination
-✓ **Real-time Output Capture**: Non-blocking I/O for live output collection
+- ✓ **Parallel Execution**: Execute tasks concurrently with configurable worker pools (1-100 workers)
+- ✓ **Flexible Configuration**: Two-tier YAML configuration system with user overrides
+- ✓ **Resource Monitoring**: Track memory and CPU usage per task (requires psutil)
+- ✓ **Workspace Management**: Shared or isolated workspace modes
+- ✓ **Auto-Stop Protection**: Automatic halt on consecutive failures or high error rates
+- ✓ **Daemon Mode**: Background execution with process tracking
+- ✓ **Comprehensive Logging**: Rotating logs, CSV summaries, and detailed task output
+- ✓ **Timeout Management**: Per-task timeout with graceful termination
+- ✓ **Security Validation**: Input validation and argument length checking
+- ✓ **Graceful Shutdown**: Signal handling for clean termination
+- ✓ **Real-time Output Capture**: Non-blocking I/O for live output collection
 
 ## Quick Start
 
