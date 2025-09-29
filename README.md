@@ -124,7 +124,7 @@ python bin/parallelr.py --show-config
 |----------|-------------|
 | `-d, --daemon` | Run as background daemon (detached from session) |
 | `--enable-stop-limits` | Enable automatic halt on excessive failures |
-| `--log-task-output` | Log detailed stdout/stderr to TaskResults file |
+| `--no-task-output-log` | Disable detailed stdout/stderr logging to TaskResults file (enabled by default) |
 
 #### Process Management
 
@@ -155,8 +155,8 @@ python bin/parallelr.py -T ./scripts -C "bash @TASK@" -r -t 600
 # Run as daemon with auto-stop protection
 python bin/parallelr.py -T ./tasks -C "python3 @TASK@" -r -d --enable-stop-limits
 
-# Execute with detailed output logging
-python bin/parallelr.py -T ./tasks -C "./process.sh @TASK@" -r --log-task-output
+# Execute without detailed output logging (logging is enabled by default)
+python bin/parallelr.py -T ./tasks -C "./process.sh @TASK@" -r --no-task-output-log
 
 # List running workers
 python bin/parallelr.py --list-workers
@@ -555,7 +555,7 @@ start_time;end_time;status;process_id;worker_id;task_file;command;exit_code;dura
 
 #### 3. Task Results (`TaskResults_{PID}_{timestamp}.txt`)
 - **Purpose**: Detailed stdout/stderr for each task
-- **Enabled**: Only with `--log-task-output` flag
+- **Enabled**: By default (disable with `--no-task-output-log` flag)
 - **Format**: Human-readable with separators
 - **Use**: Debugging task failures, verifying output
 
@@ -612,7 +612,7 @@ Auto-Stop Protection:
 Log Files:
 - Main Log: /home/user/parallelr/logs/tasker_12345.log (rotating)
 - Summary: /home/user/parallelr/logs/summary_12345_29Sep25_143015.csv (session-specific)
-- TaskResults: /home/user/parallelr/logs/TaskResults_12345_29Sep25_143015.txt (only with --log-task-output)
+- TaskResults: /home/user/parallelr/logs/TaskResults_12345_29Sep25_143015.txt (enabled by default, disable with --no-task-output-log)
 
 Process Info:
 - Process ID: 12345
@@ -711,7 +711,7 @@ pip install --target=lib psutil
 1. Dry-run first: `python bin/parallelr.py -T ./tasks -C "bash @TASK@"`
 2. Check logs: `tail -f ~/parallelr/logs/tasker_<PID>.log`
 3. Test single task manually: `bash tasks/task1.sh`
-4. Enable detailed output: `--log-task-output`
+4. Check detailed task output: `~/parallelr/logs/TaskResults_<PID>_*.txt` (enabled by default)
 
 #### Issue: Worker stuck after Ctrl+C
 **Cause**: Not cleaning up properly

@@ -64,9 +64,9 @@ python bin/parallelr.py -T ./tasks -C "bash @TASK@" -r -m 10 -t 300
 python bin/parallelr.py -T ./tasks -C "python3 @TASK@" -r -d
 ```
 
-### Enable detailed task output logging
+### Disable detailed task output logging (enabled by default)
 ```bash
-python bin/parallelr.py -T ./tasks -C "python3 @TASK@" -r --log-task-output
+python bin/parallelr.py -T ./tasks -C "python3 @TASK@" -r --no-task-output-log
 ```
 
 ### Enable auto-stop on errors
@@ -111,7 +111,7 @@ python bin/parallelr.py -T ./tasks -C "python3 @TASK@"
 - **User config**: `~/parallelr/cfg/parallelr.yaml`
 - **Logs**: `~/parallelr/logs/tasker_{PID}.log` (rotating, max 10MB, 5 backups)
 - **Summary**: `~/parallelr/logs/summary_{PID}_{timestamp}.csv`
-- **Task output**: `~/parallelr/logs/TaskResults_{PID}_{timestamp}.txt` (only with `--log-task-output`)
+- **Task output**: `~/parallelr/logs/TaskResults_{PID}_{timestamp}.txt` (enabled by default, disable with `--no-task-output-log`)
 - **PID tracking**: `~/parallelr/pids/parallelr.pids`
 - **Workspace**: `~/parallelr/workspace/` or `~/parallelr/workspace/pid{PID}_worker{N}/`
 

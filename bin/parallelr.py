@@ -680,8 +680,8 @@ class SecureTaskExecutor:
 class ParallelTaskManager:
     """Main parallel task execution manager."""
     
-    def __init__(self, max_workers, timeout, wait_time, tasks_dir, command_template, 
-                 script_path, dry_run=False, enable_stop_limits=False, log_task_output=False):
+    def __init__(self, max_workers, timeout, wait_time, tasks_dir, command_template,
+                 script_path, dry_run=False, enable_stop_limits=False, log_task_output=True):
         
         self.config = Configuration.from_script(script_path)
         self.config.validate()
@@ -1037,7 +1037,7 @@ Auto-Stop Protection:
 Log Files:
 - Main Log: {self.log_dir / f'tasker_{self.process_id}.log'} (rotating)
 - Summary: {self.summary_log_file} (session-specific)
-- TaskResults: {self.task_results_file} (only with --log-task-output)
+- TaskResults: {self.task_results_file} (disable with --no-task-output-log)
 
 Process Info:
 - Process ID: {self.process_id}
@@ -1292,8 +1292,8 @@ Examples:
     parser.add_argument('--show-config', action='store_true',
                        help='Show current configuration and recommended location')
 
-    parser.add_argument('--log-task-output', action='store_true',
-                       help='Enable detailed task output logging to TaskResults file')
+    parser.add_argument('--no-task-output-log', action='store_true',
+                       help='Disable detailed task output logging to TaskResults file')
 
     args = parser.parse_args()
 
@@ -1472,7 +1472,7 @@ def main():
             script_path=script_path,
             dry_run=not args.run,
             enable_stop_limits=args.enable_stop_limits,
-            log_task_output=args.log_task_output
+            log_task_output=not args.no_task_output_log
         )
         
         if args.daemon:
