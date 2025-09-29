@@ -1095,11 +1095,13 @@ def is_daemon_supported():
 
 def start_daemon_process(script_path, args):
     """Start the parallel tasker as a daemon process."""
+    script_name = Path(script_path).name
+
     if not is_daemon_supported():
         print("Error: Daemon mode not supported on this platform (Windows)", file=sys.stderr)
         return 1
-    
-    print("Starting parallel-tasker as daemon...")
+
+    print(f"Starting {script_name} as daemon...")
     print(f"Task directory: {args.TasksDir}")
     print(f"Command template: {args.Command}")
     print(f"Workers: {args.max or 'default'}")
@@ -1121,15 +1123,16 @@ def start_daemon_process(script_path, args):
     return 1
 
 def list_workers(script_path):
-    """List running parallel-tasker processes."""
+    """List running worker processes."""
+    script_name = Path(script_path).name
     config = Configuration.from_script(script_path)
     running_pids = config.get_running_processes()
-    
+
     if not running_pids:
-        print("No running parallel-tasker processes found.")
+        print(f"No running {script_name} processes found.")
         return
-    
-    print(f"Found {len(running_pids)} running parallel-tasker process(es):")
+
+    print(f"Found {len(running_pids)} running {script_name} process(es):")
     print()
     print(f"{'PID':<8} {'Status':<10} {'Start Time':<20} {'Log File':<30} {'Summary File'}")
     print("-" * 100)
@@ -1172,20 +1175,21 @@ def list_workers(script_path):
     print("Commands:")
     print(f"  View logs:        tail -f {config.get_log_directory()}/tasker_<PID>.log")
     print(f"  View progress:    tail -f {config.get_log_directory()}/summary_<PID>_*.csv")
-    print(f"  Kill specific:    python {os.path.basename(script_path)} -k <PID>")
-    print(f"  Kill all:         python {os.path.basename(script_path)} -k")
+    print(f"  Kill specific:    python {script_name} -k <PID>")
+    print(f"  Kill all:         python {script_name} -k")
 
 def kill_processes(script_path, target_pid=None):
-    """Kill parallel-tasker processes - DANGEROUS OPERATION."""
+    """Kill worker processes - DANGEROUS OPERATION."""
+    script_name = Path(script_path).name
     config = Configuration.from_script(script_path)
     running_pids = config.get_running_processes()
-    
+
     if not running_pids:
-        print("No running parallel-tasker processes found to kill.")
+        print(f"No running {script_name} processes found to kill.")
         return
-    
+
     if target_pid is None:
-        print(f"⚠️  WARNING: This will kill ALL {len(running_pids)} running parallel-tasker processes!")
+        print(f"⚠️  WARNING: This will kill ALL {len(running_pids)} running {script_name} processes!")
         print(f"PIDs to be killed: {running_pids}")
         response = input("Are you sure? Type 'yes' to confirm: ")
         if response.lower() != 'yes':
@@ -1252,16 +1256,16 @@ def parse_arguments():
         epilog="""
 Examples:
   # Execute tasks (foreground)
-  python parallel-tasker.py -T ./tasks -C "python3 @TASK@" -r
-  
+  %(prog)s -T ./tasks -C "python3 @TASK@" -r
+
   # Execute tasks (background/detached)
-  python parallel-tasker.py -T ./tasks -C "python3 @TASK@" -r -d
-  
+  %(prog)s -T ./tasks -C "python3 @TASK@" -r -d
+
   # List running workers (safe)
-  python parallel-tasker.py --list-workers
-  
+  %(prog)s --list-workers
+
   # Kill all running instances (dangerous)
-  python parallel-tasker.py -k
+  %(prog)s -k
         """
     )
     
@@ -1290,7 +1294,7 @@ Examples:
                        help='Enable auto-stop on consecutive failures or high failure rate')
 
     parser.add_argument('--list-workers', action='store_true',
-                       help='List running parallel-tasker processes (safe)')
+                       help='List running worker processes (safe)')
 
     parser.add_argument('-k', '--kill', nargs='?', const='all', metavar='PID',
                        help='Kill processes: -k (all) or -k PID (specific) - DANGEROUS!')
