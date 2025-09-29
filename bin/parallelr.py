@@ -1301,6 +1301,9 @@ Examples:
     parser.add_argument('--show-config', action='store_true',
                        help='Show current configuration and recommended location')
 
+    parser.add_argument('--check-dependencies', action='store_true',
+                       help='Check optional Python module availability and exit')
+
     parser.add_argument('--no-task-output-log', action='store_true',
                        help='Disable detailed task output logging to TaskResults file')
 
@@ -1309,7 +1312,7 @@ Examples:
     if args.list_workers or args.kill is not None:
         return args
 
-    if not args.validate_config and not args.show_config:
+    if not args.validate_config and not args.show_config and not args.check_dependencies:
         missing_args = []
         if not args.TasksDir:
             missing_args.append("--TasksDir")
@@ -1404,12 +1407,63 @@ def show_configuration(script_path):
     else:
         print(f"No user config found at: {config.user_config_path}")
 
+def check_dependencies():
+    """Check optional Python module availability."""
+    print("=" * 60)
+    print("OPTIONAL PYTHON MODULES")
+    print("=" * 60)
+    print()
+
+    # Check PyYAML
+    print("PyYAML:")
+    if HAS_YAML:
+        print(f"  ✓ Available (version {yaml.__version__})")
+        print(f"  Location: {yaml.__file__}")
+        print("  Purpose: Load YAML configuration files")
+        print("  Impact: Without it, only hardcoded defaults are used")
+    else:
+        print("  ✗ Not available")
+        print("  Purpose: Load YAML configuration files")
+        print("  Impact: Configuration files will be ignored, using hardcoded defaults")
+        print("  Install: pip install --target=lib pyyaml")
+    print()
+
+    # Check psutil
+    print("psutil:")
+    if HAS_PSUTIL:
+        print(f"  ✓ Available (version {psutil.__version__})")
+        print(f"  Location: {psutil.__file__}")
+        print("  Purpose: Monitor memory and CPU usage per task")
+        print("  Impact: Resource metrics collected and reported")
+    else:
+        print("  ✗ Not available")
+        print("  Purpose: Monitor memory and CPU usage per task")
+        print("  Impact: Memory/CPU metrics will show 0.00 (not collected)")
+        print("  Install: pip install --target=lib psutil")
+    print()
+
+    # Summary
+    total = 2
+    available = sum([HAS_YAML, HAS_PSUTIL])
+    print(f"Summary: {available}/{total} optional modules available")
+    print()
+
+    if available == total:
+        print("✓ All optional modules are available - full functionality enabled!")
+        return True
+    elif available > 0:
+        print("⚠ Some optional modules missing - reduced functionality")
+        return True
+    else:
+        print("⚠ No optional modules available - basic functionality only")
+        return True
+
 def validate_configuration(script_path):
     """Validate configuration files."""
     try:
         config = Configuration.from_script(script_path)
         config.validate()
-        
+
         print("✓ Configuration is valid")
         print(f"✓ Script config: {config.script_config_path} (exists: {config.script_config_path.exists()})")
         print(f"✓ User config: {config.user_config_path} (exists: {config.user_config_path.exists()})")
@@ -1420,7 +1474,7 @@ def validate_configuration(script_path):
         print(f"✓ Timeout: {config.limits.timeout_seconds}s (max allowed: {config.limits.max_allowed_timeout}s)")
         print(f"✓ Custom timestamp: {config.get_custom_timestamp()}")
         return True
-        
+
     except ConfigurationError as e:
         print(f"✗ Configuration validation failed: {e}")
         return False
@@ -1449,6 +1503,10 @@ def main():
                 except ValueError:
                     print(f"✗ Invalid PID: {args.kill}")
                     sys.exit(1)
+            sys.exit(0)
+
+        if args.check_dependencies:
+            check_dependencies()
             sys.exit(0)
 
         if args.show_config:

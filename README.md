@@ -7,7 +7,7 @@ A robust, production-ready Python framework for executing tasks in parallel with
 - [Overview](#overview)
 - [Key Features](#key-features)
 - [Quick Start](#quick-start)
-- [Installation](#installation)
+- [Requirements](#requirements)
 - [Usage](#usage)
   - [Command Line Arguments](#command-line-arguments)
   - [Basic Examples](#basic-examples)
@@ -64,39 +64,36 @@ python bin/parallelr.py -T my_tasks -C "bash @TASK@" -r
 python bin/parallelr.py -T my_tasks -C "bash @TASK@" -r -m 10 -t 300
 ```
 
-## Installation
+## Requirements
 
-### Requirements
+**Python**: 3.6.8 or higher
 
-- Python 3.6.8 or higher
-- Linux/Unix environment (Windows supported except daemon mode)
+**Platform**: Linux/Unix (Windows supported except daemon mode)
 
-### Dependencies
+**Standard Library**: pathlib, argparse, threading, subprocess, signal, logging, queue, csv, json, shlex, select, errno, fcntl
 
-**Required** (bundled in `lib/`):
-- PyYAML 6.0.1 - Configuration file support
-- psutil 7.1.0 - Resource monitoring
+### Optional Python Modules
 
-**Standard Library**:
-- pathlib, argparse, threading, subprocess, signal, logging, queue, csv, json, shlex, select, errno, fcntl
+The script works without these modules but provides enhanced functionality when available. Dependencies are bundled in the `lib/` directory and loaded automatically.
 
-### Setup
-
-1. Clone or download the repository
-2. Dependencies are already bundled in the `lib/` directory
-3. The script automatically loads libraries from `lib/` if present
-4. Optionally, set `PARALLELR_LIB_PATH` environment variable to use custom library location
-
+**Check module availability**:
 ```bash
-# Verify installation
-python bin/parallelr.py --help
-
-# Validate configuration
-python bin/parallelr.py --validate-config
-
-# Show current configuration
-python bin/parallelr.py --show-config
+python bin/parallelr.py --check-dependencies
 ```
+
+**PyYAML** (bundled: 6.0.1):
+- **Purpose**: Load YAML configuration files (`cfg/parallelr.yaml`)
+- **Without it**: Configuration files are ignored; only hardcoded defaults are used
+- **Why use it**: Allows customizing workers, timeouts, logging levels, and all other settings without modifying code
+- **Install**: `pip install --target=lib pyyaml`
+
+**psutil** (bundled: 7.1.0):
+- **Purpose**: Monitor memory and CPU usage per task during execution
+- **Without it**: Memory/CPU metrics show 0.00 (not collected)
+- **Why use it**: Essential for performance analysis, debugging resource issues, and capacity planning
+- **Install**: `pip install --target=lib psutil`
+
+**Custom library path**: Set `PARALLELR_LIB_PATH` environment variable to use an alternative library location (default: `/app/COOL/lib` if exists)
 
 ## Usage
 
@@ -137,6 +134,7 @@ python bin/parallelr.py --show-config
 
 | Argument | Description |
 |----------|-------------|
+| `--check-dependencies` | Check optional Python module availability and exit |
 | `--validate-config` | Validate configuration files and exit |
 | `--show-config` | Display current effective configuration and file locations |
 
@@ -760,8 +758,9 @@ python bin/parallelr.py --help
 
 **Validate setup**:
 ```bash
-python bin/parallelr.py --validate-config
-python bin/parallelr.py --show-config
+python bin/parallelr.py --check-dependencies  # Check optional modules
+python bin/parallelr.py --validate-config     # Validate configuration
+python bin/parallelr.py --show-config         # View current config
 ```
 
 **Test with dry-run**:
@@ -824,6 +823,9 @@ python bin/parallelr.py --list-workers
 
 # Kill worker
 python bin/parallelr.py -k <PID>
+
+# Check dependencies
+python bin/parallelr.py --check-dependencies
 
 # View config
 python bin/parallelr.py --show-config
