@@ -610,12 +610,12 @@ class SecureTaskExecutor:
                 self._process.wait()
                 result.exit_code = self._process.returncode
 
-                # Combine captured output
+                # Combine captured output - capture LAST N chars (errors appear at end)
                 stdout = ''.join(stdout_lines)
                 stderr = ''.join(stderr_lines)
                 max_capture = self.config.limits.max_output_capture
-                result.stdout = stdout[:max_capture]
-                result.stderr = stderr[:max_capture]
+                result.stdout = stdout[-max_capture:] if stdout else ""
+                result.stderr = stderr[-max_capture:] if stderr else ""
                 if result.exit_code == 0:
                     result.status = TaskStatus.SUCCESS
                     self.logger.info("Worker {}: Task completed successfully".format(self.worker_id))
@@ -627,12 +627,12 @@ class SecureTaskExecutor:
                 result.status = TaskStatus.TIMEOUT
                 result.error_message = "Timeout after {}s".format(self.timeout)
 
-                # Capture any output before terminating
+                # Capture any output before terminating - capture LAST N chars
                 stdout = ''.join(stdout_lines)
                 stderr = ''.join(stderr_lines)
                 max_capture = self.config.limits.max_output_capture
-                result.stdout = stdout[:max_capture]
-                result.stderr = stderr[:max_capture]
+                result.stdout = stdout[-max_capture:] if stdout else ""
+                result.stderr = stderr[-max_capture:] if stderr else ""
                 self._terminate_process()
                  
             except subprocess.TimeoutExpired:
@@ -646,12 +646,12 @@ class SecureTaskExecutor:
         except Exception as e:
             result.status = TaskStatus.ERROR
             result.error_message = f"Error: {e}"
-            # Capture any partial output
+            # Capture any partial output - capture LAST N chars (errors at end)
             stdout = ''.join(stdout_lines)
             stderr = ''.join(stderr_lines)
             max_capture = self.config.limits.max_output_capture
-            result.stdout = stdout[:max_capture]
-            result.stderr = stderr[:max_capture]
+            result.stdout = stdout[-max_capture:] if stdout else ""
+            result.stderr = stderr[-max_capture:] if stderr else ""
         
         finally:
             result.end_time = datetime.now()
@@ -1321,7 +1321,7 @@ limits:
   max_workers: 20              # Default number of parallel workers
   timeout_seconds: 600         # Default task timeout in seconds (10 minutes)
   wait_time: 0.1              # Polling interval in seconds
-  max_output_capture: 1000    # Maximum characters of output to capture
+  max_output_capture: 1000    # Maximum characters of output to capture (last N chars)
   
   # Maximum values users are allowed to override
   max_allowed_workers: 100     # Users cannot exceed this worker count

@@ -7,12 +7,12 @@ limits:
   max_workers: 20              # Default number of parallel workers
   timeout_seconds: 600         # Default task timeout in seconds (10 minutes)
   wait_time: 0.1               # Polling interval in seconds
-  max_output_capture: 1000     # Maximum characters of output to capture
+  max_output_capture: 1000     # Maximum characters of output to capture (last N chars - errors at end)
 
   # Maximum values users are allowed to override
   max_allowed_workers: 100     # Users cannot exceed this worker count
   max_allowed_timeout: 3600    # Users cannot exceed 1 hour timeout
-  max_allowed_output: 10000    # Users cannot exceed this output capture
+  max_allowed_output: 10000    # Users cannot exceed this output capture (last N chars)
 
   # Auto-stop protection (disabled by default - must be explicitly enabled)
   stop_limits_enabled: false     # Enable with --enable-stop-limits or config

@@ -199,12 +199,12 @@ limits:
   max_workers: 20              # Number of parallel workers
   timeout_seconds: 600         # Task timeout (10 minutes)
   wait_time: 0.1               # Polling interval for free slots
-  max_output_capture: 1000     # Maximum characters of stdout/stderr to capture
+  max_output_capture: 1000     # Maximum characters of stdout/stderr to capture (last N chars)
 
   # System-enforced maximums (script config only)
   max_allowed_workers: 100     # Upper limit for max_workers
   max_allowed_timeout: 3600    # Upper limit for timeout_seconds (1 hour)
-  max_allowed_output: 10000    # Upper limit for max_output_capture
+  max_allowed_output: 10000    # Upper limit for max_output_capture (last N chars)
 
   # Auto-stop protection (requires --enable-stop-limits)
   stop_limits_enabled: false           # Must be enabled via CLI or config
@@ -221,7 +221,7 @@ limits:
 
 - **wait_time**: How often to check for completed tasks when all workers are busy. Lower = more responsive but higher CPU. Typical: 0.1-1.0 seconds.
 
-- **max_output_capture**: Limits memory usage from task output. Output exceeding this is truncated. Useful for tasks with verbose output.
+- **max_output_capture**: Limits memory usage from task output. Captures the **LAST N characters** (errors appear at end). If output exceeds this limit, earlier output is discarded. Useful for tasks with verbose output while preserving error messages.
 
 - **max_allowed_\***: Hard limits enforced by script config. User configs cannot exceed these values. If user specifies higher, value is capped with a warning.
 
