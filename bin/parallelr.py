@@ -291,8 +291,11 @@ class Configuration:
             errors.append("max_workers must be positive")
         if self.limits.timeout_seconds <= 0:
             errors.append("timeout_seconds must be positive")
-        if self.limits.wait_time < 0:
-            errors.append("wait_time cannot be negative")
+        # Wait time must be between 0.01 (10ms) and 10.0 (10 seconds)
+        if self.limits.wait_time < 0.01:
+            errors.append("wait_time must be at least 0.01 seconds (10ms)")
+        if self.limits.wait_time > 10.0:
+            errors.append("wait_time cannot exceed 10.0 seconds")
         
         valid_levels = ['DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL']
         if self.logging.level.upper() not in valid_levels:
@@ -1408,7 +1411,7 @@ Examples:
                        help='Task timeout in seconds (overrides config)')
     
     parser.add_argument('-w', '--wait', type=float, default=None,
-                       help='Wait time before checking for free slots (overrides config)')
+                       help='Polling interval when all workers busy (0.01-10.0 seconds, default: 0.1). How often to check if running tasks completed')
     
     parser.add_argument('-T', '--TasksDir', nargs='+', action='append',
                        help='Directory containing task files or specific file paths (can be used multiple times)')
@@ -1699,8 +1702,11 @@ def main():
         if args.timeout and args.timeout <= 0:
             raise ParallelTaskExecutorError("Timeout must be positive")
         
-        if args.wait and args.wait < 0:
-            raise ParallelTaskExecutorError("Wait time cannot be negative")
+        if args.wait:
+            if args.wait < 0.01:
+                raise ParallelTaskExecutorError("Wait time must be at least 0.01 seconds (10ms)")
+            if args.wait > 10.0:
+                raise ParallelTaskExecutorError("Wait time cannot exceed 10.0 seconds")
         
         manager = ParallelTaskManager(
             max_workers=args.max,

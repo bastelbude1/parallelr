@@ -139,7 +139,7 @@ python bin/parallelr.py --check-dependencies
 | `-r, --run` | Execute tasks (without this flag, runs in dry-run mode) |
 | `-m, --max N` | Maximum parallel workers (default: 20, max: 100, overrides config) |
 | `-t, --timeout N` | Task timeout in seconds (default: 600, max: 3600, overrides config) |
-| `-w, --wait N` | Wait time between slot checks in seconds (default: 0.1, overrides config) |
+| `-w, --wait N` | Polling interval when all workers busy (0.01-10.0 seconds, default: 0.1). How often to check if tasks completed |
 | `--file-extension EXT` | Filter task files by extension(s). Single: `txt`, Multiple: `txt,log,dat` |
 
 #### Advanced Execution
@@ -235,7 +235,7 @@ limits:
   # Worker and timeout settings
   max_workers: 20              # Number of parallel workers
   timeout_seconds: 600         # Task timeout (10 minutes)
-  wait_time: 0.1               # Polling interval for free slots
+  wait_time: 0.1               # Polling interval when all workers busy (0.01-10.0 seconds)
   max_output_capture: 1000     # Maximum characters of stdout/stderr to capture (last N chars)
 
   # System-enforced maximums (script config only)
@@ -256,7 +256,11 @@ limits:
 
 - **timeout_seconds**: Maximum execution time per task. Tasks exceeding this are terminated (SIGTERM, then SIGKILL). Range: 1-3600.
 
-- **wait_time**: How often to check for completed tasks when all workers are busy. Lower = more responsive but higher CPU. Typical: 0.1-1.0 seconds.
+- **wait_time**: Polling interval to check if running tasks have completed when all worker slots are occupied. This does NOT control how fast new tasks start - tasks start immediately when a worker becomes available. Range: 0.01-10.0 seconds.
+  - `0.01-0.1`: Very responsive, minimal delay detecting task completion (recommended)
+  - `0.5-1.0`: Balanced, slight delay acceptable
+  - `>2.0`: Not recommended - workers may sit idle waiting for next poll
+  - **Important**: This is NOT a delay between starting tasks. To slow processing, use fewer workers (`-m`), not higher wait_time.
 
 - **max_output_capture**: Limits memory usage from task output. Captures the **LAST N characters** (errors appear at end). If output exceeds this limit, earlier output is discarded. Useful for tasks with verbose output while preserving error messages.
 
