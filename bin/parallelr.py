@@ -689,26 +689,32 @@ class SecureTaskExecutor:
 class ParallelTaskManager:
     """Main parallel task execution manager."""
     
-    def __init__(self, max_workers, timeout, wait_time, tasks_dir, command_template,
-                 script_path, dry_run=False, enable_stop_limits=False, log_task_output=True):
-        
+    def __init__(self, max_workers, timeout, wait_time, tasks_paths, command_template,
+                 script_path, dry_run=False, enable_stop_limits=False, log_task_output=True,
+                 file_extension=None):
+
         self.config = Configuration.from_script(script_path)
         self.config.validate()
-        
+
         if max_workers is not None:
             self.config.limits.max_workers = max_workers
         if timeout is not None:
             self.config.limits.timeout_seconds = timeout
         if wait_time is not None:
             self.config.limits.wait_time = wait_time
-        
+
         if enable_stop_limits:
             self.config.limits.stop_limits_enabled = True
-        
+
         self.max_workers = self.config.limits.max_workers
         self.timeout = self.config.limits.timeout_seconds
         self.wait_time = self.config.limits.wait_time
-        self.tasks_dir = Path(tasks_dir)
+        # Handle both single path (string) and multiple paths (list)
+        if isinstance(tasks_paths, str):
+            self.tasks_paths = [tasks_paths]
+        else:
+            self.tasks_paths = tasks_paths if tasks_paths else []
+        self.file_extension = file_extension
         self.command_template = command_template
         self.dry_run = dry_run
         
@@ -786,24 +792,80 @@ class ParallelTaskManager:
                 raise ParallelTaskExecutorError(f"Failed to init summary log: {e}")
 
     def _discover_tasks(self):
-        """Discover task files with basic validation."""
+        """Discover task files from directories and/or explicit file paths."""
         task_files = []
-        
+
+        # Parse file extensions if provided
+        allowed_extensions = set()
+        if self.file_extension:
+            # Support both "txt" and "txt,log,dat" formats
+            for ext in self.file_extension.split(','):
+                ext = ext.strip()
+                if not ext.startswith('.'):
+                    ext = '.' + ext
+                allowed_extensions.add(ext.lower())
+
         try:
-            if not self.tasks_dir.exists():
-                raise ParallelTaskExecutorError(f"Tasks directory does not exist: {self.tasks_dir}")
-            
-            for file_path in self.tasks_dir.iterdir():
-                if file_path.is_file():
-                    task_files.append(str(file_path))
-            
+            if not self.tasks_paths:
+                raise ParallelTaskExecutorError("No task paths specified")
+
+            for task_path in self.tasks_paths:
+                path = Path(task_path)
+
+                if path.is_file():
+                    # It's a file - add it directly
+                    # Check extension filter if provided
+                    if allowed_extensions:
+                        if path.suffix.lower() not in allowed_extensions:
+                            self.logger.debug(f"Skipping {path} - extension not in filter")
+                            continue
+                    task_files.append(str(path))
+
+                elif path.is_dir():
+                    # It's a directory - discover files within
+                    for file_path in path.iterdir():
+                        if file_path.is_file():
+                            # Check extension filter if provided
+                            if allowed_extensions:
+                                if file_path.suffix.lower() not in allowed_extensions:
+                                    continue
+                            task_files.append(str(file_path))
+
+                else:
+                    # Path doesn't exist - could be a glob pattern that shell didn't expand
+                    # Try glob expansion
+                    import glob
+                    matched_files = glob.glob(str(path))
+                    if matched_files:
+                        for file_path in matched_files:
+                            file_path = Path(file_path)
+                            if file_path.is_file():
+                                # Check extension filter if provided
+                                if allowed_extensions:
+                                    if file_path.suffix.lower() not in allowed_extensions:
+                                        continue
+                                task_files.append(str(file_path))
+                    else:
+                        raise ParallelTaskExecutorError(f"Path does not exist: {path}")
+
             if not task_files:
-                raise ParallelTaskExecutorError(f"No task files found in {self.tasks_dir}")
-            
-            task_files.sort()
-            self.logger.info(f"Discovered {len(task_files)} task files")
+                if allowed_extensions:
+                    ext_list = ', '.join(allowed_extensions)
+                    raise ParallelTaskExecutorError(f"No task files found matching extensions: {ext_list}")
+                else:
+                    raise ParallelTaskExecutorError(f"No task files found in specified paths")
+
+            # Remove duplicates and sort
+            task_files = sorted(list(set(task_files)))
+
+            if allowed_extensions:
+                ext_list = ', '.join(allowed_extensions)
+                self.logger.info(f"Discovered {len(task_files)} task files with extensions: {ext_list}")
+            else:
+                self.logger.info(f"Discovered {len(task_files)} task files")
+
             return task_files
-            
+
         except Exception as e:
             raise ParallelTaskExecutorError(f"Failed to discover task files: {e}")
 
@@ -1103,7 +1165,17 @@ def start_daemon_process(script_path, args):
         return 1
 
     print(f"Starting {script_name} as daemon...")
-    print(f"Task directory: {args.TasksDir}")
+    # Handle both single string and list of strings
+    if args.TasksDir:
+        if isinstance(args.TasksDir, list):
+            task_paths_str = ', '.join(str(p) for p in args.TasksDir)
+        else:
+            task_paths_str = str(args.TasksDir)
+        print(f"Task paths: {task_paths_str}")
+    else:
+        print(f"Task paths: None")
+    if args.file_extension:
+        print(f"File extension filter: {args.file_extension}")
     print(f"Command template: {args.Command}")
     print(f"Workers: {args.max or 'default'}")
     print(f"Timeout: {args.timeout or 'default'}")
@@ -1279,6 +1351,12 @@ Examples:
   # Execute TASKER tasks with auto-generated project
   %(prog)s -T ./test_cases -r
 
+  # Execute specific file types only
+  %(prog)s -T ./test_cases --file-extension txt -r
+
+  # Execute specific files (shell expansion)
+  %(prog)s -T ./test_cases/*.txt -r
+
   # Execute with custom project name
   %(prog)s -T ./test_cases -p myproject -r
 
@@ -1295,8 +1373,17 @@ Note: In ptasker mode, command is automatically set to:
         description = "Parallel Task Executor - Python 3.6.8 Compatible"
         epilog = """
 Examples:
-  # Execute tasks (foreground)
+  # Execute all tasks in directory (foreground)
   %(prog)s -T ./tasks -C "python3 @TASK@" -r
+
+  # Execute specific file types only
+  %(prog)s -T ./tasks --file-extension py -C "python3 @TASK@" -r
+
+  # Execute specific files (shell expansion)
+  %(prog)s -T ./tasks/*.txt -C "cat @TASK@" -r
+
+  # Execute from multiple sources
+  %(prog)s -T ./dir1 -T ./dir2 -T ./file.txt -C "process @TASK@" -r
 
   # Execute tasks (background/detached)
   %(prog)s -T ./tasks -C "python3 @TASK@" -r -d
@@ -1323,8 +1410,11 @@ Examples:
     parser.add_argument('-w', '--wait', type=float, default=None,
                        help='Wait time before checking for free slots (overrides config)')
     
-    parser.add_argument('-T', '--TasksDir',
-                       help='Directory containing task files')
+    parser.add_argument('-T', '--TasksDir', nargs='+', action='append',
+                       help='Directory containing task files or specific file paths (can be used multiple times)')
+
+    parser.add_argument('--file-extension',
+                       help='Filter task files by extension(s), e.g., "txt" or "txt,log,dat"')
     
     if ptasker_mode:
         # In ptasker mode, -C is auto-generated from -p
@@ -1564,6 +1654,13 @@ def main():
     try:
         args = parse_arguments()
 
+        # Flatten TasksDir if it's a list of lists (from nargs='+' and action='append')
+        if args.TasksDir and isinstance(args.TasksDir[0], list):
+            flattened = []
+            for sublist in args.TasksDir:
+                flattened.extend(sublist)
+            args.TasksDir = flattened
+
         if args.list_workers:
             list_workers(script_path)
             sys.exit(0)
@@ -1609,17 +1706,28 @@ def main():
             max_workers=args.max,
             timeout=args.timeout,
             wait_time=args.wait,
-            tasks_dir=args.TasksDir,
+            tasks_paths=args.TasksDir,  # Now a list from action='append'
             command_template=args.Command,
             script_path=script_path,
             dry_run=not args.run,
             enable_stop_limits=args.enable_stop_limits,
-            log_task_output=not args.no_task_output_log
+            log_task_output=not args.no_task_output_log,
+            file_extension=args.file_extension
         )
         
         if args.daemon:
             manager.logger.info(f"Daemon started successfully - PID: {os.getpid()}")
-            manager.logger.info(f"Task directory: {args.TasksDir}")
+            # Handle both single string and list of strings
+            if args.TasksDir:
+                if isinstance(args.TasksDir, list):
+                    task_paths_str = ', '.join(str(p) for p in args.TasksDir)
+                else:
+                    task_paths_str = str(args.TasksDir)
+                manager.logger.info(f"Task paths: {task_paths_str}")
+            else:
+                manager.logger.info(f"Task paths: None")
+            if args.file_extension:
+                manager.logger.info(f"File extension filter: {args.file_extension}")
             manager.logger.info(f"Command template: {args.Command}")
             manager.logger.info(f"Workers: {manager.max_workers}, Timeout: {manager.timeout}s")
             manager.logger.info(f"Stop limits: {'enabled' if args.enable_stop_limits else 'disabled'}")
