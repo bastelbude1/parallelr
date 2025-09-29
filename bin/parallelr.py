@@ -483,15 +483,22 @@ class SecureTaskExecutor:
 
     def _monitor_process(self):
         """Monitor process resource usage."""
-        if not HAS_PSUTIL or not self._process:
+        if not HAS_PSUTIL:
             return 0.0, 0.0
-            
+
+        if not self._process:
+            return 0.0, 0.0
+
         try:
             process = psutil.Process(self._process.pid)
             memory_mb = process.memory_info().rss / 1024 / 1024
-            cpu_percent = process.cpu_percent()
+            cpu_percent = process.cpu_percent(interval=0)  # Non-blocking
             return memory_mb, cpu_percent
-        except:
+        except (psutil.NoSuchProcess, psutil.AccessDenied, ProcessLookupError):
+            # Process ended or no permission
+            return 0.0, 0.0
+        except Exception:
+            # Unexpected error - log at debug level only
             return 0.0, 0.0
 
     def execute(self):
@@ -601,10 +608,12 @@ class SecureTaskExecutor:
                 except:
                     pass
 
-                # Get resource uage before process completion 
+                # Get final resource usage (keep max values)
                 memory_usage, cpu_usage = self._monitor_process()
-                result.memory_usage = memory_usage
-                result.cpu_usage = cpu_usage
+                if memory_usage > result.memory_usage:
+                    result.memory_usage = memory_usage
+                if cpu_usage > result.cpu_usage:
+                    result.cpu_usage = cpu_usage
 
                 # Wait for process completion
                 self._process.wait()
