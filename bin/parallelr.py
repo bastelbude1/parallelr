@@ -152,31 +152,56 @@ class Configuration:
     
     def __init__(self, script_path):
         self.script_name = Path(script_path).stem
+        self.original_script_name = self._get_original_script_name(script_path)
         self.script_config_path = self._get_script_config_path(script_path)
         self.user_config_path = self._get_user_config_path()
-        
+
         # Initialize with defaults
         self.limits = LimitsConfig()
         self.security = SecurityConfig()
         self.execution = ExecutionConfig()
         self.logging = LoggingConfig()
         self.advanced = AdvancedConfig()
-        
+
         # Load script config first, then user config
         self._load_script_config()
         self._load_user_config()
 
+    def _get_original_script_name(self, script_path):
+        """Get the original script name by resolving symlinks."""
+        resolved_path = Path(script_path).resolve()
+        return resolved_path.stem
+
     def _get_script_config_path(self, script_path):
-        """Get script config path: ../cfg/<script_name>.yaml"""
+        """Get script config path with fallback to original script config."""
         script_dir = Path(script_path).resolve().parent
         cfg_dir = script_dir.parent / 'cfg'
-        return cfg_dir / f"{self.script_name}.yaml"
+
+        # First try the symlink/current name config
+        primary_config = cfg_dir / f"{self.script_name}.yaml"
+
+        # If it doesn't exist and we're using a symlink, fall back to original
+        if not primary_config.exists() and self.script_name != self.original_script_name:
+            fallback_config = cfg_dir / f"{self.original_script_name}.yaml"
+            if fallback_config.exists():
+                return fallback_config
+
+        return primary_config
 
     def _get_user_config_path(self):
-        """Get user config path: ~/<script_name>/cfg/<script_name>.yaml"""
+        """Get user config path with fallback to original script config."""
         home_dir = Path.home()
-        user_cfg_dir = home_dir / self.script_name / 'cfg'
-        return user_cfg_dir / f"{self.script_name}.yaml"
+
+        # First try the symlink/current name config
+        primary_config = home_dir / self.script_name / 'cfg' / f"{self.script_name}.yaml"
+
+        # If it doesn't exist and we're using a symlink, fall back to original
+        if not primary_config.exists() and self.script_name != self.original_script_name:
+            fallback_config = home_dir / self.original_script_name / 'cfg' / f"{self.original_script_name}.yaml"
+            if fallback_config.exists():
+                return fallback_config
+
+        return primary_config
 
     def _load_script_config(self):
         """Load script configuration with system limits."""
@@ -439,6 +464,16 @@ class Configuration:
     def __str__(self):
         """String representation of configuration."""
         workspace_type = "isolated per worker" if self.execution.workspace_isolation else "shared"
+
+        # Indicate if using fallback configs
+        script_config_desc = f"{self.script_config_path} (exists: {self.script_config_path.exists()})"
+        if self.script_name != self.original_script_name and self.script_config_path.name == f"{self.original_script_name}.yaml":
+            script_config_desc += " [fallback from original script]"
+
+        user_config_desc = f"{self.user_config_path} (exists: {self.user_config_path.exists()})"
+        if self.script_name != self.original_script_name and self.user_config_path.parts[-1] == f"{self.original_script_name}.yaml":
+            user_config_desc += " [fallback from original script]"
+
         return f"""Configuration for {self.script_name}:
   Workers: {self.limits.max_workers} (max allowed: {self.limits.max_allowed_workers})
   Timeout: {self.limits.timeout_seconds}s (max allowed: {self.limits.max_allowed_timeout}s)
@@ -447,8 +482,8 @@ class Configuration:
   Working Dir: {self.get_working_directory()}
   Log Dir: {self.get_log_directory()}
   Stop Limits: {"Enabled" if self.limits.stop_limits_enabled else "Disabled"}
-  Script Config: {self.script_config_path} (exists: {self.script_config_path.exists()})
-  User Config: {self.user_config_path} (exists: {self.user_config_path.exists()})"""
+  Script Config: {script_config_desc}
+  User Config: {user_config_desc}"""
 
 class SecureTaskExecutor:
     """Simplified task executor with basic security validation."""
