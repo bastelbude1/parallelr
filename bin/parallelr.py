@@ -419,7 +419,7 @@ class Configuration:
 
     def get_process_log_prefix(self, process_id):
         """Get simplified log file prefix."""
-        return f"tasker_{process_id}"
+        return f"parallelr_{process_id}"
 
     @classmethod
     def from_script(cls, script_path):
@@ -731,18 +731,18 @@ class ParallelTaskManager:
         self.logger = self._setup_logging()
         
         timestamp = self.config.get_custom_timestamp()
-        self.summary_log_file = self.log_dir / f"summary_{self.process_id}_{timestamp}.csv"
+        self.summary_log_file = self.log_dir / f"parallelr_{self.process_id}_{timestamp}_summary.csv"
         self._log_lock = threading.Lock()
         self._init_summary_log()
 
         self.log_task_output = log_task_output
-        self.task_results_file = self.log_dir / f"TaskResults_{self.process_id}_{timestamp}.txt"
+        self.task_results_file = self.log_dir / f"parallelr_{self.process_id}_{timestamp}_output.txt"
 
     def _setup_logging(self):
         """Set up logging with size-based rotation."""
         import logging.handlers
-        
-        logger = logging.getLogger(f'tasker_{self.process_id}')
+
+        logger = logging.getLogger(f'parallelr_{self.process_id}')
         logger.setLevel(getattr(logging, self.config.logging.level.upper()))
         logger.handlers.clear()
         
@@ -890,7 +890,7 @@ class ParallelTaskManager:
                         if result.error_message:
                             f.write(f"\nERROR: {result.error_message}\n")
             except Exception as e:
-                self.logger.error(f"TaskResults log write failed: {e}")
+                self.logger.error(f"Output log write failed: {e}")
 
     def _setup_signal_handlers(self):
         """Set up signal handlers for graceful shutdown."""
@@ -1044,9 +1044,9 @@ Auto-Stop Protection:
 - Stop Limits: {stop_enabled}{stop_details}
 
 Log Files:
-- Main Log: {self.log_dir / f'tasker_{self.process_id}.log'} (rotating)
+- Main Log: {self.log_dir / f'parallelr_{self.process_id}.log'} (rotating)
 - Summary: {self.summary_log_file} (session-specific)
-- TaskResults: {self.task_results_file} (disable with --no-task-output-log)
+- Output: {self.task_results_file} (disable with --no-task-output-log)
 
 Process Info:
 - Process ID: {self.process_id}
@@ -1157,9 +1157,9 @@ def list_workers(script_path):
                     start_time = "unknown"
             
             log_dir = config.get_log_directory()
-            log_file = f"tasker_{pid}.log"
-            
-            summary_pattern = f"summary_{pid}_*.csv"
+            log_file = f"parallelr_{pid}.log"
+
+            summary_pattern = f"parallelr_{pid}_*_summary.csv"
             summary_files = list(log_dir.glob(summary_pattern))
             if summary_files:
                 summary_file = max(summary_files, key=lambda f: f.stat().st_mtime).name
@@ -1173,8 +1173,8 @@ def list_workers(script_path):
     
     print()
     print("Commands:")
-    print(f"  View logs:        tail -f {config.get_log_directory()}/tasker_<PID>.log")
-    print(f"  View progress:    tail -f {config.get_log_directory()}/summary_<PID>_*.csv")
+    print(f"  View logs:        tail -f {config.get_log_directory()}/parallelr_<PID>.log")
+    print(f"  View progress:    tail -f {config.get_log_directory()}/parallelr_<PID>_*_summary.csv")
     print(f"  Kill specific:    python {script_name} -k <PID>")
     print(f"  Kill all:         python {script_name} -k")
 
@@ -1355,7 +1355,7 @@ Examples:
                        help='Check optional Python module availability and exit')
 
     parser.add_argument('--no-task-output-log', action='store_true',
-                       help='Disable detailed task output logging to TaskResults file')
+                       help='Disable detailed task output logging to output file')
 
     args = parser.parse_args()
 
