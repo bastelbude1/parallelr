@@ -1248,12 +1248,43 @@ def kill_processes(script_path, target_pid=None):
         
         print(f"✓ Kill operation completed for {killed_count} processes")
 
+def is_ptasker_mode():
+    """Check if script is running in ptasker mode (symlink)."""
+    script_name = Path(sys.argv[0]).name
+    return script_name.startswith('ptasker')
+
+def generate_project_id():
+    """Generate unique project ID for ptasker mode."""
+    import secrets
+    unique_id = secrets.token_hex(3)  # 6 hex chars
+    return f"parallelr_{unique_id}"
+
 def parse_arguments():
     """Parse and validate command line arguments."""
-    parser = argparse.ArgumentParser(
-        description="Parallel Task Executor - Python 3.6.8 Compatible",
-        formatter_class=argparse.RawDescriptionHelpFormatter,
-        epilog="""
+    ptasker_mode = is_ptasker_mode()
+
+    if ptasker_mode:
+        description = "Parallel Task Executor for TASKER - Simplified Interface"
+        epilog = """
+Examples:
+  # Execute TASKER tasks with auto-generated project
+  %(prog)s -T ./test_cases -r
+
+  # Execute with custom project name
+  %(prog)s -T ./test_cases -p myproject -r
+
+  # Execute as daemon
+  %(prog)s -T ./test_cases -p myproject -r -d
+
+  # List running workers
+  %(prog)s --list-workers
+
+Note: In ptasker mode, command is automatically set to:
+      tasker @TASK@ -p <project_name> -r
+        """
+    else:
+        description = "Parallel Task Executor - Python 3.6.8 Compatible"
+        epilog = """
 Examples:
   # Execute tasks (foreground)
   %(prog)s -T ./tasks -C "python3 @TASK@" -r
@@ -1267,6 +1298,11 @@ Examples:
   # Kill all running instances (dangerous)
   %(prog)s -k
         """
+
+    parser = argparse.ArgumentParser(
+        description=description,
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog=epilog
     )
     
     parser.add_argument('-m', '--max', type=int, default=None,
@@ -1281,9 +1317,19 @@ Examples:
     parser.add_argument('-T', '--TasksDir',
                        help='Directory containing task files')
     
-    parser.add_argument('-C', '--Command', 
-                       help='Command template with @TASK@ pattern to execute')
-    
+    if ptasker_mode:
+        # In ptasker mode, -C is auto-generated from -p
+        parser.add_argument('-C', '--Command',
+                           help='(Ignored in ptasker mode - auto-generated from project)')
+        parser.add_argument('-p', '--project',
+                           help='Project name for TASKER (auto-generated if not provided)')
+    else:
+        # Normal mode
+        parser.add_argument('-C', '--Command',
+                           help='Command template with @TASK@ pattern to execute')
+        parser.add_argument('-p', '--project',
+                           help='Project name for summary logging')
+
     parser.add_argument('-r', '--run', action='store_true',
                        help='Execute tasks (default is dry-run)')
 
@@ -1298,7 +1344,7 @@ Examples:
 
     parser.add_argument('-k', '--kill', nargs='?', const='all', metavar='PID',
                        help='Kill processes: -k (all) or -k PID (specific) - DANGEROUS!')
-    
+
     parser.add_argument('--validate-config', action='store_true',
                        help='Validate configuration file and exit')
 
@@ -1313,6 +1359,18 @@ Examples:
 
     args = parser.parse_args()
 
+    # Special handling for ptasker mode
+    if ptasker_mode and not (args.list_workers or args.kill is not None or
+                             args.validate_config or args.show_config or args.check_dependencies):
+        # Generate or use provided project name
+        if not args.project:
+            args.project = generate_project_id()
+            print(f"Auto-generated project: {args.project}")
+
+        # Auto-generate command for TASKER
+        args.Command = f"tasker @TASK@ -p {args.project} -r"
+        print(f"Using command: {args.Command}")
+
     if args.list_workers or args.kill is not None:
         return args
 
@@ -1321,7 +1379,11 @@ Examples:
         if not args.TasksDir:
             missing_args.append("--TasksDir")
         if not args.Command:
-            missing_args.append("--Command")
+            if ptasker_mode:
+                # In ptasker mode, Command should have been auto-generated
+                parser.error("Internal error: Command not generated in ptasker mode")
+            else:
+                missing_args.append("--Command")
         if missing_args:
             parser.error(f"The following arguments are required: {', '.join(missing_args)}")
 

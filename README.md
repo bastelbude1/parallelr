@@ -45,6 +45,7 @@ Perfect for batch processing, data pipelines, test suites, or any scenario where
 - ✓ **Security Validation**: Input validation and argument length checking
 - ✓ **Graceful Shutdown**: Signal handling for clean termination
 - ✓ **Real-time Output Capture**: Non-blocking I/O for live output collection
+- ✓ **TASKER Integration**: Simplified `ptasker` mode with auto-generated project IDs
 
 ## Quick Start
 
@@ -63,6 +64,23 @@ python bin/parallelr.py -T my_tasks -C "bash @TASK@" -r
 # 4. Run with custom settings
 python bin/parallelr.py -T my_tasks -C "bash @TASK@" -r -m 10 -t 300
 ```
+
+### Quick Start for TASKER Users (ptasker mode)
+
+The `ptasker` symlink provides a simplified interface specifically for running TASKER test cases:
+
+```bash
+# 1. Execute TASKER tests with auto-generated project ID
+python bin/ptasker -T /path/to/test_cases -r
+
+# 2. Execute with custom project name
+python bin/ptasker -T /path/to/test_cases -p myproject -r
+
+# 3. Run as daemon
+python bin/ptasker -T /path/to/test_cases -p myproject -r -d
+```
+
+**How it works**: ptasker automatically generates the command as `tasker @TASK@ -p <project> -r`. You don't need to specify `-C`. If no project name is provided, one is auto-generated (e.g., `parallelr_1a811c`).
 
 ## Requirements
 
