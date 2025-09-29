@@ -149,10 +149,18 @@ class AdvancedConfig:
 
 class Configuration:
     """Configuration manager with script defaults and optional user overrides."""
-    
+
     def __init__(self, script_path):
         self.script_name = Path(script_path).stem
         self.original_script_name = self._get_original_script_name(script_path)
+
+        # Track what was actually loaded (initialize before calling path methods)
+        self.script_config_loaded = False
+        self.script_config_is_fallback = False
+        self.user_config_loaded = False
+        self.user_config_is_fallback = False
+
+        # Get config paths (may set fallback flags)
         self.script_config_path = self._get_script_config_path(script_path)
         self.user_config_path = self._get_user_config_path()
 
@@ -184,6 +192,7 @@ class Configuration:
         if not primary_config.exists() and self.script_name != self.original_script_name:
             fallback_config = cfg_dir / f"{self.original_script_name}.yaml"
             if fallback_config.exists():
+                self.script_config_is_fallback = True
                 return fallback_config
 
         return primary_config
@@ -199,6 +208,7 @@ class Configuration:
         if not primary_config.exists() and self.script_name != self.original_script_name:
             fallback_config = home_dir / self.original_script_name / 'cfg' / f"{self.original_script_name}.yaml"
             if fallback_config.exists():
+                self.user_config_is_fallback = True
                 return fallback_config
 
         return primary_config
@@ -208,7 +218,7 @@ class Configuration:
         try:
             if not self.script_config_path.exists():
                 return
-                
+
             with open(str(self.script_config_path), 'r') as f:
                 if self.script_config_path.suffix in ['.yaml', '.yml']:
                     if not HAS_YAML:
@@ -216,9 +226,10 @@ class Configuration:
                     config_data = yaml.safe_load(f)
                 else:
                     return
-            
+
             self._apply_config(config_data or {})
-            
+            self.script_config_loaded = True
+
         except (FileNotFoundError, PermissionError) as e:
             print(f"Warning: Cannot access script config: {e}")
         except Exception as e:
@@ -229,7 +240,7 @@ class Configuration:
         try:
             if not self.user_config_path.exists():
                 return
-                
+
             with open(str(self.user_config_path), 'r') as f:
                 if self.user_config_path.suffix in ['.yaml', '.yml']:
                     if not HAS_YAML:
@@ -237,9 +248,10 @@ class Configuration:
                     user_config = yaml.safe_load(f)
                 else:
                     return
-            
+
             self._apply_user_config(user_config or {})
-            
+            self.user_config_loaded = True
+
         except (FileNotFoundError, PermissionError) as e:
             print(f"Warning: Cannot access user config: {e}")
         except Exception as e:
@@ -1685,8 +1697,21 @@ def validate_configuration(script_path):
         config.validate()
 
         print("✓ Configuration is valid")
-        print(f"✓ Script config: {config.script_config_path} (exists: {config.script_config_path.exists()})")
-        print(f"✓ User config: {config.user_config_path} (exists: {config.user_config_path.exists()})")
+
+        # Script config status
+        if config.script_config_loaded:
+            fallback_note = " (fallback from parallelr.yaml)" if config.script_config_is_fallback else ""
+            print(f"✓ Script config: {config.script_config_path}{fallback_note}")
+        else:
+            print(f"  Script config: Not found (using defaults)")
+
+        # User config status
+        if config.user_config_loaded:
+            fallback_note = " (fallback from parallelr.yaml)" if config.user_config_is_fallback else ""
+            print(f"✓ User config: {config.user_config_path}{fallback_note}")
+        else:
+            print(f"  User config: Not found (using defaults)")
+
         print(f"✓ Working dir: {config.get_working_directory()}")
         print(f"✓ Log dir: {config.get_log_directory()}")
         print(f"✓ Workspace mode: {'Isolated' if config.execution.workspace_isolation else 'Shared'}")
