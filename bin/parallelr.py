@@ -1700,14 +1700,20 @@ def validate_configuration(script_path):
 
         # Script config status
         if config.script_config_loaded:
-            fallback_note = " (fallback from parallelr.yaml)" if config.script_config_is_fallback else ""
+            if config.script_config_is_fallback:
+                fallback_note = f" (fallback from {config.script_name}.yaml)"
+            else:
+                fallback_note = ""
             print(f"✓ Script config: {config.script_config_path}{fallback_note}")
         else:
             print(f"  Script config: Not found (using defaults)")
 
         # User config status
         if config.user_config_loaded:
-            fallback_note = " (fallback from parallelr.yaml)" if config.user_config_is_fallback else ""
+            if config.user_config_is_fallback:
+                fallback_note = f" (fallback from {config.script_name}.yaml)"
+            else:
+                fallback_note = ""
             print(f"✓ User config: {config.user_config_path}{fallback_note}")
         else:
             print(f"  User config: Not found (using defaults)")
