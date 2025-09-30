@@ -217,27 +217,89 @@ python bin/parallelr.py -k
 
 ### Configuration Hierarchy
 
-parallelr uses a two-tier configuration system with automatic fallback for symlinks:
+parallelr uses a **hierarchical merge** configuration system with automatic fallback for symlinks.
+
+#### How Configuration Merging Works
+
+**IMPORTANT**: Both configs are loaded and merged together. The user config does NOT replace the script config - it only overrides specific values you choose to customize.
+
+**Loading Process**:
+1. **Start with hardcoded defaults** (built into the code)
+2. **Load Script Configuration** - overrides defaults
+3. **Load User Configuration** - overrides specific script config values
+
+**What This Means**:
+- ✓ User config values override matching script config values
+- ✓ Script config provides all values not specified in user config
+- ✓ System limits (`max_allowed_*`) always come from script config
+- ✓ Security settings always come from script config (cannot be overridden)
+- ✓ You only need to specify values you want to change in user config
+
+**Example Merge**:
+
+Script config (`cfg/parallelr.yaml`):
+```yaml
+limits:
+  max_workers: 20
+  timeout_seconds: 600
+  max_allowed_workers: 100
+logging:
+  level: "INFO"
+```
+
+User config (`~/parallelr/cfg/parallelr.yaml`):
+```yaml
+limits:
+  max_workers: 50
+logging:
+  level: "DEBUG"
+```
+
+**Effective Configuration** (merged result):
+- `max_workers: 50` ← from user config (overrides script)
+- `timeout_seconds: 600` ← from script config (not overridden)
+- `max_allowed_workers: 100` ← from script config (system limit)
+- `level: "DEBUG"` ← from user config (overrides script)
+
+#### Configuration Files
 
 1. **Script Configuration** (`cfg/parallelr.yaml`)
    - Ships with the tool
    - Defines system defaults and maximum limits
    - Controls security boundaries
-   - Cannot be overridden by users for security settings
+   - Provides base values for all settings
+   - Always loaded first
 
 2. **User Configuration** (`~/parallelr/cfg/parallelr.yaml`)
    - Optional user-specific overrides
+   - Only specify values you want to customize
    - Subject to validation against script limits
+   - Merged on top of script config
    - Allows customization within safe boundaries
 
-**Loading Order**: Script config → User config (validated overrides)
+#### Symlink Config Fallback
 
-**Symlink Config Fallback**: When using symlinks (e.g., `ptasker`), the tool first looks for symlink-specific configs (`ptasker.yaml`), then falls back to the original script's config (`parallelr.yaml`) if not found. This allows:
+When using symlinks (e.g., `ptasker`), the tool first looks for symlink-specific configs (`ptasker.yaml`), then falls back to the original script's config (`parallelr.yaml`) if not found. This allows:
 - Custom configurations per symlink (optional)
 - Automatic fallback to default parallelr config
 - Clear indication in validation output when fallback is used
 
-**Validation**: Use `--validate-config` to see which configs are loaded and whether fallback is active.
+**Fallback Example**:
+- `ptasker` looks for `cfg/ptasker.yaml` → not found
+- Falls back to `cfg/parallelr.yaml` → found and used
+- Same for user config: `~/ptasker/cfg/ptasker.yaml` → `~/parallelr/cfg/parallelr.yaml`
+
+#### Checking Your Configuration
+
+Use `--validate-config` to see which configs are loaded and whether fallback is active:
+```bash
+python bin/parallelr.py --validate-config
+```
+
+Use `--show-config` to see the complete effective configuration (after merging):
+```bash
+python bin/parallelr.py --show-config
+```
 
 ### Configuration Sections
 
@@ -394,29 +456,48 @@ advanced:
 
 #### User Configuration Example
 
+**Remember**: You only need to specify values you want to change. All other settings will come from the script config.
+
 Create `~/parallelr/cfg/parallelr.yaml`:
 
 ```yaml
 # User overrides for parallelr
-# Values are validated against script config limits
+# Only specify settings you want to customize
+# All other values will come from script config (cfg/parallelr.yaml)
 
 limits:
-  max_workers: 50              # Override default (capped at max_allowed_workers)
-  timeout_seconds: 1800        # 30 minutes (capped at max_allowed_timeout)
+  max_workers: 50              # Override default of 20 (capped at max_allowed_workers: 100)
+  timeout_seconds: 1800        # Override default of 600 (capped at max_allowed_timeout: 3600)
+  # Note: timeout_seconds not specified, so script default (600) will be used
+  # Note: max_allowed_workers always comes from script config (100)
 
 execution:
-  workspace_isolation: true    # Use isolated workspaces
+  workspace_isolation: true    # Override default (false) - use isolated workspaces
 
 logging:
-  level: "DEBUG"               # More verbose logging
-  max_log_size_mb: 50          # Larger logs before rotation
+  level: "DEBUG"               # Override default (INFO) - more verbose logging
+  max_log_size_mb: 50          # Override default (10) - larger logs before rotation
+  # Note: Other logging settings come from script config
 ```
+
+**What Happens**:
+- Settings you specify in user config override script config
+- Settings you DON'T specify come from script config
+- System limits (`max_allowed_*`) always enforced from script config
+- Security settings always come from script config (cannot be overridden)
 
 **Validation Rules**:
 - User cannot override `security` section
 - `max_workers`, `timeout_seconds`, `max_output_capture` are capped at `max_allowed_*` values
 - Invalid values cause warnings and fall back to script defaults
 - Type mismatches are automatically converted if possible
+
+**Minimal Example** (only override what you need):
+```yaml
+# Just increase workers - everything else from script config
+limits:
+  max_workers: 50
+```
 
 ### Validating Configuration
 
