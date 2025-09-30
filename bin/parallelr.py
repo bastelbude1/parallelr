@@ -1602,42 +1602,62 @@ logging:
 def show_configuration(script_path):
     """Show current configuration and recommended locations."""
     config = Configuration.from_script(script_path)
-    
+
     print("=" * 60)
     print("PARALLEL TASK EXECUTOR CONFIGURATION")
     print("=" * 60)
     print()
     print(config)
     print()
-    
-    print("SCRIPT CONFIGURATION:")
-    print("-" * 40)
-    if config.script_config_path.exists():
+
+    # Check if both configs point to the same file
+    same_config = config.script_config_path == config.user_config_path
+
+    if same_config and config.script_config_path.exists():
+        # Both configs are the same file - show only once
+        print("CONFIGURATION FILE (Script and User):")
+        print("-" * 40)
         print(f"Location: {config.script_config_path}")
+        if config.script_config_is_fallback or config.user_config_is_fallback:
+            print(f"Note: Using fallback from {config.original_script_name}.yaml (no {config.script_name}.yaml found)")
         try:
             with open(str(config.script_config_path), 'r') as f:
-                content = f.read()
-                # print(content[:500] + ("..." if len(content) > 500 else ""))
-                print(content)
-        except Exception as e:
-            print(f"Error reading: {e}")
-    else:
-        print(f"No script config at: {config.script_config_path}")
-        print("To create script config:")
-        print(get_default_config_content()[:300] + "...")
-    
-    print()
-    print("USER CONFIGURATION:")
-    print("-" * 40)
-    if config.user_config_path.exists():
-        print(f"Location: {config.user_config_path}")
-        try:
-            with open(str(config.user_config_path), 'r') as f:
                 print(f.read())
         except Exception as e:
             print(f"Error reading: {e}")
     else:
-        print(f"No user config found at: {config.user_config_path}")
+        # Different configs - show separately
+        print("SCRIPT CONFIGURATION:")
+        print("-" * 40)
+        if config.script_config_path.exists():
+            print(f"Location: {config.script_config_path}")
+            if config.script_config_is_fallback:
+                print(f"Note: Fallback from {config.script_name}.yaml")
+            try:
+                with open(str(config.script_config_path), 'r') as f:
+                    content = f.read()
+                    print(content)
+            except Exception as e:
+                print(f"Error reading: {e}")
+        else:
+            print(f"No script config at: {config.script_config_path}")
+            print("To create script config:")
+            print(get_default_config_content()[:300] + "...")
+
+        print()
+        print("USER CONFIGURATION:")
+        print("-" * 40)
+        if config.user_config_path.exists():
+            print(f"Location: {config.user_config_path}")
+            if config.user_config_is_fallback:
+                print(f"Note: Fallback from {config.script_name}.yaml")
+            try:
+                with open(str(config.user_config_path), 'r') as f:
+                    print(f.read())
+            except Exception as e:
+                print(f"Error reading: {e}")
+        else:
+            print(f"No user config found at: {config.user_config_path}")
 
 def check_dependencies():
     """Check optional Python module availability."""
