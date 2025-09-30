@@ -86,9 +86,14 @@ python bin/ptasker -T /path/to/test_cases -p myproject -r
 
 # 5. Run as daemon
 python bin/ptasker -T /path/to/test_cases -p myproject -r -d
+
+# 6. Validate ptasker configuration
+python bin/ptasker --validate-config
 ```
 
 **How it works**: ptasker automatically generates the command as `tasker @TASK@ -p <project> -r`. You don't need to specify `-C`. If no project name is provided, one is auto-generated (e.g., `parallelr_1a811c`).
+
+**Custom Configuration**: ptasker can have its own configuration files (`cfg/ptasker.yaml` and `~/ptasker/cfg/ptasker.yaml`). If these don't exist, it automatically falls back to the parallelr configs. This allows you to customize ptasker settings independently while maintaining a common default configuration.
 
 ## Requirements
 
@@ -162,7 +167,7 @@ python bin/parallelr.py --check-dependencies
 | Argument | Description |
 |----------|-------------|
 | `--check-dependencies` | Check optional Python module availability and exit |
-| `--validate-config` | Validate configuration files and exit |
+| `--validate-config` | Validate configuration files and exit. Shows which configs are loaded and whether fallback is used |
 | `--show-config` | Display current effective configuration and file locations |
 
 ### Basic Examples
@@ -212,7 +217,7 @@ python bin/parallelr.py -k
 
 ### Configuration Hierarchy
 
-parallelr uses a two-tier configuration system:
+parallelr uses a two-tier configuration system with automatic fallback for symlinks:
 
 1. **Script Configuration** (`cfg/parallelr.yaml`)
    - Ships with the tool
@@ -226,6 +231,13 @@ parallelr uses a two-tier configuration system:
    - Allows customization within safe boundaries
 
 **Loading Order**: Script config → User config (validated overrides)
+
+**Symlink Config Fallback**: When using symlinks (e.g., `ptasker`), the tool first looks for symlink-specific configs (`ptasker.yaml`), then falls back to the original script's config (`parallelr.yaml`) if not found. This allows:
+- Custom configurations per symlink (optional)
+- Automatic fallback to default parallelr config
+- Clear indication in validation output when fallback is used
+
+**Validation**: Use `--validate-config` to see which configs are loaded and whether fallback is active.
 
 ### Configuration Sections
 
@@ -406,6 +418,57 @@ logging:
 - Invalid values cause warnings and fall back to script defaults
 - Type mismatches are automatically converted if possible
 
+### Validating Configuration
+
+Use `--validate-config` to check configuration status and see which files are loaded:
+
+```bash
+python bin/parallelr.py --validate-config
+# or
+python bin/ptasker --validate-config
+```
+
+**Example Output (configs loaded)**:
+```
+✓ Configuration is valid
+✓ Script config: /home/user/parallelr/cfg/parallelr.yaml
+✓ User config: /home/user/parallelr/cfg/parallelr.yaml
+✓ Working dir: /home/user/parallelr/workspace
+✓ Log dir: /home/user/parallelr/logs
+✓ Workspace mode: Shared
+✓ Workers: 20 (max allowed: 100)
+✓ Timeout: 600s (max allowed: 3600s)
+```
+
+**Example Output (with fallback)**:
+```
+✓ Configuration is valid
+✓ Script config: /home/user/parallelr/cfg/parallelr.yaml (fallback from ptasker.yaml)
+✓ User config: /home/user/parallelr/cfg/parallelr.yaml (fallback from ptasker.yaml)
+✓ Working dir: /home/user/ptasker/workspace
+✓ Log dir: /home/user/ptasker/logs
+✓ Workspace mode: Shared
+✓ Workers: 20 (max allowed: 100)
+✓ Timeout: 600s (max allowed: 3600s)
+```
+
+**Example Output (no configs)**:
+```
+✓ Configuration is valid
+  Script config: Not found (using defaults)
+  User config: Not found (using defaults)
+✓ Working dir: /home/user/parallelr/workspace
+✓ Log dir: /home/user/parallelr/logs
+✓ Workspace mode: Shared
+✓ Workers: 20 (max allowed: 100)
+✓ Timeout: 600s (max allowed: 3600s)
+```
+
+**Status Indicators**:
+- `✓` = Config file loaded successfully
+- `  ` (no checkmark) = Config file not found, using defaults
+- `(fallback from X.yaml)` = Looked for X.yaml, fell back to parallelr.yaml
+
 ## Advanced Features
 
 ### Daemon Mode
@@ -420,7 +483,7 @@ python bin/parallelr.py -T ./tasks -C "bash @TASK@" -r -d
 python bin/parallelr.py --list-workers
 
 # View daemon logs
-tail -f ~/parallelr/logs/tasker_<PID>.log
+tail -f ~/parallelr/logs/parallelr_<PID>_*.log
 
 # Kill daemon
 python bin/parallelr.py -k <PID>
@@ -544,10 +607,10 @@ python bin/parallelr.py --list-workers
 ```
 Found 2 running parallel-tasker process(es):
 
-PID      Status     Start Time           Log File                       Summary File
-----------------------------------------------------------------------------------------------------
-12345    running    2025-09-29 14:30:15  tasker_12345.log              summary_12345_29Sep25_143015.csv
-12346    running    2025-09-29 14:32:01  tasker_12346.log              summary_12346_29Sep25_143201.csv
+PID      Status     Start Time           Log File                                    Summary File
+------------------------------------------------------------------------------------------------------------
+12345    running    2025-09-29 14:30:15  parallelr_12345_29Sep25_143015.log         parallelr_12345_29Sep25_143015_summary.csv
+12346    running    2025-09-29 14:32:01  parallelr_12346_29Sep25_143201.log         parallelr_12346_29Sep25_143201_summary.csv
 ```
 
 ### Kill Processes
@@ -777,9 +840,9 @@ pip install --target=lib psutil
 **Cause**: Wrong command, missing dependencies, wrong permissions
 **Solution**:
 1. Dry-run first: `python bin/parallelr.py -T ./tasks -C "bash @TASK@"`
-2. Check logs: `tail -f ~/parallelr/logs/tasker_<PID>.log`
+2. Check logs: `tail -f ~/parallelr/logs/parallelr_<PID>_*.log`
 3. Test single task manually: `bash tasks/task1.sh`
-4. Check detailed task output: `~/parallelr/logs/TaskResults_<PID>_*.txt` (enabled by default)
+4. Check detailed task output: `~/parallelr/logs/parallelr_<PID>_*_output.txt` (enabled by default)
 
 #### Issue: Worker stuck after Ctrl+C
 **Cause**: Not cleaning up properly
@@ -909,9 +972,11 @@ python bin/parallelr.py --validate-config
 ```
 parallelr/
 ├── bin/
-│   └── parallelr.py          # Main script
+│   ├── parallelr.py          # Main script
+│   └── ptasker -> parallelr.py  # Symlink for TASKER mode
 ├── cfg/
-│   └── parallelr.yaml        # Script config
+│   ├── parallelr.yaml        # Script config (default)
+│   └── ptasker.yaml          # Optional ptasker-specific config (falls back to parallelr.yaml)
 ├── lib/                      # Bundled dependencies (psutil, pyyaml)
 └── CLAUDE.md                 # Developer guide
 
@@ -919,13 +984,20 @@ parallelr/
 ├── cfg/
 │   └── parallelr.yaml        # User config (optional)
 ├── logs/
-│   ├── tasker_{PID}.log      # Main log (rotating)
-│   ├── summary_{PID}_{timestamp}.csv
-│   └── TaskResults_{PID}_{timestamp}.txt
+│   ├── parallelr_{PID}_{timestamp}.log           # Main log (rotating)
+│   ├── parallelr_{PID}_{timestamp}_summary.csv   # Task summary
+│   └── parallelr_{PID}_{timestamp}_output.txt    # Task output (enabled by default)
 ├── workspace/                # Shared workspace
 │   └── pid{PID}_worker{N}/   # Isolated workspaces (if enabled)
 └── pids/
     └── parallelr.pids        # Running process tracking
+
+~/ptasker/                    # Optional ptasker-specific location
+├── cfg/
+│   └── ptasker.yaml          # Optional ptasker user config (falls back to ~/parallelr/cfg/parallelr.yaml)
+├── logs/                     # ptasker logs go here
+├── workspace/                # ptasker workspace
+└── pids/                     # ptasker process tracking
 ```
 
 ---
