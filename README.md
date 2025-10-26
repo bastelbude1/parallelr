@@ -132,7 +132,8 @@ parallelr --check-dependencies
 
 | Argument | Description |
 |----------|-------------|
-| `-d, --daemon` | Run as background daemon (detached from session) |
+| `-d, --debug` | Enable debug mode (set log level to DEBUG) |
+| `-D, --daemon` | Run as background daemon (detached from session) |
 | `--enable-stop-limits` | Enable automatic halt on excessive failures |
 | `--no-task-output-log` | Disable detailed stdout/stderr logging to TaskResults file (enabled by default) |
 
@@ -225,6 +226,40 @@ parallelr -T script.sh -A hosts.txt -E HOSTNAME -C "bash @TASK@ @ARG@" -r
 # Each task runs: HOSTNAME=<hostname> bash script.sh <hostname>
 ```
 
+**4. Multi-Argument Mode** - Process multiple arguments per line with delimiters:
+```bash
+# Create multi-column arguments file (e.g., servers.txt)
+echo "server1.example.com,8080,prod
+server2.example.com,8081,dev
+server3.example.com,8082,staging" > servers.txt
+
+# Use comma separator with indexed placeholders
+parallelr -T deploy.sh -A servers.txt -S comma -C "bash @TASK@ --host @ARG_1@ --port @ARG_2@ --env @ARG_3@" -r
+# Each task runs: bash deploy.sh --host server1.example.com --port 8080 --env prod
+
+# With multiple environment variables (comma-separated)
+parallelr -T deploy.sh -A servers.txt -S comma -E HOSTNAME,PORT,ENV -C "bash @TASK@" -r
+# Each task runs: HOSTNAME=server1.example.com PORT=8080 ENV=prod bash deploy.sh
+```
+
+**Supported Delimiters**:
+- `space` - One or more space characters (space only, not tabs)
+- `whitespace` - One or more whitespace characters (spaces, tabs, etc.)
+- `tab` - One or more tabs
+- `comma` - Comma (`,`)
+- `semicolon` - Semicolon (`;`)
+- `pipe` - Pipe (`|`)
+- `colon` - Colon (`:`) - Common in config files like `/etc/passwd`
+
+**Placeholders**:
+- `@TASK@` - Template file path (File Mode only)
+- `@ARG@` - First argument (backward compatibility)
+- `@ARG_1@`, `@ARG_2@`, `@ARG_3@`, etc. - Individual arguments by position
+
+**Environment Variable Validation**:
+- **Fewer env vars than arguments**: Only available env vars are set, warning logged
+- **More env vars than arguments**: Error logged, execution stops
+
 #### ptasker Integration
 
 ptasker mode automatically sets HOSTNAME when using arguments file:
@@ -236,6 +271,7 @@ ptasker -T template.txt -A hostnames.txt -p myproject -r
 
 #### Arguments File Format
 
+**Single Argument per Line**:
 ```text
 # Comments start with #
 server1.example.com
@@ -244,6 +280,34 @@ server2.example.com
 
 server3.example.com
 server4.example.com
+```
+
+**Multiple Arguments per Line** (with `-S` delimiter):
+```text
+# Space-separated (use -S space)
+server1.example.com 8080 prod
+server2.example.com 8081 dev
+
+# Tab-separated (use -S tab)
+# Note: Use actual tab character (\t) between fields
+server1.example.com<TAB>8080<TAB>prod
+server2.example.com<TAB>8081<TAB>dev
+
+# Comma-separated (use -S comma)
+server1.example.com,8080,prod
+server2.example.com,8081,dev
+
+# Semicolon-separated (use -S semicolon)
+server1.example.com;8080;prod
+server2.example.com;8081;dev
+
+# Pipe-separated (use -S pipe)
+server1.example.com|8080|prod
+server2.example.com|8081|dev
+
+# Colon-separated (use -S colon) - Common in /etc/passwd format
+server1.example.com:8080:prod
+server2.example.com:8081:dev
 ```
 
 #### Use Cases

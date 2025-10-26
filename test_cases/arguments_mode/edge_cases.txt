@@ -1,0 +1,6 @@
+# Test edge cases for argument handling
+0
+false
+server with spaces.com
+server-with-special!chars@test.com
+empty-at-end

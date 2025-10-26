@@ -22,6 +22,7 @@ __pycache__/
 *.egg-info/
 dist/
 build/
+lib/
 
 # IDE
 .vscode/
@@ -33,7 +34,6 @@ build/
 # Logs and runtime data
 *.log
 *.csv
-*.txt
 logs/
 pids/
 workspace/

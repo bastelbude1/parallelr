@@ -1,0 +1,5 @@
+server1.example.com,8080,prod
+server2.example.com,8081,dev
+server3.example.com,8082,staging
+server4.example.com,8083,prod
+server5.example.com,8084,test
