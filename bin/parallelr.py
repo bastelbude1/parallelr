@@ -587,8 +587,8 @@ class SecureTaskExecutor:
             unique_unmatched = sorted(set(unmatched_placeholders), key=lambda x: (len(x), x))
             raise SecurityError(
                 f"Command template contains unmatched argument placeholder(s): {', '.join(unique_unmatched)}. "
-                f"These placeholders were not replaced because insufficient arguments were provided. "
-                f"Please check your command template (-C) and ensure you provide the required arguments."
+                "These placeholders were not replaced because insufficient arguments were provided. "
+                "Please check your command template (-C) and ensure you provide the required arguments."
             )
 
         try:
@@ -1094,8 +1094,8 @@ class ParallelTaskManager:
                         mismatch_details.append(f"{count} argument(s): lines {line_str}")
 
                     raise ParallelTaskExecutorError(
-                        f"Inconsistent argument counts in arguments file. All lines must have the same number of arguments.\n"
-                        f"Found:\n" + '\n'.join(f"  - {detail}" for detail in mismatch_details)
+                        "Inconsistent argument counts in arguments file. All lines must have the same number of arguments.\n"
+                        "Found:\n" + '\n'.join(f"  - {detail}" for detail in mismatch_details)
                     )
 
                 # All entries have consistent argument count, use it for env var validation
@@ -1110,7 +1110,7 @@ class ParallelTaskManager:
                         self.logger.error(
                             f"Environment variable count mismatch: {num_env_vars} env var(s) provided "
                             f"but {num_args} argument(s) per line. Only first {num_env_vars} argument(s) "
-                            f"will have environment variables set."
+                            "will have environment variables set."
                         )
                     elif num_env_vars > num_args:
                         raise ParallelTaskExecutorError(
@@ -1185,7 +1185,7 @@ class ParallelTaskManager:
                     ext_list = ', '.join(allowed_extensions)
                     raise ParallelTaskExecutorError(f"No task files found matching extensions: {ext_list}")
                 else:
-                    raise ParallelTaskExecutorError(f"No task files found in specified paths")
+                    raise ParallelTaskExecutorError("No task files found in specified paths")
 
             # Remove duplicates and sort
             task_files = sorted(list(set(task_files)))
@@ -1565,7 +1565,7 @@ def start_daemon_process(script_path, args):
             task_paths_str = str(args.TasksDir)
         print(f"Task paths: {task_paths_str}")
     else:
-        print(f"Task paths: None")
+        print("Task paths: None")
     if args.file_extension:
         print(f"File extension filter: {args.file_extension}")
     print(f"Command template: {args.Command}")
@@ -2089,7 +2089,7 @@ def validate_configuration(script_path):
                 fallback_note = ""
             print(f"✓ Script config: {config.script_config_path}{fallback_note}")
         else:
-            print(f"  Script config: Not found (using defaults)")
+            print("  Script config: Not found (using defaults)")
 
         # User config status
         if config.user_config_loaded:
@@ -2099,7 +2099,7 @@ def validate_configuration(script_path):
                 fallback_note = ""
             print(f"✓ User config: {config.user_config_path}{fallback_note}")
         else:
-            print(f"  User config: Not found (using defaults)")
+            print("  User config: Not found (using defaults)")
 
         print(f"✓ Working dir: {config.get_working_directory()}")
         print(f"✓ Log dir: {config.get_log_directory()}")
@@ -2201,7 +2201,7 @@ def main():
                     task_paths_str = str(args.TasksDir)
                 manager.logger.info(f"Task paths: {task_paths_str}")
             else:
-                manager.logger.info(f"Task paths: None")
+                manager.logger.info("Task paths: None")
             if args.file_extension:
                 manager.logger.info(f"File extension filter: {args.file_extension}")
             manager.logger.info(f"Command template: {args.Command}")
