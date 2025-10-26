@@ -7,8 +7,10 @@ echo "=== Arguments Mode Test Suite ==="
 echo "Testing from directory: $(pwd)"
 echo ""
 
-# Change to parallelr root directory
-cd ../..
+# Change to parallelr root directory (resolve script location for robustness)
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
+cd "${REPO_ROOT}"
 
 echo "1. Testing basic environment variable mode..."
 echo "   Command: python bin/parallelr.py -T test_cases/arguments_mode/template.sh -A test_cases/arguments_mode/hosts.txt -E HOSTNAME -C \"bash @TASK@\""
