@@ -264,5 +264,20 @@ else
     exit 1
 fi
 
+# Test 17: Empty environment variable validation
+echo "17. Testing empty environment variable detection..."
+OUTPUT=$(timeout 5 python ../../bin/parallelr.py \
+    -T template.sh \
+    -A hosts.txt \
+    -E 'VAR1, ,VAR3' \
+    -C "bash @TASK@" 2>&1 || true)
+if echo "$OUTPUT" | grep -q "empty entries"; then
+    echo "   ✓ Empty env var detection passed"
+else
+    echo "   ✗ Empty env var detection failed"
+    echo "Output was: $OUTPUT"
+    exit 1
+fi
+
 echo ""
 echo "=== All multi-argument tests passed successfully ==="

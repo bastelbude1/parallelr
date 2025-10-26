@@ -1893,6 +1893,11 @@ Examples:
         # Support comma-separated list of environment variables
         env_vars = [var.strip() for var in args.env_var.split(',')]
         for env_var in env_vars:
+            # Check for empty entries after stripping
+            if not env_var:
+                parser.error("Environment variable list contains empty entries. "
+                           "Example: '-E VAR1,VAR2' (not '-E VAR1, ,VAR2')")
+            # Validate environment variable name format
             if not env_var.replace('_', '').isalnum() or env_var[0].isdigit():
                 parser.error(f"Invalid environment variable name: {env_var}. "
                            "Must start with a letter or underscore and contain only alphanumeric characters or underscores.")
