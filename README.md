@@ -438,7 +438,15 @@ execution:
     - Pros: No conflicts, clean separation
     - Cons: More disk usage, slower for file-heavy tasks
 
-- **use_process_groups**: Enables process group management for better cleanup. Recommended: `true`.
+- **use_process_groups**: Enables process group management for comprehensive cleanup of child processes.
+  - `true` (recommended): Tasks and all their child processes are terminated together
+    - POSIX: Uses `setsid()` to create new process group, terminates with `killpg()`
+    - Windows: Uses `CREATE_NEW_PROCESS_GROUP`, terminates with `CTRL_BREAK_EVENT`
+    - Prevents orphaned child processes when tasks timeout or are cancelled
+    - Essential for scripts that spawn background jobs or subprocesses
+  - `false`: Only the direct task process is terminated
+    - Child processes may outlive parent and become orphans
+    - Use only if tasks are guaranteed not to spawn children
 
 #### 4. Logging Section
 

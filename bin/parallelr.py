@@ -611,16 +611,27 @@ class SecureTaskExecutor:
             if self.extra_env:
                 env.update(self.extra_env)
 
-            self._process = subprocess.Popen(
-                command_args,
-                shell=False,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                universal_newlines=True,
-                bufsize=0,  # Unbuffered
-                cwd=str(work_dir),
-                env=env
-            )
+            # Prepare process group configuration
+            popen_kwargs = {
+                'shell': False,
+                'stdout': subprocess.PIPE,
+                'stderr': subprocess.PIPE,
+                'universal_newlines': True,
+                'bufsize': 0,  # Unbuffered
+                'cwd': str(work_dir),
+                'env': env
+            }
+
+            # Apply process group settings if enabled
+            if self.config.execution.use_process_groups:
+                if os.name == 'posix':
+                    # POSIX: Use setsid to create new process group
+                    popen_kwargs['preexec_fn'] = os.setsid
+                else:
+                    # Windows: Use CREATE_NEW_PROCESS_GROUP flag
+                    popen_kwargs['creationflags'] = subprocess.CREATE_NEW_PROCESS_GROUP
+
+            self._process = subprocess.Popen(command_args, **popen_kwargs)
             
             try:
                 # Real-time output capture with timeout handling
@@ -739,14 +750,59 @@ class SecureTaskExecutor:
         return result
 
     def _terminate_process(self):
-        """Safely terminate the running process."""
-        if self._process:
-            try:
+        """Safely terminate the running process and its children."""
+        if not self._process:
+            return
+
+        try:
+            pid = self._process.pid
+
+            # Terminate process group if enabled, otherwise just the process
+            if self.config.execution.use_process_groups:
+                if os.name == 'posix':
+                    # POSIX: Terminate entire process group
+                    try:
+                        pgid = os.getpgid(pid)
+                        self.logger.debug(f"Terminating process group {pgid}")
+                        os.killpg(pgid, signal.SIGTERM)
+                    except (OSError, ProcessLookupError) as e:
+                        self.logger.debug(f"Process group termination failed, falling back to process: {e}")
+                        # Fallback to single process termination
+                        self._process.terminate()
+                else:
+                    # Windows: Send CTRL_BREAK_EVENT to process group
+                    try:
+                        self.logger.debug(f"Sending CTRL_BREAK to process group {pid}")
+                        self._process.send_signal(signal.CTRL_BREAK_EVENT)
+                    except (OSError, AttributeError) as e:
+                        self.logger.debug(f"Process group signal failed, falling back to terminate: {e}")
+                        # Fallback to single process termination
+                        self._process.terminate()
+            else:
+                # Process groups disabled - terminate single process
                 self._process.terminate()
-                try:
-                    self._process.wait(timeout=5)
-                except subprocess.TimeoutExpired:
+
+            # Wait for graceful termination
+            try:
+                self._process.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                # Forceful kill if graceful termination failed
+                if self.config.execution.use_process_groups and os.name == 'posix':
+                    try:
+                        pgid = os.getpgid(pid)
+                        self.logger.debug(f"Force killing process group {pgid}")
+                        os.killpg(pgid, signal.SIGKILL)
+                    except (OSError, ProcessLookupError) as e:
+                        self.logger.debug(f"Process group kill failed, falling back to process: {e}")
+                        self._process.kill()
+                else:
                     self._process.kill()
+
+        except Exception as e:
+            self.logger.debug(f"Error during process termination: {e}")
+            # Last resort - try basic kill
+            try:
+                self._process.kill()
             except:
                 pass
 
