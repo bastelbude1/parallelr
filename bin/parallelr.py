@@ -535,8 +535,7 @@ def replace_argument_placeholders(command_str, arguments):
         return command_str
 
     # Replace @ARG@ with first argument (backward compatibility)
-    if len(arguments) > 0:
-        command_str = command_str.replace("@ARG@", shlex.quote(str(arguments[0])))
+    command_str = command_str.replace("@ARG@", shlex.quote(str(arguments[0])))
 
     # Replace indexed placeholders @ARG_1@, @ARG_2@, etc.
     for idx, arg in enumerate(arguments, start=1):
@@ -1050,10 +1049,12 @@ class ParallelTaskManager:
                 raise ParallelTaskExecutorError(f"Arguments file not found: {args_file}")
 
             # Delimiter mapping for multi-argument support
-            # Using regex patterns for proper splitting
+            # Using regex patterns for proper splitting:
+            # 'space': matches consecutive spaces only (not tabs/newlines)
+            # 'whitespace': matches any whitespace (spaces, tabs, newlines, etc.)
             delimiter_map = {
-                'space': r' +',          # One or more space characters (not tabs/newlines)
-                'whitespace': r'\s+',    # One or more whitespace characters (space, tab, etc)
+                'space': r' +',          # One or more space characters only
+                'whitespace': r'\s+',    # One or more of any whitespace characters
                 'tab': r'\t+',           # One or more tabs
                 'colon': ':',            # Common in config files (/etc/passwd, etc)
                 'semicolon': ';',        # Common in CSV-like formats
