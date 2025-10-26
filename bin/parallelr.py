@@ -824,10 +824,14 @@ class ParallelTaskManager:
     
     def __init__(self, max_workers, timeout, task_start_delay, tasks_paths, command_template,
                  script_path, dry_run=False, enable_stop_limits=False, log_task_output=True,
-                 file_extension=None, arguments_file=None, env_var=None, separator=None):
+                 file_extension=None, arguments_file=None, env_var=None, separator=None, debug=False):
 
         self.config = Configuration.from_script(script_path)
         self.config.validate()
+
+        # Override log level if debug mode is enabled
+        if debug:
+            self.config.logging.level = 'DEBUG'
 
         if max_workers is not None:
             self.config.limits.max_workers = max_workers
@@ -1745,7 +1749,10 @@ Examples:
     parser.add_argument('-r', '--run', action='store_true',
                        help='Execute tasks (default is dry-run)')
 
-    parser.add_argument('-d', '--daemon', action='store_true',
+    parser.add_argument('-d', '--debug', action='store_true',
+                       help='Enable debug mode (set log level to DEBUG)')
+
+    parser.add_argument('-D', '--daemon', action='store_true',
                        help='Run as background daemon (detached from user session)')
 
     parser.add_argument('--enable-stop-limits', action='store_true',
@@ -2085,7 +2092,8 @@ def main():
             file_extension=args.file_extension,
             arguments_file=args.arguments_file,
             env_var=args.env_var,
-            separator=args.separator if hasattr(args, 'separator') else None
+            separator=args.separator if hasattr(args, 'separator') else None,
+            debug=args.debug if hasattr(args, 'debug') else False
         )
         
         if args.daemon:

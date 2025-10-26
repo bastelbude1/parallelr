@@ -132,7 +132,8 @@ parallelr --check-dependencies
 
 | Argument | Description |
 |----------|-------------|
-| `-d, --daemon` | Run as background daemon (detached from session) |
+| `-d, --debug` | Enable debug mode (set log level to DEBUG) |
+| `-D, --daemon` | Run as background daemon (detached from session) |
 | `--enable-stop-limits` | Enable automatic halt on excessive failures |
 | `--no-task-output-log` | Disable detailed stdout/stderr logging to TaskResults file (enabled by default) |
 
