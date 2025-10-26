@@ -528,7 +528,7 @@ class SecureTaskExecutor:
 
         # Replace @ARG@ if we have a task argument (use is not None to handle "0" and other falsy values)
         if self.task_argument is not None:
-            command_str = command_str.replace("@ARG@", shlex.quote(self.task_argument))
+            command_str = command_str.replace("@ARG@", shlex.quote(str(self.task_argument)))
 
         try:
             args = shlex.split(command_str)
@@ -929,6 +929,13 @@ class ParallelTaskManager:
             template_file = Path(self.tasks_paths[0])
             if not template_file.is_file():
                 raise ParallelTaskExecutorError(f"Template file not found: {template_file}")
+
+            # Validate that command template contains @ARG@ placeholder if not using env var mode
+            if '@ARG@' not in self.command_template and not self.env_var:
+                self.logger.warning(
+                    "Arguments mode active but command template does not contain @ARG@ placeholder "
+                    "and no environment variable specified. Arguments will not be used."
+                )
 
             args_file = Path(self.arguments_file)
             if not args_file.is_file():
@@ -1672,6 +1679,12 @@ Examples:
                        help='Disable detailed task output logging to output file')
 
     args = parser.parse_args()
+
+    # Validate environment variable name if provided
+    if args.env_var:
+        if not args.env_var.replace('_', '').isalnum() or args.env_var[0].isdigit():
+            parser.error(f"Invalid environment variable name: {args.env_var}. "
+                       "Must start with a letter or underscore and contain only alphanumeric characters or underscores.")
 
     # Special handling for ptasker mode
     if ptasker_mode and not (args.list_workers or args.kill is not None or
