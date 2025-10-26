@@ -147,3 +147,28 @@ Environment variable `PARALLELR_LIB_PATH` (default: `/app/COOL/lib`) can be set 
 - `psutil` - For resource monitoring (memory/CPU usage)
 
 Without optional dependencies, the tool falls back gracefully with reduced functionality.
+
+## Development Workflow
+
+### Git Branching Strategy
+
+**IMPORTANT**: Always create a new feature branch before making changes and pushing to GitHub. Never push directly to master.
+
+```bash
+# Create and switch to a new feature branch
+git checkout -b feature/your-feature-name
+
+# Make your changes, test, and commit
+git add .
+git commit -m "Description of changes"
+
+# Push to the feature branch
+git push origin feature/your-feature-name
+
+# Create a pull request for review before merging to master
+```
+
+### Branch Naming Convention
+- Feature branches: `feature/descriptive-name`
+- Bug fixes: `bugfix/issue-description`
+- Hotfixes: `hotfix/critical-issue`

@@ -40,6 +40,7 @@ import shlex
 import select
 import errno
 import fcntl
+import re
 from pathlib import Path
 from datetime import datetime
 from concurrent.futures import ThreadPoolExecutor, Future, as_completed
@@ -501,7 +502,7 @@ class SecureTaskExecutor:
     """Simplified task executor with basic security validation."""
     
     def __init__(self, task_file, command_template, timeout, worker_id, logger, config,
-                 extra_env=None, task_argument=None):
+                 extra_env=None, task_arguments=None):
         self.task_file = task_file
         self.command_template = command_template
         self.timeout = timeout
@@ -509,7 +510,11 @@ class SecureTaskExecutor:
         self.logger = logger
         self.config = config
         self.extra_env = extra_env or {}
-        self.task_argument = task_argument
+        # Support both single argument (backward compat) and list of arguments
+        if task_arguments is not None:
+            self.task_arguments = task_arguments if isinstance(task_arguments, list) else [task_arguments]
+        else:
+            self.task_arguments = None
         self._process = None
         self._cancelled = False
 
@@ -526,9 +531,17 @@ class SecureTaskExecutor:
         abs_task_file = str(Path(task_file).resolve())
         command_str = self.command_template.replace("@TASK@", abs_task_file)
 
-        # Replace @ARG@ if we have a task argument (use is not None to handle "0" and other falsy values)
-        if self.task_argument is not None:
-            command_str = command_str.replace("@ARG@", shlex.quote(str(self.task_argument)))
+        # Replace argument placeholders if we have task arguments
+        if self.task_arguments is not None:
+            # Replace @ARG@ with first argument (backward compatibility)
+            if len(self.task_arguments) > 0:
+                command_str = command_str.replace("@ARG@", shlex.quote(str(self.task_arguments[0])))
+
+            # Replace indexed placeholders @ARG_1@, @ARG_2@, etc.
+            for idx, arg in enumerate(self.task_arguments, start=1):
+                placeholder = f"@ARG_{idx}@"
+                if placeholder in command_str:
+                    command_str = command_str.replace(placeholder, shlex.quote(str(arg)))
 
         try:
             args = shlex.split(command_str)
@@ -811,7 +824,7 @@ class ParallelTaskManager:
     
     def __init__(self, max_workers, timeout, task_start_delay, tasks_paths, command_template,
                  script_path, dry_run=False, enable_stop_limits=False, log_task_output=True,
-                 file_extension=None, arguments_file=None, env_var=None):
+                 file_extension=None, arguments_file=None, env_var=None, separator=None):
 
         self.config = Configuration.from_script(script_path)
         self.config.validate()
@@ -840,6 +853,7 @@ class ParallelTaskManager:
         self.dry_run = dry_run
         self.arguments_file = arguments_file
         self.env_var = env_var
+        self.separator = separator
 
         self.log_dir = self.config.get_log_directory()
         self.process_id = os.getpid()
@@ -941,6 +955,18 @@ class ParallelTaskManager:
             if not args_file.is_file():
                 raise ParallelTaskExecutorError(f"Arguments file not found: {args_file}")
 
+            # Delimiter mapping for multi-argument support
+            # Using regex patterns for proper splitting
+            delimiter_map = {
+                'space': r'\s+',         # One or more whitespace characters
+                'tab': r'\t+',           # One or more tabs
+                'colon': ':',            # Common in config files (/etc/passwd, etc)
+                'semicolon': ';',        # Common in CSV-like formats
+                'comma': ',',            # Standard CSV
+                'pipe': r'\|'            # Pipe needs escaping in regex
+            }
+            delimiter_pattern = delimiter_map.get(self.separator) if self.separator else None
+
             # Read arguments from file
             try:
                 with open(args_file, 'r') as f:
@@ -949,15 +975,44 @@ class ParallelTaskManager:
                         # Skip empty lines and comments
                         if not line or line.startswith('#'):
                             continue
-                        # Create a task entry for each argument
+
+                        # Parse arguments (single or multiple with delimiter)
+                        if delimiter_pattern:
+                            # Split by delimiter pattern for multi-argument support
+                            arguments = [arg.strip() for arg in re.split(delimiter_pattern, line) if arg.strip()]
+                        else:
+                            # Single argument (backward compatibility)
+                            arguments = [line]
+
+                        # Create a task entry for each line
                         task_entries.append({
                             'type': 'argument',
                             'template': str(template_file),
-                            'argument': line,
+                            'arguments': arguments,  # Now a list
                             'line_num': line_num
                         })
             except Exception as e:
                 raise ParallelTaskExecutorError(f"Failed to read arguments file: {e}") from e
+
+            # Validate environment variable count vs argument count
+            if self.env_var and task_entries:
+                env_vars = [var.strip() for var in self.env_var.split(',')]
+                # Check the first task entry to determine argument count
+                sample_args = task_entries[0]['arguments']
+                num_args = len(sample_args)
+                num_env_vars = len(env_vars)
+
+                if num_env_vars < num_args:
+                    self.logger.error(
+                        f"Environment variable count mismatch: {num_env_vars} env var(s) provided "
+                        f"but {num_args} argument(s) per line. Only first {num_env_vars} argument(s) "
+                        f"will have environment variables set."
+                    )
+                elif num_env_vars > num_args:
+                    raise ParallelTaskExecutorError(
+                        f"Environment variable count mismatch: {num_env_vars} env var(s) provided "
+                        f"but only {num_args} argument(s) per line. Cannot proceed."
+                    )
 
             self.logger.info(f"Created {len(task_entries)} tasks from arguments file")
             return task_entries
@@ -1171,10 +1226,30 @@ class ParallelTaskManager:
                         # Build command with absolute path and proper quoting
                         abs_task_file = str(Path(task_entry['template']).resolve())
                         command_str = self.command_template.replace("@TASK@", abs_task_file)
-                        command_str = command_str.replace("@ARG@", shlex.quote(task_entry['argument']))
+
+                        # Handle arguments (list)
+                        arguments = task_entry['arguments']
+
+                        # Replace @ARG@ with first argument (backward compat)
+                        if len(arguments) > 0:
+                            command_str = command_str.replace("@ARG@", shlex.quote(str(arguments[0])))
+
+                        # Replace indexed placeholders @ARG_1@, @ARG_2@, etc.
+                        for idx, arg in enumerate(arguments, start=1):
+                            placeholder = f"@ARG_{idx}@"
+                            if placeholder in command_str:
+                                command_str = command_str.replace(placeholder, shlex.quote(str(arg)))
+
+                        # Build environment variable prefix
                         if self.env_var:
-                            env_prefix = f"{self.env_var}={shlex.quote(task_entry['argument'])} "
-                            command_str = env_prefix + command_str
+                            env_vars = [var.strip() for var in self.env_var.split(',')]
+                            env_parts = []
+                            for idx, env_var in enumerate(env_vars):
+                                if idx < len(arguments):
+                                    env_parts.append(f"{env_var}={shlex.quote(str(arguments[idx]))}")
+                            if env_parts:
+                                env_prefix = " ".join(env_parts) + " "
+                                command_str = env_prefix + command_str
                     else:
                         abs_task_file = str(Path(task_entry['file']).resolve())
                         command_str = self.command_template.replace("@TASK@", abs_task_file)
@@ -1212,17 +1287,24 @@ class ParallelTaskManager:
                         # Prepare task file and extra environment based on task type
                         if task_entry['type'] == 'argument':
                             task_file = task_entry['template']
-                            extra_env = {self.env_var: task_entry['argument']} if self.env_var else {}
-                            task_argument = task_entry['argument']
+                            task_arguments = task_entry['arguments']  # Now a list
+
+                            # Set multiple environment variables if provided
+                            extra_env = {}
+                            if self.env_var:
+                                env_vars = [var.strip() for var in self.env_var.split(',')]
+                                for idx, env_var in enumerate(env_vars):
+                                    if idx < len(task_arguments):
+                                        extra_env[env_var] = task_arguments[idx]
                         else:
                             task_file = task_entry['file']
                             extra_env = {}
-                            task_argument = None
+                            task_arguments = None
 
                         task_executor = SecureTaskExecutor(
                             task_file, self.command_template, self.timeout,
                             worker_counter, self.logger, self.config,
-                            extra_env=extra_env, task_argument=task_argument
+                            extra_env=extra_env, task_arguments=task_arguments
                         )
 
                         future = executor.submit(task_executor.execute)
@@ -1633,10 +1715,17 @@ Examples:
                        help='Filter task files by extension(s), e.g., "txt" or "txt,log,dat"')
 
     parser.add_argument('-A', '--arguments-file',
-                       help='File containing arguments, one per line. Each line becomes a parallel task')
+                       help='File containing arguments, one per line. Each line becomes a parallel task. '
+                            'Use -S to specify delimiter for multiple arguments per line')
+
+    parser.add_argument('-S', '--separator',
+                       choices=['space', 'tab', 'comma', 'semicolon', 'pipe', 'colon'],
+                       help='Delimiter for multiple arguments per line in -A file: space, tab, comma (,), '
+                            'semicolon (;), pipe (|), or colon (:). Use with @ARG_1@, @ARG_2@, etc. in command template')
 
     parser.add_argument('-E', '--env-var',
-                       help='Environment variable name to set with argument value (e.g., HOSTNAME)')
+                       help='Environment variable name(s) to set with argument value(s). '
+                            'Single: -E HOSTNAME, Multiple: -E HOSTNAME,PORT (comma-separated)')
 
     if ptasker_mode:
         # In ptasker mode, -C is auto-generated from -p
@@ -1647,7 +1736,8 @@ Examples:
     else:
         # Normal mode
         parser.add_argument('-C', '--Command',
-                           help='Command template with @TASK@ pattern to execute')
+                           help='Command template. File Mode: use @TASK@ for task file path. '
+                                'Arguments Mode (-A): use @ARG@ (first arg), @ARG_1@, @ARG_2@, etc.')
         parser.add_argument('-p', '--project',
                            help='Project name for summary logging')
 
@@ -1680,11 +1770,14 @@ Examples:
 
     args = parser.parse_args()
 
-    # Validate environment variable name if provided
+    # Validate environment variable name(s) if provided
     if args.env_var:
-        if not args.env_var.replace('_', '').isalnum() or args.env_var[0].isdigit():
-            parser.error(f"Invalid environment variable name: {args.env_var}. "
-                       "Must start with a letter or underscore and contain only alphanumeric characters or underscores.")
+        # Support comma-separated list of environment variables
+        env_vars = [var.strip() for var in args.env_var.split(',')]
+        for env_var in env_vars:
+            if not env_var.replace('_', '').isalnum() or env_var[0].isdigit():
+                parser.error(f"Invalid environment variable name: {env_var}. "
+                           "Must start with a letter or underscore and contain only alphanumeric characters or underscores.")
 
     # Special handling for ptasker mode
     if ptasker_mode and not (args.list_workers or args.kill is not None or
@@ -1990,7 +2083,8 @@ def main():
             log_task_output=not args.no_task_output_log,
             file_extension=args.file_extension,
             arguments_file=args.arguments_file,
-            env_var=args.env_var
+            env_var=args.env_var,
+            separator=args.separator if hasattr(args, 'separator') else None
         )
         
         if args.daemon:
