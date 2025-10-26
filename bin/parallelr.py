@@ -1709,7 +1709,8 @@ Examples:
                        help='Delay between starting new tasks (0-60 seconds, default: 0). Use to throttle resource consumption')
 
     parser.add_argument('-T', '--TasksDir', nargs='+', action='append',
-                       help='Directory containing task files or specific file paths (can be used multiple times)')
+                       help='Directory containing task files or specific file paths (can be used multiple times). '
+                            'File Mode: Each file becomes a task, use @TASK@ placeholder in -C for file path')
 
     parser.add_argument('--file-extension',
                        help='Filter task files by extension(s), e.g., "txt" or "txt,log,dat"')
