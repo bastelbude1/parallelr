@@ -1107,7 +1107,7 @@ class ParallelTaskManager:
                     num_env_vars = len(env_vars)
 
                     if num_env_vars < num_args:
-                        self.logger.error(
+                        self.logger.warning(
                             f"Environment variable count mismatch: {num_env_vars} env var(s) provided "
                             f"but {num_args} argument(s) per line. Only first {num_env_vars} argument(s) "
                             "will have environment variables set."
