@@ -498,9 +498,55 @@ class Configuration:
   Script Config: {script_config_desc}
   User Config: {user_config_desc}"""
 
+def replace_argument_placeholders(command_str, arguments):
+    """Replace argument placeholders in command string (helper function).
+
+    Args:
+        command_str: Command string with placeholders
+        arguments: List of argument values
+
+    Returns:
+        Command string with placeholders replaced
+    """
+    if not arguments:
+        return command_str
+
+    # Replace @ARG@ with first argument (backward compatibility)
+    if len(arguments) > 0:
+        command_str = command_str.replace("@ARG@", shlex.quote(str(arguments[0])))
+
+    # Replace indexed placeholders @ARG_1@, @ARG_2@, etc.
+    for idx, arg in enumerate(arguments, start=1):
+        placeholder = f"@ARG_{idx}@"
+        if placeholder in command_str:
+            command_str = command_str.replace(placeholder, shlex.quote(str(arg)))
+
+    return command_str
+
+def build_env_prefix(env_var, arguments):
+    """Build environment variable prefix string (helper function).
+
+    Args:
+        env_var: Comma-separated environment variable names
+        arguments: List of argument values
+
+    Returns:
+        Environment variable prefix string (e.g., "VAR1=val1 VAR2=val2 ")
+    """
+    if not env_var or not arguments:
+        return ""
+
+    env_vars = [var.strip() for var in env_var.split(',')]
+    env_parts = []
+    for idx, env_var_name in enumerate(env_vars):
+        if idx < len(arguments):
+            env_parts.append(f"{env_var_name}={shlex.quote(str(arguments[idx]))}")
+
+    return " ".join(env_parts) + " " if env_parts else ""
+
 class SecureTaskExecutor:
     """Simplified task executor with basic security validation."""
-    
+
     def __init__(self, task_file, command_template, timeout, worker_id, logger, config,
                  extra_env=None, task_arguments=None):
         self.task_file = task_file
@@ -533,15 +579,7 @@ class SecureTaskExecutor:
 
         # Replace argument placeholders if we have task arguments
         if self.task_arguments is not None:
-            # Replace @ARG@ with first argument (backward compatibility)
-            if len(self.task_arguments) > 0:
-                command_str = command_str.replace("@ARG@", shlex.quote(str(self.task_arguments[0])))
-
-            # Replace indexed placeholders @ARG_1@, @ARG_2@, etc.
-            for idx, arg in enumerate(self.task_arguments, start=1):
-                placeholder = f"@ARG_{idx}@"
-                if placeholder in command_str:
-                    command_str = command_str.replace(placeholder, shlex.quote(str(arg)))
+            command_str = replace_argument_placeholders(command_str, self.task_arguments)
 
         try:
             args = shlex.split(command_str)
@@ -986,7 +1024,8 @@ class ParallelTaskManager:
             # Delimiter mapping for multi-argument support
             # Using regex patterns for proper splitting
             delimiter_map = {
-                'space': r'\s+',         # One or more whitespace characters
+                'space': r' +',          # One or more space characters (not tabs/newlines)
+                'whitespace': r'\s+',    # One or more whitespace characters (space, tab, etc)
                 'tab': r'\t+',           # One or more tabs
                 'colon': ':',            # Common in config files (/etc/passwd, etc)
                 'semicolon': ';',        # Common in CSV-like formats
@@ -1288,26 +1327,13 @@ class ParallelTaskManager:
                         # Handle arguments (list)
                         arguments = task_entry['arguments']
 
-                        # Replace @ARG@ with first argument (backward compat)
-                        if len(arguments) > 0:
-                            command_str = command_str.replace("@ARG@", shlex.quote(str(arguments[0])))
+                        # Replace argument placeholders using helper function
+                        command_str = replace_argument_placeholders(command_str, arguments)
 
-                        # Replace indexed placeholders @ARG_1@, @ARG_2@, etc.
-                        for idx, arg in enumerate(arguments, start=1):
-                            placeholder = f"@ARG_{idx}@"
-                            if placeholder in command_str:
-                                command_str = command_str.replace(placeholder, shlex.quote(str(arg)))
-
-                        # Build environment variable prefix
-                        if self.env_var:
-                            env_vars = [var.strip() for var in self.env_var.split(',')]
-                            env_parts = []
-                            for idx, env_var in enumerate(env_vars):
-                                if idx < len(arguments):
-                                    env_parts.append(f"{env_var}={shlex.quote(str(arguments[idx]))}")
-                            if env_parts:
-                                env_prefix = " ".join(env_parts) + " "
-                                command_str = env_prefix + command_str
+                        # Build environment variable prefix using helper function
+                        env_prefix = build_env_prefix(self.env_var, arguments)
+                        if env_prefix:
+                            command_str = env_prefix + command_str
                     else:
                         abs_task_file = str(Path(task_entry['file']).resolve())
                         command_str = self.command_template.replace("@TASK@", abs_task_file)
@@ -1778,9 +1804,10 @@ Examples:
                             'Use -S to specify delimiter for multiple arguments per line')
 
     parser.add_argument('-S', '--separator',
-                       choices=['space', 'tab', 'comma', 'semicolon', 'pipe', 'colon'],
-                       help='Delimiter for multiple arguments per line in -A file: space, tab, comma (,), '
-                            'semicolon (;), pipe (|), or colon (:). Use with @ARG_1@, @ARG_2@, etc. in command template')
+                       choices=['space', 'whitespace', 'tab', 'comma', 'semicolon', 'pipe', 'colon'],
+                       help='Delimiter for multiple arguments per line in -A file: space (space only), '
+                            'whitespace (any whitespace), tab, comma (,), semicolon (;), pipe (|), or colon (:). '
+                            'Use with @ARG_1@, @ARG_2@, etc. in command template')
 
     parser.add_argument('-E', '--env-var',
                        help='Environment variable name(s) to set with argument value(s). '

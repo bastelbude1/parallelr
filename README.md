@@ -243,7 +243,8 @@ parallelr -T deploy.sh -A servers.txt -S comma -E HOSTNAME,PORT,ENV -C "bash @TA
 ```
 
 **Supported Delimiters**:
-- `space` - One or more spaces (whitespace)
+- `space` - One or more space characters (space only, not tabs)
+- `whitespace` - One or more whitespace characters (spaces, tabs, etc.)
 - `tab` - One or more tabs
 - `comma` - Comma (`,`)
 - `semicolon` - Semicolon (`;`)
