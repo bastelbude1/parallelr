@@ -934,6 +934,30 @@ class ParallelTaskManager:
             except Exception as e:
                 raise ParallelTaskExecutorError(f"Failed to init summary log: {e}") from e
 
+    def _validate_argument_placeholders(self, num_args):
+        """Validate that command template placeholders match available arguments."""
+        # Find all @ARG_N@ placeholders in command template
+        placeholder_pattern = r'@ARG_(\d+)@'
+        matches = re.findall(placeholder_pattern, self.command_template)
+
+        if matches:
+            # Get the highest indexed placeholder
+            max_placeholder_index = max(int(match) for match in matches)
+
+            if max_placeholder_index > num_args:
+                # Collect all problematic placeholders
+                missing_placeholders = []
+                for match in sorted(set(matches), key=int):
+                    index = int(match)
+                    if index > num_args:
+                        missing_placeholders.append(f"@ARG_{index}@")
+
+                raise ParallelTaskExecutorError(
+                    f"Command template contains placeholder(s) {', '.join(missing_placeholders)} "
+                    f"but only {num_args} argument(s) available per line. "
+                    f"Available placeholders: @ARG@ or @ARG_1@ through @ARG_{num_args}@"
+                )
+
     def _discover_tasks(self):
         """Discover task files from directories and/or explicit file paths, or create tasks from arguments."""
         task_entries = []
@@ -1044,6 +1068,9 @@ class ParallelTaskManager:
                             f"Environment variable count mismatch: {num_env_vars} env var(s) provided "
                             f"but only {num_args} argument(s) per line. Cannot proceed."
                         )
+
+                # Validate that command template has enough arguments for placeholders
+                self._validate_argument_placeholders(num_args)
 
             self.logger.info(f"Created {len(task_entries)} tasks from arguments file")
             return task_entries
@@ -1813,6 +1840,10 @@ Examples:
             if not env_var.replace('_', '').isalnum() or env_var[0].isdigit():
                 parser.error(f"Invalid environment variable name: {env_var}. "
                            "Must start with a letter or underscore and contain only alphanumeric characters or underscores.")
+
+    # Validate separator is only used with arguments file
+    if hasattr(args, 'separator') and args.separator and not args.arguments_file:
+        parser.error("-S/--separator can only be used with -A/--arguments-file")
 
     # Special handling for ptasker mode
     if ptasker_mode and not (args.list_workers or args.kill is not None or

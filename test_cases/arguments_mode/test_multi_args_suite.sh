@@ -182,8 +182,52 @@ else
     exit 1
 fi
 
-# Test 12: Dry run mode with multi-arguments
-echo "12. Testing dry run mode display..."
+# Test 12: Separator without arguments file (should fail)
+echo "12. Testing -S without -A validation..."
+OUTPUT=$(timeout 5 python ../../bin/parallelr.py \
+    -T ../../test_cases/file_mode/task1.sh \
+    -S comma \
+    -C "bash @TASK@" 2>&1 || true)
+if echo "$OUTPUT" | grep -q "separator can only be used with.*arguments-file"; then
+    echo "   ✓ Separator validation passed"
+else
+    echo "   ✗ Separator validation failed"
+    echo "Output was: $OUTPUT"
+    exit 1
+fi
+
+# Test 13: Invalid placeholder index (should fail)
+echo "13. Testing invalid placeholder index validation..."
+OUTPUT=$(timeout 5 python ../../bin/parallelr.py \
+    -T template.sh \
+    -A two_args.txt \
+    -S comma \
+    -C "bash @TASK@ @ARG_1@ @ARG_2@ @ARG_3@" 2>&1 || true)
+if echo "$OUTPUT" | grep -q "placeholder.*@ARG_3@.*only 2 argument"; then
+    echo "   ✓ Placeholder index validation passed"
+else
+    echo "   ✗ Placeholder index validation failed"
+    echo "Output was: $OUTPUT"
+    exit 1
+fi
+
+# Test 14: Multiple invalid placeholders (should fail)
+echo "14. Testing multiple invalid placeholders..."
+OUTPUT=$(timeout 5 python ../../bin/parallelr.py \
+    -T template.sh \
+    -A two_args.txt \
+    -S comma \
+    -C "bash @TASK@ @ARG_4@ @ARG_5@" 2>&1 || true)
+if echo "$OUTPUT" | grep -q "placeholder.*@ARG_4@.*@ARG_5@"; then
+    echo "   ✓ Multiple placeholder validation passed"
+else
+    echo "   ✗ Multiple placeholder validation failed"
+    echo "Output was: $OUTPUT"
+    exit 1
+fi
+
+# Test 15: Dry run mode with multi-arguments
+echo "15. Testing dry run mode display..."
 OUTPUT=$(python ../../bin/parallelr.py \
     -T template.sh \
     -A multi_args_comma.txt \
