@@ -518,8 +518,8 @@ class SecureTaskExecutor:
         try:
             if os.path.getsize(task_file) > self.config.advanced.max_file_size:
                 raise SecurityError(f"Task file too large: {task_file}")
-        except OSError:
-            raise SecurityError(f"Cannot access task file: {task_file}")
+        except OSError as e:
+            raise SecurityError(f"Cannot access task file: {task_file}") from e
 
     def _build_secure_command(self, task_file):
         """Build command arguments with basic security validation."""
@@ -533,7 +533,7 @@ class SecureTaskExecutor:
         try:
             args = shlex.split(command_str)
         except ValueError as e:
-            raise SecurityError(f"Invalid command syntax: {e}")
+            raise SecurityError(f"Invalid command syntax: {e}") from e
 
         if not args:
             raise SecurityError("Empty command after parsing")
@@ -909,12 +909,12 @@ class ParallelTaskManager:
                     with open(str(self.summary_log_file), 'w', newline='', encoding='utf-8') as f:
                         writer = csv.writer(f, delimiter=';')
                         writer.writerow([
-                            'start_time', 'end_time', 'status', 'process_id', 'worker_id', 
-                            'task_file', 'command', 'exit_code', 'duration_seconds', 
+                            'start_time', 'end_time', 'status', 'process_id', 'worker_id',
+                            'task_file', 'command', 'exit_code', 'duration_seconds',
                             'memory_mb', 'cpu_percent', 'error_message'
                         ])
             except Exception as e:
-                raise ParallelTaskExecutorError(f"Failed to init summary log: {e}")
+                raise ParallelTaskExecutorError(f"Failed to init summary log: {e}") from e
 
     def _discover_tasks(self):
         """Discover task files from directories and/or explicit file paths, or create tasks from arguments."""
@@ -950,7 +950,7 @@ class ParallelTaskManager:
                             'line_num': line_num
                         })
             except Exception as e:
-                raise ParallelTaskExecutorError(f"Failed to read arguments file: {e}")
+                raise ParallelTaskExecutorError(f"Failed to read arguments file: {e}") from e
 
             self.logger.info(f"Created {len(task_entries)} tasks from arguments file")
             return task_entries
@@ -1037,7 +1037,7 @@ class ParallelTaskManager:
             return task_entries
 
         except Exception as e:
-            raise ParallelTaskExecutorError(f"Failed to discover task files: {e}")
+            raise ParallelTaskExecutorError(f"Failed to discover task files: {e}") from e
 
     def _check_error_limits(self):
         """Check if error limits are exceeded."""
