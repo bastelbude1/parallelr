@@ -1088,7 +1088,7 @@ class ParallelTaskManager:
                 del self.futures[future]
 
         except Exception as e:
-            self.logger.error(f"Error handling task: {e}")
+            self.logger.exception("Error handling task")
             if self.config.limits.stop_limits_enabled:
                 self.consecutive_failures += 1
             # Clean up on error too
@@ -1105,7 +1105,7 @@ class ParallelTaskManager:
                     with open(str(self.summary_log_file), 'a', newline='', encoding='utf-8') as f:
                         f.write(result.to_log_line() + '\n')
             except Exception as e:
-                self.logger.error(f"Log write failed: {e}")
+                self.logger.exception("Log write failed")
 
         if self.log_task_output and not self.dry_run:
             try:
@@ -1130,7 +1130,7 @@ class ParallelTaskManager:
                         if result.error_message:
                             f.write(f"\nERROR: {result.error_message}\n")
             except Exception as e:
-                self.logger.error(f"Output log write failed: {e}")
+                self.logger.exception("Output log write failed")
 
     def _setup_signal_handlers(self):
         """Set up signal handlers for graceful shutdown."""
@@ -1247,9 +1247,9 @@ class ParallelTaskManager:
             
             self.logger.info(f"Execution completed: {stats}")
             return stats
-            
+
         except Exception as e:
-            self.logger.error(f"Fatal error during task execution: {e}")
+            self.logger.exception("Fatal error during task execution")
             raise
 
     def get_summary_report(self):
