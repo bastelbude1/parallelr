@@ -723,11 +723,6 @@ class SecureTaskExecutor:
                 result.stdout = stdout[-max_capture:] if stdout else ""
                 result.stderr = stderr[-max_capture:] if stderr else ""
                 self._terminate_process()
-                 
-            except subprocess.TimeoutExpired:
-                result.status = TaskStatus.TIMEOUT
-                result.error_message = f"Timeout after {self.timeout}s"
-                self._terminate_process()
         
         except SecurityError as e:
             result.status = TaskStatus.ERROR
@@ -1166,14 +1161,17 @@ class ParallelTaskManager:
                 self.logger.info("DRY RUN MODE")
                 for i, task_entry in enumerate(self.task_entries, 1):
                     if task_entry['type'] == 'argument':
-                        # Show command with argument replacement
-                        command = self.command_template.replace("@TASK@", task_entry['template'])
-                        command = command.replace("@ARG@", task_entry['argument'])
+                        # Build command with absolute path and proper quoting
+                        abs_task_file = str(Path(task_entry['template']).resolve())
+                        command_str = self.command_template.replace("@TASK@", abs_task_file)
+                        command_str = command_str.replace("@ARG@", shlex.quote(task_entry['argument']))
                         if self.env_var:
-                            command = f"{self.env_var}={task_entry['argument']} {command}"
+                            env_prefix = f"{self.env_var}={shlex.quote(task_entry['argument'])} "
+                            command_str = env_prefix + command_str
                     else:
-                        command = self.command_template.replace("@TASK@", task_entry['file'])
-                    self.logger.info(f"[{i}/{total_tasks}]: {command}")
+                        abs_task_file = str(Path(task_entry['file']).resolve())
+                        command_str = self.command_template.replace("@TASK@", abs_task_file)
+                    self.logger.info(f"[{i}/{total_tasks}]: {command_str}")
                 return {'total': total_tasks, 'completed': 0, 'failed': 0, 'cancelled': 0}
 
             with ThreadPoolExecutor(max_workers=self.max_workers) as executor:
@@ -1690,7 +1688,7 @@ Examples:
         # If arguments file is provided, automatically set HOSTNAME as env var
         if args.arguments_file and not args.env_var:
             args.env_var = 'HOSTNAME'
-            print(f"Auto-setting environment variable: HOSTNAME")
+            print("Auto-setting environment variable: HOSTNAME")
 
     if args.list_workers or args.kill is not None:
         return args
