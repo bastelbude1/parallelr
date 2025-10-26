@@ -526,9 +526,9 @@ class SecureTaskExecutor:
         abs_task_file = str(Path(task_file).resolve())
         command_str = self.command_template.replace("@TASK@", abs_task_file)
 
-        # Replace @ARG@ if we have a task argument
-        if self.task_argument:
-            command_str = command_str.replace("@ARG@", self.task_argument)
+        # Replace @ARG@ if we have a task argument (use is not None to handle "0" and other falsy values)
+        if self.task_argument is not None:
+            command_str = command_str.replace("@ARG@", shlex.quote(self.task_argument))
 
         try:
             args = shlex.split(command_str)
