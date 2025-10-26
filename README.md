@@ -2,29 +2,7 @@
 
 A robust, production-ready Python framework for executing tasks in parallel with comprehensive configuration, monitoring, and error handling capabilities.
 
-## Table of Contents
-
-- [Overview](#overview)
-- [Key Features](#key-features)
-- [Quick Start](#quick-start)
-- [Requirements](#requirements)
-- [Usage](#usage)
-  - [Command Line Arguments](#command-line-arguments)
-  - [Basic Examples](#basic-examples)
-- [Configuration](#configuration)
-  - [Configuration Hierarchy](#configuration-hierarchy)
-  - [Configuration Sections](#configuration-sections)
-  - [Creating Custom Configurations](#creating-custom-configurations)
-- [Advanced Features](#advanced-features)
-  - [Daemon Mode](#daemon-mode)
-  - [Workspace Isolation](#workspace-isolation)
-  - [Auto-Stop Protection](#auto-stop-protection)
-  - [Resource Monitoring](#resource-monitoring)
-- [Process Management](#process-management)
-- [Logging and Output](#logging-and-output)
-- [Task File Format](#task-file-format)
-- [Troubleshooting](#troubleshooting)
-- [Security Considerations](#security-considerations)
+[[_TOC_]]
 
 ## Overview
 
@@ -36,6 +14,7 @@ Perfect for batch processing, data pipelines, test suites, or any scenario where
 
 - ✓ **Parallel Execution**: Execute tasks concurrently with configurable worker pools (1-100 workers)
 - ✓ **Flexible Task Selection**: Support for directories, files, glob patterns, and multiple sources
+- ✓ **Arguments Mode**: Run same template with different arguments from file (NEW)
 - ✓ **File Type Filtering**: Filter tasks by extension(s) with `--file-extension`
 - ✓ **Flexible Configuration**: Two-tier YAML configuration system with user overrides
 - ✓ **Resource Monitoring**: Track memory and CPU usage per task (requires psutil)
@@ -49,7 +28,7 @@ Perfect for batch processing, data pipelines, test suites, or any scenario where
 - ✓ **Real-time Output Capture**: Non-blocking I/O for live output collection
 - ✓ **TASKER Integration**: Simplified `ptasker` mode with auto-generated project IDs
 
-## Quick Start
+## Quick Start on JumpHosts
 
 ```bash
 # 1. Create a directory with task files
@@ -58,37 +37,37 @@ echo "echo 'Task 1 complete'" > my_tasks/task1.sh
 echo "echo 'Task 2 complete'" > my_tasks/task2.sh
 
 # 2. Execute tasks with 5 parallel workers (dry-run first)
-python bin/parallelr.py -T my_tasks -C "bash @TASK@"
+parallelr -T my_tasks -C "bash @TASK@"
 
 # 3. Run for real
-python bin/parallelr.py -T my_tasks -C "bash @TASK@" -r
+parallelr -T my_tasks -C "bash @TASK@" -r
 
 # 4. Run with custom settings
-python bin/parallelr.py -T my_tasks -C "bash @TASK@" -r -m 10 -t 300
+parallelr -T my_tasks -C "bash @TASK@" -r -m 10 -t 300
 ```
 
 ### Quick Start for TASKER Users (ptasker mode)
 
-The `ptasker` symlink provides a simplified interface specifically for running TASKER test cases:
+The `ptasker` symlink provides a simplified interface specifically for running [TASKER](https://devcloud.ubs.net/ubs/ts/mainframe/mms-midrange-n-datawarehouse-svcs/platforms-access-tls/commons/tasker) test cases:
 
 ```bash
 # 1. Execute TASKER tests with auto-generated project ID
-python bin/ptasker -T /path/to/test_cases -r
+ptasker -T /path/to/test_cases -r
 
 # 2. Execute only .txt test cases
-python bin/ptasker -T /path/to/test_cases --file-extension txt -r
+ptasker -T /path/to/test_cases --file-extension txt -r
 
 # 3. Execute specific test files using glob patterns
-python bin/ptasker -T /path/to/test_cases/*.txt -r
+ptasker -T /path/to/test_cases/*.txt -r
 
 # 4. Execute with custom project name
 python bin/ptasker -T /path/to/test_cases -p myproject -r
 
 # 5. Run as daemon
-python bin/ptasker -T /path/to/test_cases -p myproject -r -d
+ptasker -T /path/to/test_cases -p myproject -r -d
 
 # 6. Validate ptasker configuration
-python bin/ptasker --validate-config
+ptasker --validate-config
 ```
 
 **How it works**: ptasker automatically generates the command as `tasker @TASK@ -p <project> -r`. You don't need to specify `-C`. If no project name is provided, one is auto-generated (e.g., `parallelr_1a811c`).
@@ -99,7 +78,7 @@ python bin/ptasker --validate-config
 
 **Python**: 3.6.8 or higher
 
-**Platform**: Linux/Unix (Windows supported except daemon mode)
+**Platform**: Linux/Unix
 
 **Standard Library**: pathlib, argparse, threading, subprocess, signal, logging, queue, csv, json, shlex, select, errno, fcntl
 
@@ -109,20 +88,20 @@ The script works without these modules but provides enhanced functionality when 
 
 **Check module availability**:
 ```bash
-python bin/parallelr.py --check-dependencies
+parallelr --check-dependencies
 ```
 
 **PyYAML** (bundled: 6.0.1):
 - **Purpose**: Load YAML configuration files (`cfg/parallelr.yaml`)
 - **Without it**: Configuration files are ignored; only hardcoded defaults are used
 - **Why use it**: Allows customizing workers, timeouts, logging levels, and all other settings without modifying code
-- **Install**: `pip install --target=lib pyyaml`
+- **Install**: `pip3 install --target=<path to lib> pyyaml`
 
 **psutil** (bundled: 7.1.0):
 - **Purpose**: Monitor memory and CPU usage per task during execution
 - **Without it**: Memory/CPU metrics show 0.00 (not collected)
 - **Why use it**: Essential for performance analysis, debugging resource issues, and capacity planning
-- **Install**: `pip install --target=lib psutil`
+- **Install**: `pip3 install --target=<path to lib> psutil`
 
 **Custom library path**: Set `PARALLELR_LIB_PATH` environment variable to use an alternative library location (default: `/app/COOL/lib` if exists)
 
@@ -146,6 +125,8 @@ python bin/parallelr.py --check-dependencies
 | `-t, --timeout N` | Task timeout in seconds (default: 600, max: 3600, overrides config) |
 | `-s, --sleep N` | Delay between starting new tasks (0-60 seconds, default: 0). Use to throttle resource consumption |
 | `--file-extension EXT` | Filter task files by extension(s). Single: `txt`, Multiple: `txt,log,dat` |
+| `-A, --arguments-file FILE` | File containing arguments, one per line. Each line becomes a parallel task |
+| `-E, --env-var NAME` | Environment variable name to set with argument value (e.g., HOSTNAME) |
 
 #### Advanced Execution
 
@@ -174,44 +155,103 @@ python bin/parallelr.py --check-dependencies
 
 ```bash
 # Dry-run to preview commands (safe, no execution)
-python bin/parallelr.py -T ./tasks -C "python3 @TASK@"
+parallelr -T ./tasks -C "python3 @TASK@"
 
 # Execute Python scripts with 5 workers
-python bin/parallelr.py -T ./tasks -C "python3 @TASK@" -r -m 5
+parallelr -T ./tasks -C "python3 @TASK@" -r -m 5
 
 # Execute only .txt files from a directory
-python bin/parallelr.py -T ./tasks --file-extension txt -C "process @TASK@" -r
+parallelr -T ./tasks --file-extension txt -C "process @TASK@" -r
 
 # Execute specific files using shell glob patterns
-python bin/parallelr.py -T ./tasks/*.py -C "python3 @TASK@" -r
+parallelr -T ./tasks/*.py -C "python3 @TASK@" -r
 
 # Execute from multiple sources
-python bin/parallelr.py -T ./scripts -T ./tests -T config.json -C "process @TASK@" -r
+parallelr -T ./scripts -T ./tests -T config.json -C "process @TASK@" -r
 
 # Filter multiple extensions
-python bin/parallelr.py -T ./data --file-extension "csv,tsv,txt" -C "analyze @TASK@" -r
+parallelr -T ./data --file-extension "csv,tsv,txt" -C "analyze @TASK@" -r
 
 # Execute bash scripts with 600s timeout
-python bin/parallelr.py -T ./scripts -C "bash @TASK@" -r -t 600
+parallelr -T ./scripts -C "bash @TASK@" -r -t 600
 
 # Throttle resource consumption with 2-second delay between task starts
-python bin/parallelr.py -T ./tasks -C "curl @TASK@" -r -s 2.0
+parallelr -T ./tasks -C "curl @TASK@" -r -s 2.0
 
 # Run as daemon with auto-stop protection
-python bin/parallelr.py -T ./tasks -C "python3 @TASK@" -r -d --enable-stop-limits
+parallelr -T ./tasks -C "python3 @TASK@" -r -d --enable-stop-limits
 
 # Execute without detailed output logging (logging is enabled by default)
-python bin/parallelr.py -T ./tasks -C "./process.sh @TASK@" -r --no-task-output-log
+parallelr -T ./tasks -C "./process.sh @TASK@" -r --no-task-output-log
 
 # List running workers
-python bin/parallelr.py --list-workers
+parallelr --list-workers
 
 # Kill specific worker
-python bin/parallelr.py -k 12345
+parallelr -k 12345
 
 # Kill all workers (requires 'yes' confirmation)
-python bin/parallelr.py -k
+parallelr -k
 ```
+
+### Arguments Mode (New Feature)
+
+Arguments mode allows you to run the same template file/script with different arguments in parallel. Instead of creating multiple task files, you provide one template and a file containing arguments (one per line).
+
+#### Basic Usage
+
+**1. Environment Variable Mode** - Set an environment variable for each task:
+```bash
+# Create arguments file (e.g., hostnames.txt)
+echo "server1.example.com
+server2.example.com
+server3.example.com" > hostnames.txt
+
+# Run template.sh for each hostname with HOSTNAME environment variable
+parallelr -T template.sh -A hostnames.txt -E HOSTNAME -C "bash @TASK@" -r
+# Each task runs: HOSTNAME=<hostname> bash template.sh
+```
+
+**2. Command Argument Mode** - Replace @ARG@ in command with each argument:
+```bash
+# Run script with each hostname as command-line argument
+parallelr -T process.py -A hostnames.txt -C "python @TASK@ --host @ARG@" -r
+# Each task runs: python process.py --host <hostname>
+```
+
+**3. Combined Mode** - Use both environment variable and command argument:
+```bash
+parallelr -T script.sh -A hosts.txt -E HOSTNAME -C "bash @TASK@ @ARG@" -r
+# Each task runs: HOSTNAME=<hostname> bash script.sh <hostname>
+```
+
+#### ptasker Integration
+
+ptasker mode automatically sets HOSTNAME when using arguments file:
+```bash
+# Automatically sets HOSTNAME environment variable for TASKER
+ptasker -T template.txt -A hostnames.txt -p myproject -r
+# Equivalent to: HOSTNAME=<hostname> tasker template.txt -p myproject -r
+```
+
+#### Arguments File Format
+
+```text
+# Comments start with #
+server1.example.com
+server2.example.com
+# Empty lines are skipped
+
+server3.example.com
+server4.example.com
+```
+
+#### Use Cases
+
+- **Infrastructure Testing**: Test same script across multiple servers
+- **Data Processing**: Process multiple data files with same algorithm
+- **API Testing**: Test endpoints with different parameters
+- **Configuration Deployment**: Apply same template to different environments
 
 ## Configuration
 
@@ -293,12 +333,12 @@ When using symlinks (e.g., `ptasker`), the tool first looks for symlink-specific
 
 Use `--validate-config` to see which configs are loaded and whether fallback is active:
 ```bash
-python bin/parallelr.py --validate-config
+parallelr --validate-config
 ```
 
 Use `--show-config` to see the complete effective configuration (after merging):
 ```bash
-python bin/parallelr.py --show-config
+parallelr --show-config
 ```
 
 ### Configuration Sections
@@ -504,18 +544,18 @@ limits:
 Use `--validate-config` to check configuration status and see which files are loaded:
 
 ```bash
-python bin/parallelr.py --validate-config
+parallelr --validate-config
 # or
-python bin/ptasker --validate-config
+ptasker --validate-config
 ```
 
 **Example Output (configs loaded)**:
 ```
 ✓ Configuration is valid
-✓ Script config: /home/user/parallelr/cfg/parallelr.yaml
-✓ User config: /home/user/parallelr/cfg/parallelr.yaml
-✓ Working dir: /home/user/parallelr/workspace
-✓ Log dir: /home/user/parallelr/logs
+✓ Script config: /app/COOL/parallelr/cfg/parallelr.yaml
+✓ User config: /home/<TNR>/parallelr/cfg/parallelr.yaml
+✓ Working dir: /home/<TNR>/parallelr/workspace
+✓ Log dir: /home/<TNR>/parallelr/logs
 ✓ Workspace mode: Shared
 ✓ Workers: 20 (max allowed: 100)
 ✓ Timeout: 600s (max allowed: 3600s)
@@ -524,10 +564,10 @@ python bin/ptasker --validate-config
 **Example Output (with fallback)**:
 ```
 ✓ Configuration is valid
-✓ Script config: /home/user/parallelr/cfg/parallelr.yaml (fallback from ptasker.yaml)
-✓ User config: /home/user/parallelr/cfg/parallelr.yaml (fallback from ptasker.yaml)
-✓ Working dir: /home/user/ptasker/workspace
-✓ Log dir: /home/user/ptasker/logs
+✓ Script config: /app/COOL/parallelr/cfg/parallelr.yaml (fallback from ptasker.yaml)
+✓ User config: /home/<TNR>/parallelr/cfg/parallelr.yaml (fallback from ptasker.yaml)
+✓ Working dir: /home/<TNR>/ptasker/workspace
+✓ Log dir: /home/<TNR>/ptasker/logs
 ✓ Workspace mode: Shared
 ✓ Workers: 20 (max allowed: 100)
 ✓ Timeout: 600s (max allowed: 3600s)
@@ -538,8 +578,8 @@ python bin/ptasker --validate-config
 ✓ Configuration is valid
   Script config: Not found (using defaults)
   User config: Not found (using defaults)
-✓ Working dir: /home/user/parallelr/workspace
-✓ Log dir: /home/user/parallelr/logs
+✓ Working dir: /home/<TNR>/parallelr/workspace
+✓ Log dir: /home/<TNR>/parallelr/logs
 ✓ Workspace mode: Shared
 ✓ Workers: 20 (max allowed: 100)
 ✓ Timeout: 600s (max allowed: 3600s)
@@ -558,16 +598,16 @@ Run parallelr as a background daemon, detached from your terminal session.
 
 ```bash
 # Start as daemon
-python bin/parallelr.py -T ./tasks -C "bash @TASK@" -r -d
+parallelr -T ./tasks -C "bash @TASK@" -r -d
 
 # Check running daemons
-python bin/parallelr.py --list-workers
+parallelr --list-workers
 
 # View daemon logs
 tail -f ~/parallelr/logs/parallelr_<PID>_*.log
 
 # Kill daemon
-python bin/parallelr.py -k <PID>
+parallelr -k <PID>
 ```
 
 **How It Works**:
@@ -578,7 +618,7 @@ python bin/parallelr.py -k <PID>
 - Process ID tracked in `~/parallelr/pids/parallelr.pids`
 
 **Limitations**:
-- Linux/Unix only (not supported on Windows)
+- Linux/Unix only
 - Cannot interact after daemonizing
 - Must use log files to monitor progress
 
@@ -621,7 +661,7 @@ Automatically halt execution when failure thresholds are exceeded.
 
 **Enable via CLI**:
 ```bash
-python bin/parallelr.py -T ./tasks -C "python @TASK@" -r --enable-stop-limits
+parallelr -T ./tasks -C "python @TASK@" -r --enable-stop-limits
 ```
 
 **Enable via Config**:
@@ -681,7 +721,7 @@ Performance Statistics:
 ### List Running Workers
 
 ```bash
-python bin/parallelr.py --list-workers
+parallelr --list-workers
 ```
 
 **Output**:
@@ -698,12 +738,12 @@ PID      Status     Start Time           Log File                               
 
 **Kill specific process**:
 ```bash
-python bin/parallelr.py -k 12345
+parallelr -k 12345
 ```
 
 **Kill all processes** (requires confirmation):
 ```bash
-python bin/parallelr.py -k
+parallelr -k
 # Prompts: Are you sure? Type 'yes' to confirm:
 ```
 
@@ -807,17 +847,17 @@ Performance Statistics:
 - Peak Memory Usage: 512.33MB
 
 Directories:
-- Working Dir: /home/user/parallelr/workspace
+- Working Dir: /home/<TNR>/parallelr/workspace
 - Workspace Type: Shared
-- Log Dir: /home/user/parallelr/logs
+- Log Dir: /home/<TNR>/parallelr/logs
 
 Auto-Stop Protection:
 - Stop Limits: Disabled
 
 Log Files:
-- Main Log: /home/user/parallelr/logs/parallelr_12345_29Sep25_143015.log (rotating)
-- Summary: /home/user/parallelr/logs/parallelr_12345_29Sep25_143015_summary.csv (session-specific)
-- Output: /home/user/parallelr/logs/parallelr_12345_29Sep25_143015_output.txt (enabled by default, disable with --no-task-output-log)
+- Main Log: /home/<TNR>/parallelr/logs/parallelr_12345_29Sep25_143015.log (rotating)
+- Summary: /home/<TNR>/parallelr/logs/parallelr_12345_29Sep25_143015_summary.csv (session-specific)
+- Output: /home/<TNR>/parallelr/logs/parallelr_12345_29Sep25_143015_output.txt (enabled by default, disable with --no-task-output-log)
 
 Process Info:
 - Process ID: 12345
@@ -884,63 +924,6 @@ echo "Task 1 complete"
 print("Hello from Python task")
 ```
 
-## Troubleshooting
-
-### Common Issues
-
-#### Issue: "No task files found"
-**Cause**: TasksDir is empty or doesn't exist
-**Solution**:
-```bash
-ls -la <TasksDir>  # Verify directory exists and has files
-```
-
-#### Issue: "Configuration validation failed"
-**Cause**: Invalid YAML syntax or values
-**Solution**:
-```bash
-python bin/parallelr.py --validate-config  # See specific errors
-python bin/parallelr.py --show-config      # View current config
-```
-
-#### Issue: Tasks hang forever
-**Cause**: No timeout set or timeout too high
-**Solution**: Use `-t` flag or set `timeout_seconds` in config
-```bash
-python bin/parallelr.py -T ./tasks -C "bash @TASK@" -r -t 300
-```
-
-#### Issue: "Memory/CPU monitoring: Not available"
-**Cause**: psutil not installed
-**Solution**: psutil is in `lib/`, but if missing:
-```bash
-pip install --target=lib psutil
-```
-
-#### Issue: High failure rate
-**Cause**: Wrong command, missing dependencies, wrong permissions
-**Solution**:
-1. Dry-run first: `python bin/parallelr.py -T ./tasks -C "bash @TASK@"`
-2. Check logs: `tail -f ~/parallelr/logs/parallelr_<PID>_*.log`
-3. Test single task manually: `bash tasks/task1.sh`
-4. Check detailed task output: `~/parallelr/logs/parallelr_<PID>_*_output.txt` (enabled by default)
-
-#### Issue: Worker stuck after Ctrl+C
-**Cause**: Not cleaning up properly
-**Solution**:
-```bash
-python bin/parallelr.py --list-workers  # Find PID
-python bin/parallelr.py -k <PID>        # Kill specific worker
-```
-
-#### Issue: Permission denied on task files
-**Cause**: Task files not executable
-**Solution**:
-```bash
-chmod +x tasks/*.sh  # Make executable
-# Or use interpreter: -C "bash @TASK@" instead of -C "@TASK@"
-```
-
 ### Debug Mode
 
 Enable debug logging for troubleshooting:
@@ -967,19 +950,19 @@ self.level = "DEBUG"  # In LoggingConfig class
 
 **View help**:
 ```bash
-python bin/parallelr.py --help
+parallelr --help
 ```
 
 **Validate setup**:
 ```bash
-python bin/parallelr.py --check-dependencies  # Check optional modules
-python bin/parallelr.py --validate-config     # Validate configuration
-python bin/parallelr.py --show-config         # View current config
+parallelr --check-dependencies  # Check optional modules
+parallelr --validate-config     # Validate configuration
+parallelr --show-config         # View current config
 ```
 
 **Test with dry-run**:
 ```bash
-python bin/parallelr.py -T ./tasks -C "bash @TASK@"
+parallelr -T ./tasks -C "bash @TASK@"
 ```
 
 ## Security Considerations
@@ -1021,69 +1004,29 @@ python bin/parallelr.py -T ./tasks -C "bash @TASK@"
 
 ```bash
 # Dry-run (preview)
-python bin/parallelr.py -T <dir> -C "<command> @TASK@"
+parallelr -T <dir> -C "<command> @TASK@"
 
 # Execute
-python bin/parallelr.py -T <dir> -C "<command> @TASK@" -r
+parallelr -T <dir> -C "<command> @TASK@" -r
 
 # Custom workers/timeout
-python bin/parallelr.py -T <dir> -C "<command> @TASK@" -r -m 10 -t 300
+parallelr -T <dir> -C "<command> @TASK@" -r -m 10 -t 300
 
 # Daemon mode
-python bin/parallelr.py -T <dir> -C "<command> @TASK@" -r -d
+parallelr -T <dir> -C "<command> @TASK@" -r -d
 
 # List workers
-python bin/parallelr.py --list-workers
+parallelr --list-workers
 
 # Kill worker
-python bin/parallelr.py -k <PID>
+parallelr -k <PID>
 
 # Check dependencies
-python bin/parallelr.py --check-dependencies
+parallelr --check-dependencies
 
 # View config
-python bin/parallelr.py --show-config
+parallelr --show-config
 
 # Validate config
-python bin/parallelr.py --validate-config
+parallelr --validate-config
 ```
-
-### File Locations
-
-```
-parallelr/
-├── bin/
-│   ├── parallelr.py          # Main script
-│   └── ptasker -> parallelr.py  # Symlink for TASKER mode
-├── cfg/
-│   ├── parallelr.yaml        # Script config (default)
-│   └── ptasker.yaml          # Optional ptasker-specific config (falls back to parallelr.yaml)
-├── lib/                      # Bundled dependencies (psutil, pyyaml)
-└── CLAUDE.md                 # Developer guide
-
-~/parallelr/
-├── cfg/
-│   └── parallelr.yaml        # User config (optional)
-├── logs/
-│   ├── parallelr_{PID}_{timestamp}.log           # Main log (rotating)
-│   ├── parallelr_{PID}_{timestamp}_summary.csv   # Task summary
-│   └── parallelr_{PID}_{timestamp}_output.txt    # Task output (enabled by default)
-├── workspace/                # Shared workspace
-│   └── pid{PID}_worker{N}/   # Isolated workspaces (if enabled)
-└── pids/
-    └── parallelr.pids        # Running process tracking
-
-~/ptasker/                    # Optional ptasker-specific location
-├── cfg/
-│   └── ptasker.yaml          # Optional ptasker user config (falls back to ~/parallelr/cfg/parallelr.yaml)
-├── logs/                     # ptasker logs go here
-├── workspace/                # ptasker workspace
-└── pids/                     # ptasker process tracking
-```
-
----
-
-**Version**: 1.0
-**Python Compatibility**: 3.6.8+
-**License**: See project documentation
-**Author**: See project documentation

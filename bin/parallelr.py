@@ -500,13 +500,16 @@ class Configuration:
 class SecureTaskExecutor:
     """Simplified task executor with basic security validation."""
     
-    def __init__(self, task_file, command_template, timeout, worker_id, logger, config):
+    def __init__(self, task_file, command_template, timeout, worker_id, logger, config,
+                 extra_env=None, task_argument=None):
         self.task_file = task_file
         self.command_template = command_template
         self.timeout = timeout
         self.worker_id = worker_id
         self.logger = logger
         self.config = config
+        self.extra_env = extra_env or {}
+        self.task_argument = task_argument
         self._process = None
         self._cancelled = False
 
@@ -522,20 +525,23 @@ class SecureTaskExecutor:
         """Build command arguments with basic security validation."""
         abs_task_file = str(Path(task_file).resolve())
         command_str = self.command_template.replace("@TASK@", abs_task_file)
-        #command_str = self.command_template.replace("@TASK@", task_file)
-        
+
+        # Replace @ARG@ if we have a task argument
+        if self.task_argument:
+            command_str = command_str.replace("@ARG@", self.task_argument)
+
         try:
             args = shlex.split(command_str)
         except ValueError as e:
             raise SecurityError(f"Invalid command syntax: {e}")
-        
+
         if not args:
             raise SecurityError("Empty command after parsing")
-        
+
         for arg in args:
             if len(arg) > self.config.security.max_argument_length:
                 raise SecurityError(f"Argument too long: {len(arg)} characters")
-        
+
         return args
 
     def _monitor_process(self):
@@ -599,7 +605,12 @@ class SecureTaskExecutor:
                 work_dir = self.config.get_worker_workspace(self.worker_id, os.getpid())
             else:
                 work_dir = self.config.get_working_directory()
-            
+
+            # Prepare environment with any extra variables
+            env = os.environ.copy()
+            if self.extra_env:
+                env.update(self.extra_env)
+
             self._process = subprocess.Popen(
                 command_args,
                 shell=False,
@@ -607,7 +618,8 @@ class SecureTaskExecutor:
                 stderr=subprocess.PIPE,
                 universal_newlines=True,
                 bufsize=0,  # Unbuffered
-                cwd=str(work_dir)
+                cwd=str(work_dir),
+                env=env
             )
             
             try:
@@ -748,7 +760,7 @@ class ParallelTaskManager:
     
     def __init__(self, max_workers, timeout, task_start_delay, tasks_paths, command_template,
                  script_path, dry_run=False, enable_stop_limits=False, log_task_output=True,
-                 file_extension=None):
+                 file_extension=None, arguments_file=None, env_var=None):
 
         self.config = Configuration.from_script(script_path)
         self.config.validate()
@@ -775,7 +787,9 @@ class ParallelTaskManager:
         self.file_extension = file_extension
         self.command_template = command_template
         self.dry_run = dry_run
-        
+        self.arguments_file = arguments_file
+        self.env_var = env_var
+
         self.log_dir = self.config.get_log_directory()
         self.process_id = os.getpid()
         
@@ -783,8 +797,10 @@ class ParallelTaskManager:
         
         self.consecutive_failures = 0
         self.total_completed = 0
-        
-        self.task_files = []
+
+        # Change to task_entries to support both files and arguments
+        self.task_entries = []  # Will contain dicts with task info
+        self.task_files = []  # Legacy support
         self.completed_tasks = []
         self.failed_tasks = []
         self.running_tasks = {}
@@ -850,7 +866,45 @@ class ParallelTaskManager:
                 raise ParallelTaskExecutorError(f"Failed to init summary log: {e}")
 
     def _discover_tasks(self):
-        """Discover task files from directories and/or explicit file paths."""
+        """Discover task files from directories and/or explicit file paths, or create tasks from arguments."""
+        task_entries = []
+
+        # Check if we're in arguments mode
+        if self.arguments_file:
+            # Arguments mode: Read arguments from file and create tasks
+            if not self.tasks_paths or len(self.tasks_paths) != 1:
+                raise ParallelTaskExecutorError("Arguments mode requires exactly one template file with -T")
+
+            template_file = Path(self.tasks_paths[0])
+            if not template_file.is_file():
+                raise ParallelTaskExecutorError(f"Template file not found: {template_file}")
+
+            args_file = Path(self.arguments_file)
+            if not args_file.is_file():
+                raise ParallelTaskExecutorError(f"Arguments file not found: {args_file}")
+
+            # Read arguments from file
+            try:
+                with open(args_file, 'r') as f:
+                    for line_num, line in enumerate(f, 1):
+                        line = line.strip()
+                        # Skip empty lines and comments
+                        if not line or line.startswith('#'):
+                            continue
+                        # Create a task entry for each argument
+                        task_entries.append({
+                            'type': 'argument',
+                            'template': str(template_file),
+                            'argument': line,
+                            'line_num': line_num
+                        })
+            except Exception as e:
+                raise ParallelTaskExecutorError(f"Failed to read arguments file: {e}")
+
+            self.logger.info(f"Created {len(task_entries)} tasks from arguments file")
+            return task_entries
+
+        # Regular mode: Discover task files from paths
         task_files = []
 
         # Parse file extensions if provided
@@ -916,13 +970,20 @@ class ParallelTaskManager:
             # Remove duplicates and sort
             task_files = sorted(list(set(task_files)))
 
+            # Convert to task entries for consistency
+            for task_file in task_files:
+                task_entries.append({
+                    'type': 'file',
+                    'file': task_file
+                })
+
             if allowed_extensions:
                 ext_list = ', '.join(allowed_extensions)
-                self.logger.info(f"Discovered {len(task_files)} task files with extensions: {ext_list}")
+                self.logger.info(f"Discovered {len(task_entries)} task files with extensions: {ext_list}")
             else:
-                self.logger.info(f"Discovered {len(task_files)} task files")
+                self.logger.info(f"Discovered {len(task_entries)} task files")
 
-            return task_files
+            return task_entries
 
         except Exception as e:
             raise ParallelTaskExecutorError(f"Failed to discover task files: {e}")
@@ -1026,26 +1087,36 @@ class ParallelTaskManager:
     def execute_tasks(self):
         """Execute all tasks."""
         self.logger.info("Starting parallel execution")
-        
+
         try:
-            self.task_files = self._discover_tasks()
-            total_tasks = len(self.task_files)
-            
+            self.task_entries = self._discover_tasks()
+            total_tasks = len(self.task_entries)
+
+            # For backward compatibility, also populate task_files if in file mode
+            self.task_files = [entry.get('file', entry.get('template')) for entry in self.task_entries]
+
             self.logger.info(f"Executing {total_tasks} tasks with {self.max_workers} workers")
             if self.task_start_delay > 0:
                 self.logger.info(f"Task start delay: {self.task_start_delay} seconds between new tasks")
 
             if self.dry_run:
                 self.logger.info("DRY RUN MODE")
-                for i, task_file in enumerate(self.task_files, 1):
-                    command = self.command_template.replace("@TASK@", task_file)
+                for i, task_entry in enumerate(self.task_entries, 1):
+                    if task_entry['type'] == 'argument':
+                        # Show command with argument replacement
+                        command = self.command_template.replace("@TASK@", task_entry['template'])
+                        command = command.replace("@ARG@", task_entry['argument'])
+                        if self.env_var:
+                            command = f"{self.env_var}={task_entry['argument']} {command}"
+                    else:
+                        command = self.command_template.replace("@TASK@", task_entry['file'])
                     self.logger.info(f"[{i}/{total_tasks}]: {command}")
                 return {'total': total_tasks, 'completed': 0, 'failed': 0, 'cancelled': 0}
-            
+
             with ThreadPoolExecutor(max_workers=self.max_workers) as executor:
                 task_queue = queue.Queue()
-                for task_file in self.task_files:
-                    task_queue.put(task_file)
+                for task_entry in self.task_entries:
+                    task_queue.put(task_entry)
                 
                 worker_counter = 0
                 tasks_started = 0  # Track number of tasks started for delay
@@ -1066,13 +1137,24 @@ class ParallelTaskManager:
                         if self.task_start_delay > 0 and tasks_started > 0:
                             time.sleep(self.task_start_delay)
 
-                        task_file = task_queue.get()
+                        task_entry = task_queue.get()
                         worker_counter += 1
                         tasks_started += 1
 
+                        # Prepare task file and extra environment based on task type
+                        if task_entry['type'] == 'argument':
+                            task_file = task_entry['template']
+                            extra_env = {self.env_var: task_entry['argument']} if self.env_var else {}
+                            task_argument = task_entry['argument']
+                        else:
+                            task_file = task_entry['file']
+                            extra_env = {}
+                            task_argument = None
+
                         task_executor = SecureTaskExecutor(
                             task_file, self.command_template, self.timeout,
-                            worker_counter, self.logger, self.config
+                            worker_counter, self.logger, self.config,
+                            extra_env=extra_env, task_argument=task_argument
                         )
 
                         future = executor.submit(task_executor.execute)
@@ -1481,7 +1563,13 @@ Examples:
 
     parser.add_argument('--file-extension',
                        help='Filter task files by extension(s), e.g., "txt" or "txt,log,dat"')
-    
+
+    parser.add_argument('-A', '--arguments-file',
+                       help='File containing arguments, one per line. Each line becomes a parallel task')
+
+    parser.add_argument('-E', '--env-var',
+                       help='Environment variable name to set with argument value (e.g., HOSTNAME)')
+
     if ptasker_mode:
         # In ptasker mode, -C is auto-generated from -p
         parser.add_argument('-C', '--Command',
@@ -1535,6 +1623,11 @@ Examples:
         # Auto-generate command for TASKER
         args.Command = f"tasker @TASK@ -p {args.project} -r"
         print(f"Using command: {args.Command}")
+
+        # If arguments file is provided, automatically set HOSTNAME as env var
+        if args.arguments_file and not args.env_var:
+            args.env_var = 'HOSTNAME'
+            print(f"Auto-setting environment variable: HOSTNAME")
 
     if args.list_workers or args.kill is not None:
         return args
@@ -1821,7 +1914,9 @@ def main():
             dry_run=not args.run,
             enable_stop_limits=args.enable_stop_limits,
             log_task_output=not args.no_task_output_log,
-            file_extension=args.file_extension
+            file_extension=args.file_extension,
+            arguments_file=args.arguments_file,
+            env_var=args.env_var
         )
         
         if args.daemon:
