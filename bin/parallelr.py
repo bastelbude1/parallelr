@@ -500,13 +500,16 @@ class Configuration:
 class SecureTaskExecutor:
     """Simplified task executor with basic security validation."""
     
-    def __init__(self, task_file, command_template, timeout, worker_id, logger, config):
+    def __init__(self, task_file, command_template, timeout, worker_id, logger, config,
+                 extra_env=None, task_argument=None):
         self.task_file = task_file
         self.command_template = command_template
         self.timeout = timeout
         self.worker_id = worker_id
         self.logger = logger
         self.config = config
+        self.extra_env = extra_env or {}
+        self.task_argument = task_argument
         self._process = None
         self._cancelled = False
 
@@ -515,27 +518,30 @@ class SecureTaskExecutor:
         try:
             if os.path.getsize(task_file) > self.config.advanced.max_file_size:
                 raise SecurityError(f"Task file too large: {task_file}")
-        except OSError:
-            raise SecurityError(f"Cannot access task file: {task_file}")
+        except OSError as e:
+            raise SecurityError(f"Cannot access task file: {task_file}") from e
 
     def _build_secure_command(self, task_file):
         """Build command arguments with basic security validation."""
         abs_task_file = str(Path(task_file).resolve())
         command_str = self.command_template.replace("@TASK@", abs_task_file)
-        #command_str = self.command_template.replace("@TASK@", task_file)
-        
+
+        # Replace @ARG@ if we have a task argument (use is not None to handle "0" and other falsy values)
+        if self.task_argument is not None:
+            command_str = command_str.replace("@ARG@", shlex.quote(str(self.task_argument)))
+
         try:
             args = shlex.split(command_str)
         except ValueError as e:
-            raise SecurityError(f"Invalid command syntax: {e}")
-        
+            raise SecurityError(f"Invalid command syntax: {e}") from e
+
         if not args:
             raise SecurityError("Empty command after parsing")
-        
+
         for arg in args:
             if len(arg) > self.config.security.max_argument_length:
                 raise SecurityError(f"Argument too long: {len(arg)} characters")
-        
+
         return args
 
     def _monitor_process(self):
@@ -599,16 +605,33 @@ class SecureTaskExecutor:
                 work_dir = self.config.get_worker_workspace(self.worker_id, os.getpid())
             else:
                 work_dir = self.config.get_working_directory()
-            
-            self._process = subprocess.Popen(
-                command_args,
-                shell=False,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                universal_newlines=True,
-                bufsize=0,  # Unbuffered
-                cwd=str(work_dir)
-            )
+
+            # Prepare environment with any extra variables
+            env = os.environ.copy()
+            if self.extra_env:
+                env.update(self.extra_env)
+
+            # Prepare process group configuration
+            popen_kwargs = {
+                'shell': False,
+                'stdout': subprocess.PIPE,
+                'stderr': subprocess.PIPE,
+                'universal_newlines': True,
+                'bufsize': 0,  # Unbuffered
+                'cwd': str(work_dir),
+                'env': env
+            }
+
+            # Apply process group settings if enabled
+            if self.config.execution.use_process_groups:
+                if os.name == 'posix':
+                    # POSIX: Use setsid to create new process group
+                    popen_kwargs['preexec_fn'] = os.setsid
+                else:
+                    # Windows: Use CREATE_NEW_PROCESS_GROUP flag
+                    popen_kwargs['creationflags'] = subprocess.CREATE_NEW_PROCESS_GROUP
+
+            self._process = subprocess.Popen(command_args, **popen_kwargs)
             
             try:
                 # Real-time output capture with timeout handling
@@ -700,11 +723,6 @@ class SecureTaskExecutor:
                 result.stdout = stdout[-max_capture:] if stdout else ""
                 result.stderr = stderr[-max_capture:] if stderr else ""
                 self._terminate_process()
-                 
-            except subprocess.TimeoutExpired:
-                result.status = TaskStatus.TIMEOUT
-                result.error_message = f"Timeout after {self.timeout}s"
-                self._terminate_process()
         
         except SecurityError as e:
             result.status = TaskStatus.ERROR
@@ -727,14 +745,59 @@ class SecureTaskExecutor:
         return result
 
     def _terminate_process(self):
-        """Safely terminate the running process."""
-        if self._process:
-            try:
+        """Safely terminate the running process and its children."""
+        if not self._process:
+            return
+
+        try:
+            pid = self._process.pid
+
+            # Terminate process group if enabled, otherwise just the process
+            if self.config.execution.use_process_groups:
+                if os.name == 'posix':
+                    # POSIX: Terminate entire process group
+                    try:
+                        pgid = os.getpgid(pid)
+                        self.logger.debug(f"Terminating process group {pgid}")
+                        os.killpg(pgid, signal.SIGTERM)
+                    except (OSError, ProcessLookupError) as e:
+                        self.logger.debug(f"Process group termination failed, falling back to process: {e}")
+                        # Fallback to single process termination
+                        self._process.terminate()
+                else:
+                    # Windows: Send CTRL_BREAK_EVENT to process group
+                    try:
+                        self.logger.debug(f"Sending CTRL_BREAK to process group {pid}")
+                        self._process.send_signal(signal.CTRL_BREAK_EVENT)
+                    except (OSError, AttributeError) as e:
+                        self.logger.debug(f"Process group signal failed, falling back to terminate: {e}")
+                        # Fallback to single process termination
+                        self._process.terminate()
+            else:
+                # Process groups disabled - terminate single process
                 self._process.terminate()
-                try:
-                    self._process.wait(timeout=5)
-                except subprocess.TimeoutExpired:
+
+            # Wait for graceful termination
+            try:
+                self._process.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                # Forceful kill if graceful termination failed
+                if self.config.execution.use_process_groups and os.name == 'posix':
+                    try:
+                        pgid = os.getpgid(pid)
+                        self.logger.debug(f"Force killing process group {pgid}")
+                        os.killpg(pgid, signal.SIGKILL)
+                    except (OSError, ProcessLookupError) as e:
+                        self.logger.debug(f"Process group kill failed, falling back to process: {e}")
+                        self._process.kill()
+                else:
                     self._process.kill()
+
+        except Exception as e:
+            self.logger.debug(f"Error during process termination: {e}")
+            # Last resort - try basic kill
+            try:
+                self._process.kill()
             except:
                 pass
 
@@ -748,7 +811,7 @@ class ParallelTaskManager:
     
     def __init__(self, max_workers, timeout, task_start_delay, tasks_paths, command_template,
                  script_path, dry_run=False, enable_stop_limits=False, log_task_output=True,
-                 file_extension=None):
+                 file_extension=None, arguments_file=None, env_var=None):
 
         self.config = Configuration.from_script(script_path)
         self.config.validate()
@@ -775,7 +838,9 @@ class ParallelTaskManager:
         self.file_extension = file_extension
         self.command_template = command_template
         self.dry_run = dry_run
-        
+        self.arguments_file = arguments_file
+        self.env_var = env_var
+
         self.log_dir = self.config.get_log_directory()
         self.process_id = os.getpid()
         
@@ -783,8 +848,10 @@ class ParallelTaskManager:
         
         self.consecutive_failures = 0
         self.total_completed = 0
-        
-        self.task_files = []
+
+        # Change to task_entries to support both files and arguments
+        self.task_entries = []  # Will contain dicts with task info
+        self.task_files = []  # Legacy support
         self.completed_tasks = []
         self.failed_tasks = []
         self.running_tasks = {}
@@ -842,15 +909,60 @@ class ParallelTaskManager:
                     with open(str(self.summary_log_file), 'w', newline='', encoding='utf-8') as f:
                         writer = csv.writer(f, delimiter=';')
                         writer.writerow([
-                            'start_time', 'end_time', 'status', 'process_id', 'worker_id', 
-                            'task_file', 'command', 'exit_code', 'duration_seconds', 
+                            'start_time', 'end_time', 'status', 'process_id', 'worker_id',
+                            'task_file', 'command', 'exit_code', 'duration_seconds',
                             'memory_mb', 'cpu_percent', 'error_message'
                         ])
             except Exception as e:
-                raise ParallelTaskExecutorError(f"Failed to init summary log: {e}")
+                raise ParallelTaskExecutorError(f"Failed to init summary log: {e}") from e
 
     def _discover_tasks(self):
-        """Discover task files from directories and/or explicit file paths."""
+        """Discover task files from directories and/or explicit file paths, or create tasks from arguments."""
+        task_entries = []
+
+        # Check if we're in arguments mode
+        if self.arguments_file:
+            # Arguments mode: Read arguments from file and create tasks
+            if not self.tasks_paths or len(self.tasks_paths) != 1:
+                raise ParallelTaskExecutorError("Arguments mode requires exactly one template file with -T")
+
+            template_file = Path(self.tasks_paths[0])
+            if not template_file.is_file():
+                raise ParallelTaskExecutorError(f"Template file not found: {template_file}")
+
+            # Validate that command template contains @ARG@ placeholder if not using env var mode
+            if '@ARG@' not in self.command_template and not self.env_var:
+                self.logger.warning(
+                    "Arguments mode active but command template does not contain @ARG@ placeholder "
+                    "and no environment variable specified. Arguments will not be used."
+                )
+
+            args_file = Path(self.arguments_file)
+            if not args_file.is_file():
+                raise ParallelTaskExecutorError(f"Arguments file not found: {args_file}")
+
+            # Read arguments from file
+            try:
+                with open(args_file, 'r') as f:
+                    for line_num, line in enumerate(f, 1):
+                        line = line.strip()
+                        # Skip empty lines and comments
+                        if not line or line.startswith('#'):
+                            continue
+                        # Create a task entry for each argument
+                        task_entries.append({
+                            'type': 'argument',
+                            'template': str(template_file),
+                            'argument': line,
+                            'line_num': line_num
+                        })
+            except Exception as e:
+                raise ParallelTaskExecutorError(f"Failed to read arguments file: {e}") from e
+
+            self.logger.info(f"Created {len(task_entries)} tasks from arguments file")
+            return task_entries
+
+        # Regular mode: Discover task files from paths
         task_files = []
 
         # Parse file extensions if provided
@@ -916,16 +1028,23 @@ class ParallelTaskManager:
             # Remove duplicates and sort
             task_files = sorted(list(set(task_files)))
 
+            # Convert to task entries for consistency
+            for task_file in task_files:
+                task_entries.append({
+                    'type': 'file',
+                    'file': task_file
+                })
+
             if allowed_extensions:
                 ext_list = ', '.join(allowed_extensions)
-                self.logger.info(f"Discovered {len(task_files)} task files with extensions: {ext_list}")
+                self.logger.info(f"Discovered {len(task_entries)} task files with extensions: {ext_list}")
             else:
-                self.logger.info(f"Discovered {len(task_files)} task files")
+                self.logger.info(f"Discovered {len(task_entries)} task files")
 
-            return task_files
+            return task_entries
 
         except Exception as e:
-            raise ParallelTaskExecutorError(f"Failed to discover task files: {e}")
+            raise ParallelTaskExecutorError(f"Failed to discover task files: {e}") from e
 
     def _check_error_limits(self):
         """Check if error limits are exceeded."""
@@ -944,13 +1063,14 @@ class ParallelTaskManager:
         
         return False
 
-    def _handle_completed_task(self, future, task_file):
+    def _handle_completed_task(self, future):
         """Handle completion of a task with error tracking."""
         try:
             result = future.result()
+            task_file = result.task_file
             self._log_task_result(result)
             self.total_completed += 1
-            
+
             if result.status == TaskStatus.SUCCESS:
                 self.completed_tasks.append(result)
                 self.consecutive_failures = 0
@@ -959,24 +1079,30 @@ class ParallelTaskManager:
                 self.failed_tasks.append(result)
                 if self.config.limits.stop_limits_enabled:
                     self.consecutive_failures += 1
-                    
+
                 if result.status == TaskStatus.TIMEOUT:
                     self.logger.warning(f"Task timed out after {self.timeout}s: {task_file}")
                 else:
                     self.logger.warning(f"Task failed: {task_file} - {result.error_message}")
-                
+
                 if self.config.limits.stop_limits_enabled and self._check_error_limits():
                     self.shutdown_requested = True
-            
-            if task_file in self.running_tasks:
-                del self.running_tasks[task_file]
+
+            # Clean up future-based tracking
+            if future in self.running_tasks:
+                del self.running_tasks[future]
             if future in self.futures:
                 del self.futures[future]
-                
+
         except Exception as e:
-            self.logger.error(f"Error handling task {task_file}: {e}")
+            self.logger.exception("Error handling task")
             if self.config.limits.stop_limits_enabled:
                 self.consecutive_failures += 1
+            # Clean up on error too
+            if future in self.running_tasks:
+                del self.running_tasks[future]
+            if future in self.futures:
+                del self.futures[future]
 
     def _log_task_result(self, result):
         """Log task result to summary file."""
@@ -986,7 +1112,7 @@ class ParallelTaskManager:
                     with open(str(self.summary_log_file), 'a', newline='', encoding='utf-8') as f:
                         f.write(result.to_log_line() + '\n')
             except Exception as e:
-                self.logger.error(f"Log write failed: {e}")
+                self.logger.exception("Log write failed")
 
         if self.log_task_output and not self.dry_run:
             try:
@@ -1011,7 +1137,7 @@ class ParallelTaskManager:
                         if result.error_message:
                             f.write(f"\nERROR: {result.error_message}\n")
             except Exception as e:
-                self.logger.error(f"Output log write failed: {e}")
+                self.logger.exception("Output log write failed")
 
     def _setup_signal_handlers(self):
         """Set up signal handlers for graceful shutdown."""
@@ -1026,26 +1152,39 @@ class ParallelTaskManager:
     def execute_tasks(self):
         """Execute all tasks."""
         self.logger.info("Starting parallel execution")
-        
+
         try:
-            self.task_files = self._discover_tasks()
-            total_tasks = len(self.task_files)
-            
+            self.task_entries = self._discover_tasks()
+            total_tasks = len(self.task_entries)
+
+            # For backward compatibility, also populate task_files if in file mode
+            self.task_files = [entry.get('file', entry.get('template')) for entry in self.task_entries]
+
             self.logger.info(f"Executing {total_tasks} tasks with {self.max_workers} workers")
             if self.task_start_delay > 0:
                 self.logger.info(f"Task start delay: {self.task_start_delay} seconds between new tasks")
 
             if self.dry_run:
                 self.logger.info("DRY RUN MODE")
-                for i, task_file in enumerate(self.task_files, 1):
-                    command = self.command_template.replace("@TASK@", task_file)
-                    self.logger.info(f"[{i}/{total_tasks}]: {command}")
+                for i, task_entry in enumerate(self.task_entries, 1):
+                    if task_entry['type'] == 'argument':
+                        # Build command with absolute path and proper quoting
+                        abs_task_file = str(Path(task_entry['template']).resolve())
+                        command_str = self.command_template.replace("@TASK@", abs_task_file)
+                        command_str = command_str.replace("@ARG@", shlex.quote(task_entry['argument']))
+                        if self.env_var:
+                            env_prefix = f"{self.env_var}={shlex.quote(task_entry['argument'])} "
+                            command_str = env_prefix + command_str
+                    else:
+                        abs_task_file = str(Path(task_entry['file']).resolve())
+                        command_str = self.command_template.replace("@TASK@", abs_task_file)
+                    self.logger.info(f"[{i}/{total_tasks}]: {command_str}")
                 return {'total': total_tasks, 'completed': 0, 'failed': 0, 'cancelled': 0}
-            
+
             with ThreadPoolExecutor(max_workers=self.max_workers) as executor:
                 task_queue = queue.Queue()
-                for task_file in self.task_files:
-                    task_queue.put(task_file)
+                for task_entry in self.task_entries:
+                    task_queue.put(task_entry)
                 
                 worker_counter = 0
                 tasks_started = 0  # Track number of tasks started for delay
@@ -1066,24 +1205,35 @@ class ParallelTaskManager:
                         if self.task_start_delay > 0 and tasks_started > 0:
                             time.sleep(self.task_start_delay)
 
-                        task_file = task_queue.get()
+                        task_entry = task_queue.get()
                         worker_counter += 1
                         tasks_started += 1
 
+                        # Prepare task file and extra environment based on task type
+                        if task_entry['type'] == 'argument':
+                            task_file = task_entry['template']
+                            extra_env = {self.env_var: task_entry['argument']} if self.env_var else {}
+                            task_argument = task_entry['argument']
+                        else:
+                            task_file = task_entry['file']
+                            extra_env = {}
+                            task_argument = None
+
                         task_executor = SecureTaskExecutor(
                             task_file, self.command_template, self.timeout,
-                            worker_counter, self.logger, self.config
+                            worker_counter, self.logger, self.config,
+                            extra_env=extra_env, task_argument=task_argument
                         )
 
                         future = executor.submit(task_executor.execute)
-                        self.futures[future] = task_file
-                        self.running_tasks[task_file] = task_executor
+                        # Use future as key to avoid collisions when same template is used multiple times
+                        self.futures[future] = task_file  # Keep for reference
+                        self.running_tasks[future] = task_executor  # Key by future, not task_file
                     
                     if self.futures:
                         try:
                             for future in as_completed(self.futures.keys(), timeout=self.wait_time):
-                                task_file = self.futures[future]
-                                self._handle_completed_task(future, task_file)
+                                self._handle_completed_task(future)
                                 break
                         except:
                             time.sleep(self.wait_time)
@@ -1104,9 +1254,9 @@ class ParallelTaskManager:
             
             self.logger.info(f"Execution completed: {stats}")
             return stats
-            
+
         except Exception as e:
-            self.logger.error(f"Fatal error during task execution: {e}")
+            self.logger.exception("Fatal error during task execution")
             raise
 
     def get_summary_report(self):
@@ -1481,7 +1631,13 @@ Examples:
 
     parser.add_argument('--file-extension',
                        help='Filter task files by extension(s), e.g., "txt" or "txt,log,dat"')
-    
+
+    parser.add_argument('-A', '--arguments-file',
+                       help='File containing arguments, one per line. Each line becomes a parallel task')
+
+    parser.add_argument('-E', '--env-var',
+                       help='Environment variable name to set with argument value (e.g., HOSTNAME)')
+
     if ptasker_mode:
         # In ptasker mode, -C is auto-generated from -p
         parser.add_argument('-C', '--Command',
@@ -1524,6 +1680,12 @@ Examples:
 
     args = parser.parse_args()
 
+    # Validate environment variable name if provided
+    if args.env_var:
+        if not args.env_var.replace('_', '').isalnum() or args.env_var[0].isdigit():
+            parser.error(f"Invalid environment variable name: {args.env_var}. "
+                       "Must start with a letter or underscore and contain only alphanumeric characters or underscores.")
+
     # Special handling for ptasker mode
     if ptasker_mode and not (args.list_workers or args.kill is not None or
                              args.validate_config or args.show_config or args.check_dependencies):
@@ -1535,6 +1697,11 @@ Examples:
         # Auto-generate command for TASKER
         args.Command = f"tasker @TASK@ -p {args.project} -r"
         print(f"Using command: {args.Command}")
+
+        # If arguments file is provided, automatically set HOSTNAME as env var
+        if args.arguments_file and not args.env_var:
+            args.env_var = 'HOSTNAME'
+            print("Auto-setting environment variable: HOSTNAME")
 
     if args.list_workers or args.kill is not None:
         return args
@@ -1821,7 +1988,9 @@ def main():
             dry_run=not args.run,
             enable_stop_limits=args.enable_stop_limits,
             log_task_output=not args.no_task_output_log,
-            file_extension=args.file_extension
+            file_extension=args.file_extension,
+            arguments_file=args.arguments_file,
+            env_var=args.env_var
         )
         
         if args.daemon:
