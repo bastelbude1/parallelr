@@ -33,7 +33,6 @@ build/
 # Logs and runtime data
 *.log
 *.csv
-*.txt
 logs/
 pids/
 workspace/
