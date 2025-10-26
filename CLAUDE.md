@@ -172,3 +172,47 @@ git push origin feature/your-feature-name
 - Feature branches: `feature/descriptive-name`
 - Bug fixes: `bugfix/issue-description`
 - Hotfixes: `hotfix/critical-issue`
+
+### Pull Request Guidelines
+
+**Before Creating a PR:**
+1. Ensure all tests pass locally
+2. Update documentation (README.md, docstrings)
+3. Add test coverage for new features
+4. Follow existing code style and conventions
+
+**PR Process:**
+1. **Create PR** from your feature branch to `master`
+2. **Code Review** is required before merging
+   - Address review comments promptly
+   - Update PR based on feedback
+3. **Merge Strategy**: Squash and merge preferred
+   - Keeps commit history clean
+   - Single commit per feature/fix on master
+   - PR description becomes commit message
+4. **After Merge**: Delete the feature branch
+
+### Commit Message Guidelines
+
+Use clear, descriptive commit messages:
+- **Format**: `<type>: <short description>`
+- **Types**: feat, fix, docs, test, refactor, chore
+- **Examples**:
+  - `feat: Add multi-argument support with delimiter options`
+  - `fix: Prevent IndexError in environment variable validation`
+  - `docs: Update README with multi-argument examples`
+  - `test: Add comprehensive delimiter test suite`
+
+### Code Review Expectations
+
+**As a Contributor:**
+- Respond to review comments within 48 hours
+- Be open to suggestions and constructive feedback
+- Explain your design decisions when asked
+- Update PR based on feedback
+
+**As a Reviewer:**
+- Focus on correctness, security, and maintainability
+- Provide specific, actionable feedback
+- Approve if minor issues can be addressed in follow-up
+- Be respectful and constructive
