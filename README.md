@@ -1070,6 +1070,42 @@ parallelr -T ./tasks -C "bash @TASK@"
 
 ---
 
+## Testing
+
+The project includes a comprehensive test suite with 109+ tests covering functionality, edge cases, and security.
+
+### Run Tests
+
+```bash
+# Install test dependencies
+pip install -r tests/requirements-test.txt
+
+# Run all tests
+pytest tests/ -v
+
+# Run specific test categories
+pytest tests/unit/ -v          # Unit tests (42 tests)
+pytest tests/integration/ -v   # Integration tests (47 tests)
+pytest tests/security/ -v      # Security tests (20 tests)
+
+# Run with coverage
+pytest tests/ --cov=bin/parallelr.py --cov-report=html
+```
+
+### Test Categories
+
+- **Unit Tests (42)**: Placeholder replacement, input validation, exception handling
+- **Integration Tests (47)**: File mode, arguments mode, daemon mode, workspace management, signal handling
+- **Security Tests (20)**: Command injection prevention, path traversal validation
+
+### Continuous Integration
+
+All tests run automatically on push via GitHub Actions across Python 3.8-3.12.
+
+For detailed testing documentation, see [tests/README.md](tests/README.md).
+
+---
+
 ## Quick Reference
 
 ### Essential Commands
