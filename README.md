@@ -289,8 +289,9 @@ server1.example.com 8080 prod
 server2.example.com 8081 dev
 
 # Tab-separated (use -S tab)
-server1.example.com	8080	prod
-server2.example.com	8081	dev
+# Note: Use actual tab character (\t) between fields
+server1.example.com<TAB>8080<TAB>prod
+server2.example.com<TAB>8081<TAB>dev
 
 # Comma-separated (use -S comma)
 server1.example.com,8080,prod
