@@ -261,7 +261,7 @@ parallelr uses a **hierarchical merge** configuration system with automatic fall
 
 #### How Configuration Merging Works
 
-**IMPORTANT**: Both configs are loaded and merged together. The user config does NOT replace the script config - it only overrides specific values you choose to customize.
+**IMPORTANT**: Both configs are loaded and merged. The user config does NOT replace the script config - it only overrides specific values you choose to customize.
 
 **Loading Process**:
 1. **Start with hardcoded defaults** (built into the code)
@@ -558,7 +558,7 @@ ptasker --validate-config
 ```
 
 **Example Output (configs loaded)**:
-```
+```text
 ✓ Configuration is valid
 ✓ Script config: /app/COOL/parallelr/cfg/parallelr.yaml
 ✓ User config: /home/<TNR>/parallelr/cfg/parallelr.yaml
@@ -570,7 +570,7 @@ ptasker --validate-config
 ```
 
 **Example Output (with fallback)**:
-```
+```text
 ✓ Configuration is valid
 ✓ Script config: /app/COOL/parallelr/cfg/parallelr.yaml (fallback from ptasker.yaml)
 ✓ User config: /home/<TNR>/parallelr/cfg/parallelr.yaml (fallback from ptasker.yaml)
@@ -582,7 +582,7 @@ ptasker --validate-config
 ```
 
 **Example Output (no configs)**:
-```
+```text
 ✓ Configuration is valid
   Script config: Not found (using defaults)
   User config: Not found (using defaults)
@@ -715,7 +715,7 @@ Track memory and CPU usage per task (requires psutil).
 - All other features work normally
 
 **Summary Report Example**:
-```
+```text
 Performance Statistics:
 - Average Duration: 15.34s
 - Maximum Duration: 45.12s
