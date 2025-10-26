@@ -167,8 +167,23 @@ else
     exit 1
 fi
 
-# Test 11: Dry run mode with multi-arguments
-echo "11. Testing dry run mode display..."
+# Test 11: Inconsistent argument counts (should fail)
+echo "11. Testing inconsistent argument count validation..."
+OUTPUT=$(timeout 5 python ../../bin/parallelr.py \
+    -T template.sh \
+    -A inconsistent_args.txt \
+    -S comma \
+    -C "bash @TASK@" 2>&1 || true)
+if echo "$OUTPUT" | grep -q "Inconsistent argument counts"; then
+    echo "   ✓ Inconsistent argument count validation passed"
+else
+    echo "   ✗ Inconsistent argument count validation failed"
+    echo "Output was: $OUTPUT"
+    exit 1
+fi
+
+# Test 12: Dry run mode with multi-arguments
+echo "12. Testing dry run mode display..."
 OUTPUT=$(python ../../bin/parallelr.py \
     -T template.sh \
     -A multi_args_comma.txt \

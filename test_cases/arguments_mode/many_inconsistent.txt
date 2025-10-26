@@ -1,0 +1,10 @@
+server1,8080,prod
+server2,8081,dev
+server3,8082,staging
+server4,8083,test
+server5,8084,qa
+server6,8085,uat
+server7,8086
+server8,8087
+server9,8088,prod
+server10,8089,dev

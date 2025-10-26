@@ -998,25 +998,52 @@ class ParallelTaskManager:
             except Exception as e:
                 raise ParallelTaskExecutorError(f"Failed to read arguments file: {e}") from e
 
-            # Validate environment variable count vs argument count
-            if self.env_var and task_entries:
-                env_vars = [var.strip() for var in self.env_var.split(',')]
-                # Check the first task entry to determine argument count
-                sample_args = task_entries[0]['arguments']
-                num_args = len(sample_args)
-                num_env_vars = len(env_vars)
+            # Validate argument count consistency across all lines
+            if task_entries:
+                # Collect argument counts from all entries
+                arg_counts = {}
+                for entry in task_entries:
+                    count = len(entry['arguments'])
+                    line_num = entry['line_num']
+                    if count not in arg_counts:
+                        arg_counts[count] = []
+                    arg_counts[count].append(line_num)
 
-                if num_env_vars < num_args:
-                    self.logger.error(
-                        f"Environment variable count mismatch: {num_env_vars} env var(s) provided "
-                        f"but {num_args} argument(s) per line. Only first {num_env_vars} argument(s) "
-                        f"will have environment variables set."
-                    )
-                elif num_env_vars > num_args:
+                # Ensure all lines have the same number of arguments
+                if len(arg_counts) > 1:
+                    # Build detailed error message showing which lines have which counts
+                    mismatch_details = []
+                    for count, lines in sorted(arg_counts.items()):
+                        if len(lines) <= 5:
+                            line_str = ', '.join(map(str, lines))
+                        else:
+                            line_str = ', '.join(map(str, lines[:5])) + f', ... ({len(lines)} total)'
+                        mismatch_details.append(f"{count} argument(s): lines {line_str}")
+
                     raise ParallelTaskExecutorError(
-                        f"Environment variable count mismatch: {num_env_vars} env var(s) provided "
-                        f"but only {num_args} argument(s) per line. Cannot proceed."
+                        f"Inconsistent argument counts in arguments file. All lines must have the same number of arguments.\n"
+                        f"Found:\n" + '\n'.join(f"  - {detail}" for detail in mismatch_details)
                     )
+
+                # All entries have consistent argument count, use it for env var validation
+                num_args = len(task_entries[0]['arguments'])
+
+                # Validate environment variable count vs argument count
+                if self.env_var:
+                    env_vars = [var.strip() for var in self.env_var.split(',')]
+                    num_env_vars = len(env_vars)
+
+                    if num_env_vars < num_args:
+                        self.logger.error(
+                            f"Environment variable count mismatch: {num_env_vars} env var(s) provided "
+                            f"but {num_args} argument(s) per line. Only first {num_env_vars} argument(s) "
+                            f"will have environment variables set."
+                        )
+                    elif num_env_vars > num_args:
+                        raise ParallelTaskExecutorError(
+                            f"Environment variable count mismatch: {num_env_vars} env var(s) provided "
+                            f"but only {num_args} argument(s) per line. Cannot proceed."
+                        )
 
             self.logger.info(f"Created {len(task_entries)} tasks from arguments file")
             return task_entries
