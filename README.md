@@ -113,7 +113,7 @@ parallelr --check-dependencies
 
 | Argument | Description |
 |----------|-------------|
-| `-T, --TasksDir PATHS...` | Directory, file paths, or glob patterns. Can be used multiple times:<br>• Directory: `-T /path/to/dir`<br>• Specific files: `-T /path/*.txt` (shell expansion)<br>• Multiple sources: `-T /dir1 -T /dir2 -T file.txt` |
+| `-T, --TasksDir PATHS...` | Directory, file paths, or glob patterns, and can be used multiple times:<br>• Directory: `-T /path/to/dir`<br>• Specific files: `-T /path/*.txt` (shell expansion)<br>• Multiple sources: `-T /dir1 -T /dir2 -T file.txt` |
 | `-C, --Command CMD` | Command template with `@TASK@` placeholder for task file path |
 
 #### Execution Control
@@ -733,7 +733,7 @@ parallelr --list-workers
 ```
 
 **Output**:
-```
+```text
 Found 2 running parallel-tasker process(es):
 
 PID      Status     Start Time           Log File                                    Summary File
@@ -781,7 +781,7 @@ All log files use a consistent naming pattern with timestamps to prevent PID reu
 - **Example name**: `parallelr_3916638_29Sep25_215848.log`
 
 **Example content**:
-```
+```text
 2025-09-29 14:30:15,123 - P12345 - INFO - [MainThread] - Starting parallel execution
 2025-09-29 14:30:15,145 - P12345 - INFO - [ThreadPoolExecutor-0_0] - Worker 1: Starting task ./tasks/task1.sh
 2025-09-29 14:30:17,892 - P12345 - INFO - [ThreadPoolExecutor-0_0] - Task completed: ./tasks/task1.sh
@@ -795,7 +795,7 @@ All log files use a consistent naming pattern with timestamps to prevent PID reu
 - **Example name**: `parallelr_3916638_29Sep25_215848_summary.csv`
 
 **Columns**:
-```
+```csv
 start_time;end_time;status;process_id;worker_id;task_file;command;exit_code;duration_seconds;memory_mb;cpu_percent;error_message
 ```
 
@@ -813,7 +813,7 @@ start_time;end_time;status;process_id;worker_id;task_file;command;exit_code;dura
 - **Example name**: `parallelr_3916638_29Sep25_215848_output.txt`
 
 **Example**:
-```
+```text
 ================================================================================
 Task: ./tasks/task1.sh
 Worker: 1
@@ -838,7 +838,7 @@ STDERR:
 
 Displayed at end of execution (or in daemon log):
 
-```
+```text
 Parallel Task Execution Summary
 ===============================
 Total Tasks: 100
