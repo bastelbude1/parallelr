@@ -581,6 +581,16 @@ class SecureTaskExecutor:
         if self.task_arguments is not None:
             command_str = replace_argument_placeholders(command_str, self.task_arguments)
 
+        # Validate that no argument placeholders remain unmatched
+        unmatched_placeholders = re.findall(r'@ARG(?:_\d+)?@', command_str)
+        if unmatched_placeholders:
+            unique_unmatched = sorted(set(unmatched_placeholders), key=lambda x: (len(x), x))
+            raise SecurityError(
+                f"Command template contains unmatched argument placeholder(s): {', '.join(unique_unmatched)}. "
+                f"These placeholders were not replaced because insufficient arguments were provided. "
+                f"Please check your command template (-C) and ensure you provide the required arguments."
+            )
+
         try:
             args = shlex.split(command_str)
         except ValueError as e:

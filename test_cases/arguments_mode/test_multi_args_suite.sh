@@ -241,5 +241,19 @@ else
     exit 1
 fi
 
+# Test 16: Unmatched placeholder detection (no arguments provided but placeholders used)
+echo "16. Testing unmatched placeholder detection..."
+OUTPUT=$(timeout 5 python ../../bin/parallelr.py \
+    -T template.sh \
+    -C "bash @TASK@ @ARG@ @ARG_1@" \
+    -r 2>&1 || true)
+if echo "$OUTPUT" | grep -q "unmatched argument placeholder"; then
+    echo "   ✓ Unmatched placeholder detection passed"
+else
+    echo "   ✗ Unmatched placeholder detection failed"
+    echo "Output was: $OUTPUT"
+    exit 1
+fi
+
 echo ""
 echo "=== All multi-argument tests passed successfully ==="
