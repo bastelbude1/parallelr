@@ -101,6 +101,29 @@ class ParallelTaskExecutorError(Exception):
 class SecurityError(ParallelTaskExecutorError):
     pass
 
+class UnmatchedPlaceholderError(SecurityError):
+    """Exception raised when argument placeholders remain unreplaced in command template."""
+
+    def __init__(self, unmatched_placeholders):
+        """
+        Initialize with list of unmatched placeholders.
+
+        Args:
+            unmatched_placeholders: List of placeholder strings that were not replaced
+        """
+        # Deduplicate and sort placeholders for consistent error messages
+        unique_unmatched = sorted(set(unmatched_placeholders), key=lambda x: (len(x), x))
+
+        # Build detailed, contextual error message
+        message = (
+            f"Command template contains unmatched argument placeholder(s): {', '.join(unique_unmatched)}. "
+            "These placeholders were not replaced because insufficient arguments were provided. "
+            "Please check your command template (-C) and ensure you provide the required arguments."
+        )
+
+        super().__init__(message)
+        self.unmatched_placeholders = unique_unmatched
+
 class ConfigurationError(ParallelTaskExecutorError):
     pass
 
@@ -584,12 +607,7 @@ class SecureTaskExecutor:
         # Validate that no argument placeholders remain unmatched
         unmatched_placeholders = re.findall(r'@ARG(?:_\d+)?@', command_str)
         if unmatched_placeholders:
-            unique_unmatched = sorted(set(unmatched_placeholders), key=lambda x: (len(x), x))
-            raise SecurityError(
-                f"Command template contains unmatched argument placeholder(s): {', '.join(unique_unmatched)}. "
-                "These placeholders were not replaced because insufficient arguments were provided. "
-                "Please check your command template (-C) and ensure you provide the required arguments."
-            )
+            raise UnmatchedPlaceholderError(unmatched_placeholders)
 
         try:
             args = shlex.split(command_str)
