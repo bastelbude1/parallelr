@@ -1061,13 +1061,14 @@ class ParallelTaskManager:
         
         return False
 
-    def _handle_completed_task(self, future, task_file):
+    def _handle_completed_task(self, future):
         """Handle completion of a task with error tracking."""
         try:
             result = future.result()
+            task_file = result.task_file
             self._log_task_result(result)
             self.total_completed += 1
-            
+
             if result.status == TaskStatus.SUCCESS:
                 self.completed_tasks.append(result)
                 self.consecutive_failures = 0
@@ -1076,24 +1077,30 @@ class ParallelTaskManager:
                 self.failed_tasks.append(result)
                 if self.config.limits.stop_limits_enabled:
                     self.consecutive_failures += 1
-                    
+
                 if result.status == TaskStatus.TIMEOUT:
                     self.logger.warning(f"Task timed out after {self.timeout}s: {task_file}")
                 else:
                     self.logger.warning(f"Task failed: {task_file} - {result.error_message}")
-                
+
                 if self.config.limits.stop_limits_enabled and self._check_error_limits():
                     self.shutdown_requested = True
-            
-            if task_file in self.running_tasks:
-                del self.running_tasks[task_file]
+
+            # Clean up future-based tracking
+            if future in self.running_tasks:
+                del self.running_tasks[future]
             if future in self.futures:
                 del self.futures[future]
-                
+
         except Exception as e:
-            self.logger.error(f"Error handling task {task_file}: {e}")
+            self.logger.error(f"Error handling task: {e}")
             if self.config.limits.stop_limits_enabled:
                 self.consecutive_failures += 1
+            # Clean up on error too
+            if future in self.running_tasks:
+                del self.running_tasks[future]
+            if future in self.futures:
+                del self.futures[future]
 
     def _log_task_result(self, result):
         """Log task result to summary file."""
@@ -1214,14 +1221,14 @@ class ParallelTaskManager:
                         )
 
                         future = executor.submit(task_executor.execute)
-                        self.futures[future] = task_file
-                        self.running_tasks[task_file] = task_executor
+                        # Use future as key to avoid collisions when same template is used multiple times
+                        self.futures[future] = task_file  # Keep for reference
+                        self.running_tasks[future] = task_executor  # Key by future, not task_file
                     
                     if self.futures:
                         try:
                             for future in as_completed(self.futures.keys(), timeout=self.wait_time):
-                                task_file = self.futures[future]
-                                self._handle_completed_task(future, task_file)
+                                self._handle_completed_task(future)
                                 break
                         except:
                             time.sleep(self.wait_time)
