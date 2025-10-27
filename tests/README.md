@@ -8,14 +8,27 @@ This test suite provides comprehensive coverage of parallelr functionality inclu
 - **Unit Tests**: Individual component testing (placeholders, validators, exceptions)
 - **Integration Tests**: Component interaction testing (file mode, daemon, signals)
 - **Security Tests**: Injection prevention, input validation, resource limits
-- **Performance Tests**: Scalability, concurrency, memory usage
-- **E2E Tests**: Real-world workflow scenarios
+
+## ⚠️ Python 3.6.8 Compatibility
+
+**CRITICAL**: All tests MUST be compatible with Python 3.6.8.
+
+### Compatibility Requirements
+
+- ✅ Use `stdout=subprocess.PIPE, stderr=subprocess.PIPE, universal_newlines=True`
+- ❌ Do NOT use `capture_output=True` (Python 3.7+)
+- ❌ Do NOT use `text=True` parameter (use `universal_newlines=True` instead)
+- ❌ Do NOT use walrus operator `:=` (Python 3.8+)
+- ❌ Do NOT use `list[str]` type hints (use `List[str]` from typing)
 
 ## 🚀 Quick Start
 
 ### Install Test Dependencies
 
 ```bash
+# Verify Python version first
+python -V  # Must show Python 3.6.8 or higher
+
 # From repository root
 pip install -r tests/requirements-test.txt
 ```

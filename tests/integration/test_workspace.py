@@ -29,8 +29,9 @@ def test_workspace_directory_created(sample_task_dir):
          '-T', str(sample_task_dir),
          '-C', 'bash @TASK@',
          '-r', '-m', '1'],
-        capture_output=True,
-        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        universal_newlines=True,
         timeout=30
     )
 
@@ -47,8 +48,9 @@ def test_shared_workspace_mode_default(sample_task_dir):
          '-T', str(sample_task_dir),
          '-C', 'bash @TASK@',
          '-r', '-m', '1'],
-        capture_output=True,
-        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        universal_newlines=True,
         timeout=30
     )
 
@@ -74,8 +76,9 @@ ls -la
          '-T', str(task_file),
          '-C', 'bash @TASK@',
          '-r'],
-        capture_output=True,
-        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        universal_newlines=True,
         timeout=30
     )
 
@@ -104,8 +107,9 @@ def test_workspace_persists_between_runs(temp_dir):
          '-T', str(task1),
          '-C', 'bash @TASK@',
          '-r'],
-        capture_output=True,
-        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        universal_newlines=True,
         timeout=30
     )
 
@@ -122,8 +126,9 @@ def test_workspace_persists_between_runs(temp_dir):
          '-T', str(task2),
          '-C', 'bash @TASK@',
          '-r'],
-        capture_output=True,
-        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        universal_newlines=True,
         timeout=30
     )
 
@@ -143,8 +148,9 @@ def test_workspace_directory_in_summary(sample_task_dir):
          '-T', str(sample_task_dir),
          '-C', 'bash @TASK@',
          '-r', '-m', '1'],
-        capture_output=True,
-        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        universal_newlines=True,
         timeout=30
     )
 
@@ -166,8 +172,9 @@ def test_tasks_run_from_workspace(temp_dir):
          '-T', str(task_file),
          '-C', 'bash @TASK@',
          '-r'],
-        capture_output=True,
-        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        universal_newlines=True,
         timeout=30
     )
 
@@ -186,8 +193,9 @@ def test_workspace_logs_directory(sample_task_dir):
          '-T', str(sample_task_dir),
          '-C', 'bash @TASK@',
          '-r', '-m', '1'],
-        capture_output=True,
-        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        universal_newlines=True,
         timeout=30
     )
 
@@ -207,8 +215,9 @@ def test_workspace_summary_csv_created(sample_task_dir):
          '-T', str(sample_task_dir),
          '-C', 'bash @TASK@',
          '-r', '-m', '1'],
-        capture_output=True,
-        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        universal_newlines=True,
         timeout=30
     )
 
@@ -228,8 +237,9 @@ def test_workspace_task_output_log_created(sample_task_dir):
          '-T', str(sample_task_dir),
          '-C', 'bash @TASK@',
          '-r', '-m', '1'],
-        capture_output=True,
-        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        universal_newlines=True,
         timeout=30
     )
 
@@ -254,8 +264,9 @@ def test_workspace_no_task_output_log_flag(sample_task_dir):
          '-C', 'bash @TASK@',
          '-r', '-m', '1',
          '--no-task-output-log'],
-        capture_output=True,
-        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        universal_newlines=True,
         timeout=30
     )
 

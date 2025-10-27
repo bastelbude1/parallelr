@@ -2,6 +2,33 @@
 
 A comprehensive guide to implementing Continuous Integration and Continuous Deployment (CI/CD) using GitHub Actions, based on the parallelr project implementation.
 
+## ⚠️ Python 3.6.8 Compatibility Requirement
+
+**CRITICAL**: This project requires Python 3.6.8 compatibility. All code and tests must work on Python 3.6.8.
+
+### Key Compatibility Requirements
+
+When writing tests or code for Python 3.6.8:
+
+```python
+# ❌ WRONG (Python 3.7+)
+result = subprocess.run(['cmd'], capture_output=True, text=True)
+
+# ✅ CORRECT (Python 3.6.8 compatible)
+result = subprocess.run(['cmd'],
+                       stdout=subprocess.PIPE,
+                       stderr=subprocess.PIPE,
+                       universal_newlines=True)
+```
+
+**Forbidden in Python 3.6**:
+- `subprocess.run(capture_output=True)` - Use `stdout/stderr=subprocess.PIPE`
+- `text=True` parameter - Use `universal_newlines=True`
+- Walrus operator `:=` (Python 3.8+)
+- `list[str]` type hints without `from typing import List`
+
+Our CI/CD tests against Python 3.6, 3.7, 3.8, 3.9, 3.10, 3.11, 3.12 to ensure compatibility.
+
 ## Table of Contents
 
 1. [What is CI/CD?](#what-is-cicd)
@@ -119,7 +146,7 @@ Workflow: test.yml
 ### What Our CI/CD Does
 
 1. **Automated Testing** - Runs 109 tests on every push/PR
-2. **Multi-Version Testing** - Tests against Python 3.8, 3.9, 3.10, 3.11, 3.12
+2. **Multi-Version Testing** - Tests against Python 3.6, 3.7, 3.8, 3.9, 3.10, 3.11, 3.12
 3. **Code Quality** - Runs linters (pylint, flake8)
 4. **Coverage Reporting** - Generates and uploads code coverage
 5. **Legacy Support** - Validates backward compatibility
@@ -1237,7 +1264,7 @@ jobs:
    - Code coverage reported
 
 3. **Multi-Environment Validation**
-   - Python 3.8, 3.9, 3.10, 3.11, 3.12
+   - Python 3.6, 3.7, 3.8, 3.9, 3.10, 3.11, 3.12
    - Ubuntu Linux runner
    - Extensible to other OS/versions
 

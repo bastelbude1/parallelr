@@ -24,8 +24,9 @@ def test_shell_injection_in_task_path(temp_dir):
         [sys.executable, str(PARALLELR_BIN),
          '-T', malicious_path,
          '-C', 'bash @TASK@'],
-        capture_output=True,
-        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        universal_newlines=True,
         timeout=10
     )
 
@@ -50,8 +51,9 @@ def test_shell_injection_in_command_template(temp_dir):
          '-T', str(task_file),
          '-C', malicious_command,
          '-r'],
-        capture_output=True,
-        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        universal_newlines=True,
         timeout=30
     )
 
@@ -77,8 +79,9 @@ def test_argument_injection_attempt(temp_dir):
          '-A', str(args_file),
          '-C', 'bash @TASK@ @ARG@',
          '-r'],
-        capture_output=True,
-        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        universal_newlines=True,
         timeout=30
     )
 
@@ -107,8 +110,9 @@ def test_environment_variable_injection(temp_dir):
          '-E', 'VAR1,VAR2,VAR3',
          '-C', 'bash @TASK@',
          '-r'],
-        capture_output=True,
-        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        universal_newlines=True,
         timeout=30
     )
 
@@ -132,8 +136,9 @@ def test_backtick_injection_in_arguments(temp_dir):
          '-A', str(args_file),
          '-C', 'bash @TASK@ @ARG@',
          '-r'],
-        capture_output=True,
-        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        universal_newlines=True,
         timeout=30
     )
 
@@ -158,8 +163,9 @@ def test_path_with_special_characters(temp_dir):
          '-T', str(task_file),
          '-C', 'bash @TASK@',
          '-r'],
-        capture_output=True,
-        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        universal_newlines=True,
         timeout=30
     )
 
@@ -184,8 +190,9 @@ def test_null_byte_injection(temp_dir):
          '-T', str(task_file),
          '-A', str(args_file),
          '-C', 'bash @TASK@ @ARG@'],
-        capture_output=True,
-        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        universal_newlines=True,
         timeout=10
     )
 
@@ -210,8 +217,9 @@ def test_unicode_injection_attempt(temp_dir):
          '-A', str(args_file),
          '-C', 'bash @TASK@ @ARG@',
          '-r'],
-        capture_output=True,
-        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        universal_newlines=True,
         timeout=30
     )
 
@@ -234,8 +242,9 @@ def test_newline_injection_in_arguments(temp_dir):
          '-T', str(task_file),
          '-A', str(args_file),
          '-C', 'bash @TASK@ @ARG@'],
-        capture_output=True,
-        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        universal_newlines=True,
         timeout=10
     )
 
@@ -260,8 +269,9 @@ def test_escaped_quotes_in_arguments(temp_dir):
          '-A', str(args_file),
          '-C', 'bash @TASK@ @ARG@',
          '-r'],
-        capture_output=True,
-        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        universal_newlines=True,
         timeout=30
     )
 

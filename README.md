@@ -1074,9 +1074,16 @@ parallelr -T ./tasks -C "bash @TASK@"
 
 The project includes a comprehensive test suite with 109+ tests covering functionality, edge cases, and security.
 
+### Requirements
+
+**Python 3.6.8+** - All tests are compatible with Python 3.6.8 to match production requirements.
+
 ### Run Tests
 
 ```bash
+# Verify Python version
+python -V  # Should show Python 3.6.8 or higher
+
 # Install test dependencies
 pip install -r tests/requirements-test.txt
 
@@ -1100,7 +1107,7 @@ pytest tests/ --cov=bin/parallelr.py --cov-report=html
 
 ### Continuous Integration
 
-All tests run automatically on push via GitHub Actions across Python 3.8-3.12.
+All tests run automatically on push via GitHub Actions across Python 3.6, 3.7, 3.8, 3.9, 3.10, 3.11, 3.12.
 
 For detailed testing documentation, see [tests/README.md](tests/README.md).
 

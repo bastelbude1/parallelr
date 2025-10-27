@@ -22,8 +22,9 @@ def test_arguments_mode_single_argument(sample_task_file, sample_arguments_file)
          '-A', str(sample_arguments_file),
          '-E', 'HOSTNAME',
          '-C', 'bash @TASK@'],
-        capture_output=True,
-        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        universal_newlines=True,
         timeout=10
     )
 
@@ -43,8 +44,9 @@ def test_arguments_mode_multi_args_comma(sample_task_file, sample_multi_args_fil
          '-E', 'HOSTNAME,PORT,ENV',
          '-C', 'bash @TASK@ @ARG_1@ @ARG_2@ @ARG_3@',
          '-r', '-m', '2'],
-        capture_output=True,
-        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        universal_newlines=True,
         timeout=30
     )
 
@@ -75,8 +77,9 @@ def test_arguments_mode_all_delimiters(temp_dir, sample_task_file):
              '-A', str(args_file),
              '-S', delim_name,
              '-C', 'bash @TASK@ @ARG_1@ @ARG_2@ @ARG_3@'],
-            capture_output=True,
-            text=True,
+            stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        universal_newlines=True,
             timeout=10
         )
 
@@ -96,8 +99,9 @@ def test_arguments_mode_indexed_placeholders(sample_task_file, temp_dir):
          '-A', str(args_file),
          '-S', 'comma',
          '-C', 'bash -c "echo @ARG_1@ @ARG_2@ @ARG_3@"'],
-        capture_output=True,
-        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        universal_newlines=True,
         timeout=10
     )
 
@@ -118,8 +122,9 @@ def test_arguments_mode_env_var_mapping(sample_task_file, sample_multi_args_file
          '-S', 'comma',
          '-E', 'HOST,PORT,ENVIRONMENT',
          '-C', 'bash @TASK@'],
-        capture_output=True,
-        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        universal_newlines=True,
         timeout=10
     )
 
@@ -142,8 +147,9 @@ def test_arguments_mode_inconsistent_args_validation(sample_task_file, temp_dir)
          '-A', str(args_file),
          '-S', 'comma',
          '-C', 'bash @TASK@'],
-        capture_output=True,
-        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        universal_newlines=True,
         timeout=10
     )
 
@@ -164,8 +170,9 @@ def test_arguments_mode_invalid_placeholder_validation(sample_task_file, temp_di
          '-A', str(args_file),
          '-S', 'comma',
          '-C', 'bash @TASK@ @ARG_1@ @ARG_2@ @ARG_5@'],  # Invalid: @ARG_5@
-        capture_output=True,
-        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        universal_newlines=True,
         timeout=10
     )
 
@@ -182,8 +189,9 @@ def test_arguments_mode_separator_without_args_file(sample_task_file):
          '-T', str(sample_task_file),
          '-S', 'comma',
          '-C', 'bash @TASK@'],
-        capture_output=True,
-        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        universal_newlines=True,
         timeout=10
     )
 
@@ -201,8 +209,9 @@ def test_arguments_mode_empty_env_var_validation(sample_task_file, sample_argume
          '-A', str(sample_arguments_file),
          '-E', 'VAR1, ,VAR3',  # Empty entry
          '-C', 'bash @TASK@'],
-        capture_output=True,
-        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        universal_newlines=True,
         timeout=10
     )
 
@@ -220,8 +229,9 @@ def test_arguments_mode_more_env_vars_than_args(sample_task_file, sample_argumen
          '-A', str(sample_arguments_file),
          '-E', 'VAR1,VAR2,VAR3,VAR4',  # 4 vars, but only 1 arg per line
          '-C', 'bash @TASK@'],
-        capture_output=True,
-        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        universal_newlines=True,
         timeout=10
     )
 
@@ -241,8 +251,9 @@ def test_arguments_mode_fewer_env_vars_than_args(sample_task_file, sample_multi_
          '-E', 'HOST,PORT',  # Only 2 vars, but 3 args per line
          '-C', 'bash @TASK@',
          '-r', '-m', '1'],
-        capture_output=True,
-        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        universal_newlines=True,
         timeout=30
     )
 
@@ -260,8 +271,9 @@ def test_arguments_mode_backward_compatibility(sample_task_file, sample_argument
          '-A', str(sample_arguments_file),
          '-C', 'bash @TASK@ --arg @ARG@',  # Use old @ARG@ placeholder
          '-r'],
-        capture_output=True,
-        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        universal_newlines=True,
         timeout=30
     )
 

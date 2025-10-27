@@ -26,8 +26,9 @@ def test_daemon_mode_starts_in_background(sample_task_dir):
          '-T', str(sample_task_dir),
          '-C', 'bash @TASK@',
          '-r', '-d'],
-        capture_output=True,
-        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        universal_newlines=True,
         timeout=5
     )
 
@@ -41,7 +42,7 @@ def test_daemon_mode_starts_in_background(sample_task_dir):
 
     # Cleanup - kill any running instances
     subprocess.run([sys.executable, str(PARALLELR_BIN), '-k'],
-                   input='yes\n', capture_output=True, text=True, timeout=10)
+                   input='yes\n', stdout=subprocess.PIPE, stderr=subprocess.PIPE, universal_newlines=True, timeout=10)
 
 
 @pytest.mark.integration
@@ -53,8 +54,9 @@ def test_daemon_mode_pid_tracking(sample_task_dir):
          '-T', str(sample_task_dir),
          '-C', 'sleep 1',
          '-r', '-d'],
-        capture_output=True,
-        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        universal_newlines=True,
         timeout=10
     )
 
@@ -68,7 +70,7 @@ def test_daemon_mode_pid_tracking(sample_task_dir):
 
     # Cleanup
     subprocess.run([sys.executable, str(PARALLELR_BIN), '-k'],
-                   input='yes\n', capture_output=True, text=True, timeout=10)
+                   input='yes\n', stdout=subprocess.PIPE, stderr=subprocess.PIPE, universal_newlines=True, timeout=10)
 
 
 @pytest.mark.integration
@@ -80,8 +82,9 @@ def test_list_workers_command(sample_task_dir):
          '-T', str(sample_task_dir),
          '-C', 'sleep 5',
          '-r', '-d'],
-        capture_output=True,
-        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        universal_newlines=True,
         timeout=10
     )
 
@@ -90,8 +93,9 @@ def test_list_workers_command(sample_task_dir):
     # List workers
     result = subprocess.run(
         [sys.executable, str(PARALLELR_BIN), '--list-workers'],
-        capture_output=True,
-        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        universal_newlines=True,
         timeout=10
     )
 
@@ -102,7 +106,7 @@ def test_list_workers_command(sample_task_dir):
 
     # Cleanup
     subprocess.run([sys.executable, str(PARALLELR_BIN), '-k'],
-                   input='yes\n', capture_output=True, text=True, timeout=10)
+                   input='yes\n', stdout=subprocess.PIPE, stderr=subprocess.PIPE, universal_newlines=True, timeout=10)
 
 
 @pytest.mark.integration
@@ -114,8 +118,9 @@ def test_kill_all_workers_requires_confirmation(sample_task_dir):
          '-T', str(sample_task_dir),
          '-C', 'echo test',
          '-r', '-d'],
-        capture_output=True,
-        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        universal_newlines=True,
         timeout=15
     )
 
@@ -125,8 +130,9 @@ def test_kill_all_workers_requires_confirmation(sample_task_dir):
     result = subprocess.run(
         [sys.executable, str(PARALLELR_BIN), '-k'],
         input='no\n',
-        capture_output=True,
-        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        universal_newlines=True,
         timeout=10
     )
 
@@ -136,7 +142,7 @@ def test_kill_all_workers_requires_confirmation(sample_task_dir):
 
     # Cleanup with confirmation
     subprocess.run([sys.executable, str(PARALLELR_BIN), '-k'],
-                   input='yes\n', capture_output=True, text=True, timeout=10)
+                   input='yes\n', stdout=subprocess.PIPE, stderr=subprocess.PIPE, universal_newlines=True, timeout=10)
 
 
 @pytest.mark.integration
@@ -153,8 +159,9 @@ def test_kill_specific_worker_by_pid(sample_task_dir, temp_dir):
          '-T', str(task_file),
          '-C', 'bash @TASK@',
          '-r', '-d'],
-        capture_output=True,
-        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        universal_newlines=True,
         timeout=15
     )
 
@@ -170,8 +177,9 @@ def test_kill_specific_worker_by_pid(sample_task_dir, temp_dir):
             # Kill specific PID (may already be done)
             kill_result = subprocess.run(
                 [sys.executable, str(PARALLELR_BIN), '-k', pid],
-                capture_output=True,
-                text=True,
+                stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        universal_newlines=True,
                 timeout=10
             )
 
@@ -184,7 +192,7 @@ def test_kill_specific_worker_by_pid(sample_task_dir, temp_dir):
 
     # Cleanup any remaining
     subprocess.run([sys.executable, str(PARALLELR_BIN), '-k'],
-                   input='yes\n', capture_output=True, text=True, timeout=10)
+                   input='yes\n', stdout=subprocess.PIPE, stderr=subprocess.PIPE, universal_newlines=True, timeout=10)
 
 
 @pytest.mark.integration
@@ -198,8 +206,9 @@ def test_daemon_mode_log_files_created(sample_task_dir):
          '-T', str(sample_task_dir),
          '-C', 'bash @TASK@',
          '-r', '-d'],
-        capture_output=True,
-        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        universal_newlines=True,
         timeout=10
     )
 
@@ -213,7 +222,7 @@ def test_daemon_mode_log_files_created(sample_task_dir):
 
     # Cleanup
     subprocess.run([sys.executable, str(PARALLELR_BIN), '-k'],
-                   input='yes\n', capture_output=True, text=True, timeout=10)
+                   input='yes\n', stdout=subprocess.PIPE, stderr=subprocess.PIPE, universal_newlines=True, timeout=10)
 
 
 @pytest.mark.integration
@@ -231,8 +240,9 @@ def test_daemon_mode_completes_tasks(sample_task_dir, temp_dir):
          '-T', str(task_file),
          '-C', 'bash @TASK@',
          '-r', '-d'],
-        capture_output=True,
-        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        universal_newlines=True,
         timeout=10
     )
 
@@ -251,7 +261,7 @@ def test_daemon_mode_completes_tasks(sample_task_dir, temp_dir):
 
     # Cleanup
     subprocess.run([sys.executable, str(PARALLELR_BIN), '-k'],
-                   input='yes\n', capture_output=True, text=True, timeout=10)
+                   input='yes\n', stdout=subprocess.PIPE, stderr=subprocess.PIPE, universal_newlines=True, timeout=10)
 
 
 @pytest.mark.integration
@@ -263,8 +273,9 @@ def test_multiple_daemon_instances(sample_task_dir, temp_dir):
          '-T', str(sample_task_dir),
          '-C', 'sleep 5',
          '-r', '-d'],
-        capture_output=True,
-        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        universal_newlines=True,
         timeout=10
     )
 
@@ -276,8 +287,9 @@ def test_multiple_daemon_instances(sample_task_dir, temp_dir):
          '-T', str(sample_task_dir),
          '-C', 'sleep 5',
          '-r', '-d'],
-        capture_output=True,
-        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        universal_newlines=True,
         timeout=10
     )
 
@@ -289,8 +301,9 @@ def test_multiple_daemon_instances(sample_task_dir, temp_dir):
     # List workers should show multiple
     list_result = subprocess.run(
         [sys.executable, str(PARALLELR_BIN), '--list-workers'],
-        capture_output=True,
-        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        universal_newlines=True,
         timeout=10
     )
 
@@ -299,7 +312,7 @@ def test_multiple_daemon_instances(sample_task_dir, temp_dir):
 
     # Cleanup all
     subprocess.run([sys.executable, str(PARALLELR_BIN), '-k'],
-                   input='yes\n', capture_output=True, text=True, timeout=10)
+                   input='yes\n', stdout=subprocess.PIPE, stderr=subprocess.PIPE, universal_newlines=True, timeout=10)
 
 
 if __name__ == "__main__":

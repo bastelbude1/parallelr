@@ -21,8 +21,9 @@ def test_file_mode_directory_execution(sample_task_dir, temp_dir):
         [sys.executable, str(PARALLELR_BIN),
          '-T', str(sample_task_dir),
          '-C', 'bash @TASK@'],
-        capture_output=True,
-        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        universal_newlines=True,
         timeout=10
     )
 
@@ -41,8 +42,9 @@ def test_file_mode_actual_execution(sample_task_dir, temp_dir):
          '-T', str(sample_task_dir),
          '-C', 'bash @TASK@',
          '-r', '-m', '2'],  # Run with 2 workers
-        capture_output=True,
-        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        universal_newlines=True,
         timeout=30
     )
 
@@ -63,8 +65,9 @@ def test_file_mode_specific_files(sample_task_dir):
          '-T', str(task2),
          '-C', 'bash @TASK@',
          '-r'],
-        capture_output=True,
-        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        universal_newlines=True,
         timeout=10
     )
 
@@ -82,8 +85,9 @@ def test_file_mode_glob_patterns(sample_task_dir):
         [sys.executable, str(PARALLELR_BIN),
          '-T', glob_pattern,
          '-C', 'bash @TASK@'],
-        capture_output=True,
-        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        universal_newlines=True,
         timeout=10
     )
 
@@ -110,8 +114,9 @@ def test_file_mode_file_extension_filter(temp_dir):
          '-T', str(task_dir),
          '--file-extension', 'sh',
          '-C', 'bash @TASK@'],
-        capture_output=True,
-        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        universal_newlines=True,
         timeout=10
     )
 
@@ -133,8 +138,9 @@ def test_file_mode_empty_directory(temp_dir):
         [sys.executable, str(PARALLELR_BIN),
          '-T', str(empty_dir),
          '-C', 'bash @TASK@'],
-        capture_output=True,
-        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        universal_newlines=True,
         timeout=10
     )
 
@@ -151,8 +157,9 @@ def test_file_mode_nonexistent_path(temp_dir):
         [sys.executable, str(PARALLELR_BIN),
          '-T', str(nonexistent),
          '-C', 'bash @TASK@'],
-        capture_output=True,
-        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        universal_newlines=True,
         timeout=10
     )
 
@@ -170,8 +177,9 @@ def test_file_mode_worker_count(sample_task_dir):
          '-T', str(sample_task_dir),
          '-C', 'bash @TASK@',
          '-r', '-m', '1'],
-        capture_output=True,
-        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        universal_newlines=True,
         timeout=30
     )
 
@@ -195,8 +203,9 @@ def test_file_mode_timeout(temp_dir):
          '-T', str(task_dir),
          '-C', 'bash @TASK@',
          '-r', '-t', '2'],  # 2 second timeout
-        capture_output=True,
-        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        universal_newlines=True,
         timeout=15
     )
 
@@ -220,8 +229,9 @@ def test_file_mode_multiple_directories(temp_dir):
          '-T', str(dir1),
          '-T', str(dir2),
          '-C', 'bash @TASK@'],
-        capture_output=True,
-        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        universal_newlines=True,
         timeout=10
     )
 

@@ -105,8 +105,9 @@ def test_sighup_ignored_in_daemon(temp_dir):
          '-T', str(task_file),
          '-C', 'bash @TASK@',
          '-r', '-d'],
-        capture_output=True,
-        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        universal_newlines=True,
         timeout=10
     )
 
@@ -138,7 +139,7 @@ def test_sighup_ignored_in_daemon(temp_dir):
 
     # Cleanup
     subprocess.run([sys.executable, str(PARALLELR_BIN), '-k'],
-                   input='yes\n', capture_output=True, text=True, timeout=10)
+                   input='yes\n', stdout=subprocess.PIPE, stderr=subprocess.PIPE, universal_newlines=True, timeout=10)
 
 
 @pytest.mark.integration

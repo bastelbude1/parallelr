@@ -6,6 +6,54 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **parallelr** is a Python 3.6.8-compatible parallel task execution framework. It executes tasks from a directory in parallel using a configurable number of workers, with robust error handling, resource monitoring, and workspace management.
 
+## ⚠️ CRITICAL: Python 3.6.8 Compatibility Requirement
+
+**MANDATORY**: All code, including tests, MUST be compatible with Python 3.6.8.
+
+### Python 3.6.8 Compatibility Rules
+
+**FORBIDDEN** (Python 3.7+):
+- ❌ `subprocess.run(capture_output=True)` - Use `stdout=subprocess.PIPE, stderr=subprocess.PIPE` instead
+- ❌ `from __future__ import annotations` - Not available in 3.6
+- ❌ Dataclass `field(default_factory=...)` with mutable defaults - Limited support
+
+**FORBIDDEN** (Python 3.8+):
+- ❌ Walrus operator `:=`
+- ❌ Positional-only parameters `/` in function definitions
+- ❌ `functools.cached_property`
+
+**FORBIDDEN** (Python 3.9+):
+- ❌ `dict | dict` syntax (use `{**dict1, **dict2}`)
+- ❌ `list[str]` type hints without `from typing import List` (use `List[str]`)
+- ❌ `str.removeprefix()` / `str.removesuffix()`
+
+**ALLOWED** (Python 3.6+):
+- ✅ f-strings (introduced in 3.6.0)
+- ✅ Type hints from `typing` module
+- ✅ `async`/`await`
+- ✅ Underscores in numeric literals (1_000_000)
+
+### Testing Compatibility
+
+All tests must run on Python 3.6.8. Use Python 3.6-compatible syntax:
+
+```python
+# ❌ WRONG (Python 3.7+)
+result = subprocess.run(['cmd'], capture_output=True, text=True)
+
+# ✅ CORRECT (Python 3.6.8)
+result = subprocess.run(['cmd'], stdout=subprocess.PIPE, stderr=subprocess.PIPE, universal_newlines=True)
+```
+
+### Verification
+
+Before committing, always verify Python 3.6.8 compatibility:
+```bash
+python -V  # Must show Python 3.6.8
+python -m py_compile your_file.py
+pytest tests/ -v
+```
+
 ## Core Architecture
 
 ### Main Components

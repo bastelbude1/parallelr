@@ -25,8 +25,9 @@ def test_path_traversal_in_task_path(temp_dir):
         [sys.executable, str(PARALLELR_BIN),
          '-T', malicious_path,
          '-C', 'cat @TASK@'],
-        capture_output=True,
-        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        universal_newlines=True,
         timeout=10
     )
 
@@ -52,8 +53,9 @@ def test_symlink_traversal_protection(temp_dir):
             [sys.executable, str(PARALLELR_BIN),
              '-T', str(link_path),
              '-C', 'echo @TASK@'],
-            capture_output=True,
-            text=True,
+            stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        universal_newlines=True,
             timeout=10
         )
 
@@ -77,8 +79,9 @@ def test_absolute_path_validation(temp_dir):
          '-T', str(task_file.absolute()),
          '-C', 'bash @TASK@',
          '-r'],
-        capture_output=True,
-        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        universal_newlines=True,
         timeout=30
     )
 
@@ -100,8 +103,9 @@ def test_relative_path_with_dots(temp_dir):
         [sys.executable, str(PARALLELR_BIN),
          '-T', relative_path,
          '-C', 'bash @TASK@'],
-        capture_output=True,
-        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        universal_newlines=True,
         timeout=10
     )
 
@@ -116,8 +120,9 @@ def test_tilde_expansion_security(temp_dir):
         [sys.executable, str(PARALLELR_BIN),
          '-T', '~/.bashrc',
          '-C', 'cat @TASK@'],
-        capture_output=True,
-        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        universal_newlines=True,
         timeout=10
     )
 
@@ -137,8 +142,9 @@ def test_workspace_path_boundaries(temp_dir):
          '-T', str(task_file),
          '-C', 'bash @TASK@',
          '-r'],
-        capture_output=True,
-        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        universal_newlines=True,
         timeout=30
     )
 
@@ -168,8 +174,9 @@ def test_task_file_size_limit(temp_dir):
         [sys.executable, str(PARALLELR_BIN),
          '-T', str(large_task),
          '-C', 'bash @TASK@'],
-        capture_output=True,
-        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        universal_newlines=True,
         timeout=10
     )
 
@@ -184,8 +191,9 @@ def test_special_file_access_prevention(temp_dir):
         [sys.executable, str(PARALLELR_BIN),
          '-T', '/dev/null',
          '-C', 'cat @TASK@'],
-        capture_output=True,
-        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        universal_newlines=True,
         timeout=10
     )
 
@@ -204,8 +212,9 @@ def test_hidden_file_access(temp_dir):
          '-T', str(hidden_task),
          '-C', 'bash @TASK@',
          '-r'],
-        capture_output=True,
-        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        universal_newlines=True,
         timeout=30
     )
 
@@ -226,8 +235,9 @@ def test_argument_file_path_validation(temp_dir):
          '-T', str(task_file),
          '-A', '/non/existent/path/args.txt',
          '-C', 'bash @TASK@'],
-        capture_output=True,
-        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        universal_newlines=True,
         timeout=10
     )
 
