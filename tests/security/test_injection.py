@@ -250,7 +250,8 @@ def test_backtick_injection_in_arguments(temp_dir):
     # Additional verification: read the task output log file
     # The log file will contain the actual command execution details
     import glob
-    log_files = glob.glob('/home/baste/parallelr/logs/parallelr_*_output.txt')
+    log_pattern = str(Path.home() / 'parallelr' / 'logs' / 'parallelr_*_output.txt')
+    log_files = glob.glob(log_pattern)
     if log_files:
         latest_log = max(log_files, key=os.path.getmtime)
         with open(latest_log, 'r') as f:
