@@ -46,8 +46,9 @@ def test_shell_injection_in_command_template(temp_dir):
     task_file.write_text('#!/bin/bash\necho "test"\n')
     task_file.chmod(0o755)
 
-    # Try to inject via command template
-    malicious_command = 'bash @TASK@; echo "INJECTED" > /tmp/injection_test.txt'
+    # Try to inject via command template using deterministic sentinel in temp_dir
+    sentinel = temp_dir / 'injection_test.txt'
+    malicious_command = f'bash @TASK@; echo "INJECTED" > {sentinel}'
 
     result = subprocess.run(
         [sys.executable, str(PARALLELR_BIN),
@@ -60,9 +61,39 @@ def test_shell_injection_in_command_template(temp_dir):
         timeout=30
     )
 
-    # Command will execute but injection should not create file
-    # The semicolon is part of the command string, not executed as separate command
-    # This tests that @TASK@ replacement is safe
+    # The semicolon is part of the command string passed to shlex.split(),
+    # not executed as a shell separator, so the command will fail
+    # This demonstrates that the injection is prevented
+    assert result.returncode != 0, (
+        f"Expected command to fail (injection prevented), got returncode {result.returncode}\n"
+        f"stdout: {result.stdout}\n"
+        f"stderr: {result.stderr}"
+    )
+
+    # Most importantly: injection should not create sentinel file
+    assert not sentinel.exists(), (
+        f"SECURITY FAILURE: Injection succeeded - sentinel file {sentinel} exists"
+    )
+
+    # "INJECTED" should not appear in any output
+    assert "INJECTED" not in result.stdout, (
+        f"SECURITY FAILURE: Injection marker found in stdout: {result.stdout}"
+    )
+    assert "INJECTED" not in result.stderr, (
+        f"SECURITY FAILURE: Injection marker found in stderr: {result.stderr}"
+    )
+
+    # Verify no files containing "INJECTED" were created anywhere in temp_dir
+    for file_path in temp_dir.rglob('*'):
+        if file_path.is_file():
+            try:
+                content = file_path.read_text()
+                assert "INJECTED" not in content, (
+                    f"SECURITY FAILURE: Injection marker found in {file_path}: {content}"
+                )
+            except (UnicodeDecodeError, PermissionError):
+                # Skip binary files or files we can't read
+                pass
 
 
 @pytest.mark.security
