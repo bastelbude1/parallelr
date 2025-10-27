@@ -168,27 +168,30 @@ def test_kill_specific_worker_by_pid(sample_task_dir, temp_dir):
     assert result.returncode == 0
     time.sleep(2)
 
-    # Get PID from output or PID file
-    if PID_FILE.exists():
-        pids = PID_FILE.read_text().strip().split('\n')
-        if pids and pids[0]:
-            pid = pids[0].strip()
+    # Get PID from PID file - fail loudly if missing
+    assert PID_FILE.exists(), f"PID file not found at {PID_FILE} - daemon did not write PID file"
 
-            # Kill specific PID (may already be done)
-            kill_result = subprocess.run(
-                [sys.executable, str(PARALLELR_BIN), '-k', pid],
-                stdout=subprocess.PIPE,
+    pids = PID_FILE.read_text().strip().split('\n')
+    non_empty_pids = [p.strip() for p in pids if p.strip()]
+    assert len(non_empty_pids) > 0, f"PID file exists but contains no valid PIDs: {pids}"
+
+    pid = non_empty_pids[0]
+
+    # Kill specific PID (may already be done)
+    kill_result = subprocess.run(
+        [sys.executable, str(PARALLELR_BIN), '-k', pid],
+        stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
         universal_newlines=True,
-                timeout=10
-            )
+        timeout=10
+    )
 
-            # Should succeed or process already gone
-            output_lower = kill_result.stdout.lower()
-            assert (kill_result.returncode == 0 or
-                    'killed' in output_lower or
-                    'not found' in output_lower or
-                    'no such process' in output_lower)
+    # Should succeed or process already gone
+    output_lower = kill_result.stdout.lower()
+    assert (kill_result.returncode == 0 or
+            'killed' in output_lower or
+            'not found' in output_lower or
+            'no such process' in output_lower)
 
     # Cleanup any remaining
     subprocess.run([sys.executable, str(PARALLELR_BIN), '-k'],
