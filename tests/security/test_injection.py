@@ -103,9 +103,13 @@ def test_argument_injection_attempt(temp_dir):
     task_file.write_text('#!/bin/bash\necho "$1"\n')
     task_file.chmod(0o755)
 
-    # Create arguments file with injection attempt
+    # Create sentinel file that injection would attempt to remove
+    sentinel = temp_dir / 'test_injected'
+    sentinel.write_text('sentinel')
+
+    # Create arguments file with injection attempt to remove sentinel
     args_file = temp_dir / 'args.txt'
-    args_file.write_text('value; rm -rf /tmp/test\n')
+    args_file.write_text(f'value; rm -rf {sentinel}\n')
 
     result = subprocess.run(
         [sys.executable, str(PARALLELR_BIN),
@@ -119,11 +123,17 @@ def test_argument_injection_attempt(temp_dir):
         timeout=30
     )
 
-    # Should complete successfully
-    assert result.returncode == 0
-    # Argument should be quoted/escaped
-    # Check that dangerous command wasn't executed
-    assert not Path('/tmp/test_injected').exists()
+    # Should complete successfully (argument is properly escaped)
+    assert result.returncode == 0, (
+        f"Expected successful execution, got returncode {result.returncode}\n"
+        f"stdout: {result.stdout}\n"
+        f"stderr: {result.stderr}"
+    )
+
+    # Sentinel should still exist (injection command should not have executed)
+    assert sentinel.exists(), (
+        f"SECURITY FAILURE: Injection succeeded - sentinel {sentinel} was removed"
+    )
 
 
 @pytest.mark.security
