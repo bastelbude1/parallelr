@@ -12,17 +12,8 @@ import subprocess
 from pathlib import Path
 import pytest
 
-# Add project root to path for imports
 PROJECT_ROOT = Path(__file__).parent.parent
-sys.path.insert(0, str(PROJECT_ROOT / 'bin'))
 PARALLELR_BIN = PROJECT_ROOT / 'bin' / 'parallelr.py'
-
-# Import after path setup
-try:
-    import parallelr
-except ImportError:
-    # parallelr is a script, not a module - we'll import specific functions as needed
-    pass
 
 
 @pytest.fixture
@@ -117,12 +108,8 @@ security:
 
 @pytest.fixture
 def mock_env(monkeypatch):
-    """Fixture to safely mock environment variables."""
-    original_env = os.environ.copy()
+    """Fixture to safely mock environment variables via monkeypatch."""
     yield monkeypatch
-    # Restore original environment
-    os.environ.clear()
-    os.environ.update(original_env)
 
 
 @pytest.fixture
@@ -188,6 +175,9 @@ def pytest_configure(config):
     )
     config.addinivalue_line(
         "markers", "integration: marks tests as integration tests"
+    )
+    config.addinivalue_line(
+        "markers", "unit: marks tests as unit tests"
     )
     config.addinivalue_line(
         "markers", "security: marks tests as security tests"
