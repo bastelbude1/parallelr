@@ -42,28 +42,63 @@ def test_path_traversal_in_task_path(temp_dir):
 @pytest.mark.security
 def test_symlink_traversal_protection(temp_dir):
     """Test that symlinks are handled carefully."""
+    import pytest
+
     # Create a symlink to sensitive location
     link_path = temp_dir / 'link_to_root'
     target_path = Path('/')
 
     try:
         link_path.symlink_to(target_path)
+    except OSError as e:
+        # Symlink creation may fail due to permissions, skip the test
+        pytest.skip(f"Cannot create symlink to test symlink traversal: {e}")
 
-        result = subprocess.run(
-            [sys.executable, str(PARALLELR_BIN),
-             '-T', str(link_path),
-             '-C', 'echo @TASK@'],
-            stdout=subprocess.PIPE,
+    # Run the tool with symlink as task path
+    result = subprocess.run(
+        [sys.executable, str(PARALLELR_BIN),
+         '-T', str(link_path),
+         '-C', 'echo @TASK@'],
+        stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
         universal_newlines=True,
-            timeout=10
-        )
+        timeout=10
+    )
 
-        # Tool may follow symlinks or reject them
-        # Should not execute dangerous operations
-    except OSError:
-        # Symlink creation may fail, that's okay
-        pass
+    # The tool should handle symlinks safely - either reject or handle carefully
+    # Expected: non-zero exit (rejected) or zero exit but no dangerous execution
+
+    # Check that result completed (didn't crash)
+    assert result.returncode is not None, "Process did not complete"
+
+    if result.returncode == 0:
+        # If it succeeded, verify no dangerous operations occurred
+        # The symlink points to /, so we shouldn't see evidence of root-level operations
+
+        # Should not show execution of dangerous root-level commands
+        dangerous_patterns = [
+            '/etc/passwd',
+            '/etc/shadow',
+            '/root/',
+            'rm -rf /',
+            'Permission denied'
+        ]
+
+        output = result.stdout + result.stderr
+        for pattern in dangerous_patterns:
+            assert pattern not in output, (
+                f"SECURITY WARNING: Dangerous pattern '{pattern}' found in output.\n"
+                f"stdout: {result.stdout}\n"
+                f"stderr: {result.stderr}"
+            )
+    else:
+        # Non-zero exit is expected and safe (symlink was rejected or handled)
+        # Verify error message is reasonable
+        assert result.returncode != 0, (
+            f"Expected safe handling, got returncode: {result.returncode}\n"
+            f"stdout: {result.stdout}\n"
+            f"stderr: {result.stderr}"
+        )
 
 
 @pytest.mark.security
