@@ -8,7 +8,6 @@ import subprocess
 import sys
 from pathlib import Path
 import pytest
-import time
 
 PROJECT_ROOT = Path(__file__).parent.parent.parent
 PARALLELR_BIN = PROJECT_ROOT / 'bin' / 'parallelr.py'
@@ -64,7 +63,7 @@ def test_workspace_accessible_to_tasks(temp_dir):
     """Test that tasks can access the workspace directory."""
     # Create a task that writes to workspace
     task_file = temp_dir / 'workspace_test.sh'
-    task_file.write_text(f'''#!/bin/bash
+    task_file.write_text('''#!/bin/bash
 cd ~/parallelr/workspace
 echo "test" > test_file.txt
 ls -la
@@ -99,7 +98,7 @@ def test_workspace_persists_between_runs(temp_dir):
 
     # First run - create marker
     task1 = temp_dir / 'create_marker.sh'
-    task1.write_text(f'#!/bin/bash\necho "persistent" > ~/parallelr/workspace/persistent_marker.txt\n')
+    task1.write_text('#!/bin/bash\necho "persistent" > ~/parallelr/workspace/persistent_marker.txt\n')
     task1.chmod(0o755)
 
     result1 = subprocess.run(
@@ -118,7 +117,7 @@ def test_workspace_persists_between_runs(temp_dir):
 
     # Second run - verify marker exists
     task2 = temp_dir / 'check_marker.sh'
-    task2.write_text(f'#!/bin/bash\ntest -f ~/parallelr/workspace/persistent_marker.txt && echo "FOUND_MARKER"\n')
+    task2.write_text('#!/bin/bash\ntest -f ~/parallelr/workspace/persistent_marker.txt && echo "FOUND_MARKER"\n')
     task2.chmod(0o755)
 
     result2 = subprocess.run(
