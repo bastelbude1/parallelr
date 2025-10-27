@@ -139,12 +139,18 @@ def test_argument_injection_attempt(temp_dir):
 @pytest.mark.security
 def test_environment_variable_injection(temp_dir):
     """Test that environment variable values are properly sanitized."""
+    import os
+
     task_file = temp_dir / 'task.sh'
     task_file.write_text('#!/bin/bash\necho "test"\n')
     task_file.chmod(0o755)
 
+    # Use deterministic sentinel in temp_dir for shell-breakout attempt
+    sentinel = temp_dir / 'env_injection_sentinel'
+
+    # Inject malicious payload in VAR2 to attempt creating sentinel
     args_file = temp_dir / 'args.txt'
-    args_file.write_text('value1,value2; rm -rf /tmp,value3\n')
+    args_file.write_text(f'value1,value2; touch {sentinel},value3\n')
 
     result = subprocess.run(
         [sys.executable, str(PARALLELR_BIN),
@@ -160,8 +166,22 @@ def test_environment_variable_injection(temp_dir):
         timeout=30
     )
 
-    # Should handle safely
-    assert result.returncode == 0
+    # Should complete successfully (environment variables are properly escaped)
+    assert result.returncode == 0, (
+        f"Expected successful execution, got returncode {result.returncode}\n"
+        f"stdout: {result.stdout}\n"
+        f"stderr: {result.stderr}"
+    )
+
+    # Sentinel should NOT exist (injection should be prevented)
+    assert not os.path.exists(sentinel), (
+        f"SECURITY FAILURE: Environment variable injection succeeded - "
+        f"sentinel {sentinel} was created"
+    )
+
+    # Cleanup: remove sentinel if it exists (avoid test pollution)
+    if os.path.exists(sentinel):
+        os.remove(sentinel)
 
 
 @pytest.mark.security
