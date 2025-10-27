@@ -56,10 +56,13 @@ def isolated_workspace(tmp_path):
 
 @pytest.mark.integration
 def test_workspace_directory_created(sample_task_dir, isolated_workspace):
-    """Test that workspace directory is created."""
+    """Test that workspace directory is created when tasks execute."""
     workspace_dir = isolated_workspace['workspace']
 
-    # Run task with isolated HOME
+    # Workspace doesn't exist yet in isolated environment
+    assert not workspace_dir.exists(), "Workspace should not exist before task execution"
+
+    # Run task which should create the workspace
     result = subprocess.run(
         [sys.executable, str(PARALLELR_BIN),
          '-T', str(sample_task_dir),
@@ -73,8 +76,8 @@ def test_workspace_directory_created(sample_task_dir, isolated_workspace):
     )
 
     assert result.returncode == 0
-    # Workspace should be mentioned in output or exist
-    assert workspace_dir.exists() or 'workspace' in result.stdout.lower()
+    # Workspace should now exist after task execution
+    assert workspace_dir.exists(), "Workspace should be created during task execution"
 
 
 @pytest.mark.integration
@@ -134,13 +137,17 @@ ls -la
 @pytest.mark.integration
 def test_workspace_persists_between_runs(temp_dir, isolated_workspace):
     """Test that workspace persists between different runs."""
+    import uuid
+
     workspace_dir = isolated_workspace['workspace']
-    marker_file = workspace_dir / 'persistent_marker.txt'
+    # Use unique marker name to avoid race conditions in parallel test execution
+    marker_name = f'persistent_marker_{uuid.uuid4().hex[:8]}.txt'
+    marker_file = workspace_dir / marker_name
     test_env = {**os.environ, **isolated_workspace['env']}
 
     # First run - create marker
     task1 = temp_dir / 'create_marker.sh'
-    task1.write_text('#!/bin/bash\necho "persistent" > ~/parallelr/workspace/persistent_marker.txt\n')
+    task1.write_text(f'#!/bin/bash\necho "persistent" > ~/parallelr/workspace/{marker_name}\n')
     task1.chmod(0o755)
 
     result1 = subprocess.run(
@@ -160,7 +167,7 @@ def test_workspace_persists_between_runs(temp_dir, isolated_workspace):
 
     # Second run - verify marker exists (using same isolated workspace)
     task2 = temp_dir / 'check_marker.sh'
-    task2.write_text('#!/bin/bash\ntest -f ~/parallelr/workspace/persistent_marker.txt && echo "FOUND_MARKER"\n')
+    task2.write_text(f'#!/bin/bash\ntest -f ~/parallelr/workspace/{marker_name} && echo "FOUND_MARKER"\n')
     task2.chmod(0o755)
 
     result2 = subprocess.run(
