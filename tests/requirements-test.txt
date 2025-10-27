@@ -1,29 +1,30 @@
 # Test Dependencies for parallelr Test Suite
 # Install with: pip install -r tests/requirements-test.txt
+# Target: Python 3.11/3.12
 
 # Core testing framework
-pytest>=7.0.0,<7.1.0               # 7.1+ dropped Py3.6
-pytest-cov>=4.0.0,<4.1.0           # 4.1+ dropped Py3.6
+pytest>=7.4.0,<8.0.0               # Python 3.8+, supports 3.11/3.12
+pytest-cov>=4.1.0,<5.0.0           # Coverage plugin for pytest
 pytest-timeout>=2.1.0,<3.0.0       # Test timeouts
-pytest-xdist>=3.0.0,<3.1.0         # 3.1+ dropped Py3.6
-pytest-mock>=3.10.0,<4.0.0         # Mocking support
+pytest-xdist>=3.3.0,<4.0.0         # Parallel test execution
+pytest-mock>=3.11.0,<4.0.0         # Mocking support
 
 # Additional testing tools
-pytest-html>=3.1.0,<4.0.0          # HTML test reports
+pytest-html>=3.2.0,<4.0.0          # HTML test reports
 pytest-json-report>=1.5.0,<2.0.0   # JSON test reports
 
 # Code quality
-pylint>=2.13.0,<2.14.0             # 2.14+ requires Py3.7+
-black>=22.0.0,<22.10.0             # 22.10+ dropped Py3.6
-mypy>=0.961,<0.971                 # 0.971+ dropped Py3.6
+pylint>=3.0.0,<4.0.0               # Python 3.8+, supports 3.11/3.12
+black>=23.0.0,<24.0.0              # Python 3.8+, supports 3.11/3.12
+mypy>=1.0.0,<2.0.0                 # Python 3.8+, supports 3.11/3.12
 
 # Performance testing
 pytest-benchmark>=4.0.0,<5.0.0     # Performance benchmarks
-memory-profiler>=0.60.0,<1.0.0     # Memory profiling
+memory-profiler>=0.61.0,<1.0.0     # Memory profiling
 
 # Security testing
-safety>=2.3.0,<3.0.0               # Dependency vulnerability scanner
+safety>=2.3.0,<4.0.0               # Dependency vulnerability scanner
 
-# Utilities
-psutil>=5.9.0                      # Process monitoring (matches bundled version)
-pyyaml>=6.0                        # YAML support (matches bundled version)
+# Utilities - pinned to bundled versions for reproducibility
+psutil==7.1.0                      # Process monitoring (matches bundled version)
+pyyaml==6.0.1                      # YAML support (matches bundled version)
