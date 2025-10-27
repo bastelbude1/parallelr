@@ -23,9 +23,7 @@ jobs:
     - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
-        pip install -r tests/requirements-test.txt
-        # Install optional dependencies for full functionality (pinned to bundled versions)
-        pip install "pyyaml==6.0.1" "psutil==7.1.0" || true
+        pip install -r tests/requirements-test-py36.txt
 
     - name: Run unit tests
       run: |
@@ -51,14 +49,14 @@ jobs:
         token: ${{ secrets.CODECOV_TOKEN }}
 
   lint:
-    name: Lint Code
+    name: Lint Code (Python 3.6.8)
     runs-on: ubuntu-20.04
 
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
 
-    - name: Set up Python
+    - name: Set up Python 3.6.8
       uses: actions/setup-python@v5
       with:
         python-version: '3.6.8'
@@ -77,14 +75,14 @@ jobs:
         flake8 bin/parallelr.py --max-line-length=120 --ignore=E501,W503 || true
 
   test-legacy:
-    name: Run Legacy Bash Tests
+    name: Run Legacy Bash Tests (Python 3.6.8)
     runs-on: ubuntu-20.04
 
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
 
-    - name: Set up Python
+    - name: Set up Python 3.6.8
       uses: actions/setup-python@v5
       with:
         python-version: '3.6.8'
@@ -92,8 +90,7 @@ jobs:
     - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
-        # Install optional dependencies pinned to bundled versions
-        pip install "pyyaml==6.0.1" "psutil==7.1.0" || true
+        pip install -r tests/requirements-test-py36.txt
 
     - name: Run multi-argument tests
       run: |
