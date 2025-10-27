@@ -413,8 +413,20 @@ def test_unicode_injection_attempt(temp_dir):
         timeout=30
     )
 
-    # Should handle safely
-    assert result.returncode == 0
+    # Tool should handle Unicode control characters safely
+    assert result.returncode == 0, (
+        f"Failed to handle Unicode characters, returncode {result.returncode}\n"
+        f"stdout: {result.stdout}\nstderr: {result.stderr}"
+    )
+
+    # Unicode control characters should not enable command injection
+    # Check for no shell errors that could indicate injection attempt
+    assert "sh:" not in result.stderr.lower(), (
+        f"Possible shell error from Unicode injection:\nstderr: {result.stderr}"
+    )
+    assert "syntax error" not in result.stderr.lower(), (
+        f"Syntax error suggests Unicode caused shell problems:\nstderr: {result.stderr}"
+    )
 
 
 @pytest.mark.security
@@ -465,8 +477,20 @@ def test_escaped_quotes_in_arguments(temp_dir):
         timeout=30
     )
 
-    # Should handle escaped quotes
-    assert result.returncode == 0
+    # Should handle escaped quotes correctly
+    assert result.returncode == 0, (
+        f"Failed to handle escaped quotes, returncode {result.returncode}\n"
+        f"stdout: {result.stdout}\n"
+        f"stderr: {result.stderr}"
+    )
+
+    # Verify no shell syntax errors from quote handling
+    assert "syntax error" not in result.stderr.lower(), (
+        f"Syntax error suggests quote escaping caused shell problems:\nstderr: {result.stderr}"
+    )
+    assert "unexpected" not in result.stderr.lower(), (
+        f"Unexpected token suggests quote parsing issue:\nstderr: {result.stderr}"
+    )
 
 
 if __name__ == "__main__":
