@@ -16,8 +16,37 @@ PROJECT_ROOT = Path(__file__).parent.parent.parent
 PARALLELR_BIN = PROJECT_ROOT / 'bin' / 'parallelr.py'
 
 
+@pytest.fixture
+def isolated_env(tmp_path):
+    """
+    Provide isolated environment for signal handling tests.
+
+    Sets HOME to temp directory to avoid polluting local environment.
+    """
+    temp_home = tmp_path / 'home'
+    temp_home.mkdir()
+
+    # Store original HOME
+    original_home = os.environ.get('HOME')
+
+    try:
+        # Set HOME to temp directory
+        os.environ['HOME'] = str(temp_home)
+
+        yield {
+            'home': temp_home,
+            'env': {**os.environ, 'HOME': str(temp_home)}
+        }
+    finally:
+        # Restore original HOME
+        if original_home:
+            os.environ['HOME'] = original_home
+        else:
+            os.environ.pop('HOME', None)
+
+
 @pytest.mark.integration
-def test_sigint_graceful_shutdown(temp_dir):
+def test_sigint_graceful_shutdown(temp_dir, isolated_env):
     """Test that SIGINT (Ctrl+C) triggers graceful shutdown."""
     # Create a long-running task
     task_file = temp_dir / 'long_task.sh'
@@ -32,7 +61,8 @@ def test_sigint_graceful_shutdown(temp_dir):
          '-r'],
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
-        universal_newlines=True
+        universal_newlines=True,
+        env=isolated_env['env']
     )
 
     # Give it time to start
@@ -55,7 +85,7 @@ def test_sigint_graceful_shutdown(temp_dir):
 
 
 @pytest.mark.integration
-def test_sigterm_graceful_shutdown(temp_dir):
+def test_sigterm_graceful_shutdown(temp_dir, isolated_env):
     """Test that SIGTERM triggers graceful shutdown."""
     # Create a long-running task
     task_file = temp_dir / 'long_task.sh'
@@ -70,7 +100,8 @@ def test_sigterm_graceful_shutdown(temp_dir):
          '-r'],
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
-        universal_newlines=True
+        universal_newlines=True,
+        env=isolated_env['env']
     )
 
     # Give it time to start
@@ -92,7 +123,9 @@ def test_sigterm_graceful_shutdown(temp_dir):
 
 
 @pytest.mark.integration
-def test_sighup_ignored_in_daemon(temp_dir):
+@pytest.mark.skipif(os.name != "posix" or not hasattr(signal, "SIGHUP"),
+                    reason="SIGHUP nur auf POSIX sinnvoll")
+def test_sighup_ignored_in_daemon(temp_dir, isolated_env):
     """Test that SIGHUP is ignored in daemon mode."""
     # Create a task
     task_file = temp_dir / 'task.sh'
@@ -108,14 +141,15 @@ def test_sighup_ignored_in_daemon(temp_dir):
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
         universal_newlines=True,
+        env=isolated_env['env'],
         timeout=10
     )
 
     assert result.returncode == 0
     time.sleep(2)
 
-    # Try to get PID
-    pid_file = Path.home() / 'parallelr' / 'pids' / 'parallelr.pids'
+    # Try to get PID from isolated environment
+    pid_file = isolated_env['home'] / 'parallelr' / 'pids' / 'parallelr.pids'
     if pid_file.exists():
         pids = pid_file.read_text().strip().split('\n')
         if pids and pids[0]:
@@ -146,11 +180,12 @@ def test_sighup_ignored_in_daemon(temp_dir):
 
     # Cleanup
     subprocess.run([sys.executable, str(PARALLELR_BIN), '-k'],
-                   input='yes\n', stdout=subprocess.PIPE, stderr=subprocess.PIPE, universal_newlines=True, timeout=10)
+                   input='yes\n', stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                   env=isolated_env['env'], universal_newlines=True, timeout=10)
 
 
 @pytest.mark.integration
-def test_multiple_interrupts_force_exit(temp_dir):
+def test_multiple_interrupts_force_exit(temp_dir, isolated_env):
     """Test that multiple SIGINT signals force immediate exit."""
     # Create a long-running task
     task_file = temp_dir / 'long_task.sh'
@@ -165,7 +200,8 @@ def test_multiple_interrupts_force_exit(temp_dir):
          '-r'],
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
-        universal_newlines=True
+        universal_newlines=True,
+        env=isolated_env['env']
     )
 
     time.sleep(2)
@@ -179,7 +215,7 @@ def test_multiple_interrupts_force_exit(temp_dir):
 
     # Should exit quickly
     try:
-        _stdout, _stderr = proc.communicate(timeout=5)
+        proc.communicate(timeout=5)
         assert proc.returncode is not None
     except subprocess.TimeoutExpired:
         proc.kill()
@@ -187,7 +223,7 @@ def test_multiple_interrupts_force_exit(temp_dir):
 
 
 @pytest.mark.integration
-def test_task_cancellation_on_interrupt(temp_dir):
+def test_task_cancellation_on_interrupt(temp_dir, isolated_env):
     """Test that running tasks are cancelled on interrupt."""
     # Create multiple long-running tasks
     task_dir = temp_dir / 'tasks'
@@ -206,7 +242,8 @@ def test_task_cancellation_on_interrupt(temp_dir):
          '-r', '-m', '2'],
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
-        universal_newlines=True
+        universal_newlines=True,
+        env=isolated_env['env']
     )
 
     time.sleep(3)
@@ -227,14 +264,14 @@ def test_task_cancellation_on_interrupt(temp_dir):
 
 
 @pytest.mark.integration
-def test_cleanup_on_forced_exit(temp_dir):
+def test_cleanup_on_forced_exit(temp_dir, isolated_env):
     """Test that cleanup happens even on forced exit."""
     # Create a task
     task_file = temp_dir / 'task.sh'
     task_file.write_text('#!/bin/bash\nsleep 60\n')
     task_file.chmod(0o755)
 
-    log_dir = Path.home() / 'parallelr' / 'logs'
+    log_dir = isolated_env['home'] / 'parallelr' / 'logs'
 
     # Start process
     proc = subprocess.Popen(
@@ -244,7 +281,8 @@ def test_cleanup_on_forced_exit(temp_dir):
          '-r'],
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
-        universal_newlines=True
+        universal_newlines=True,
+        env=isolated_env['env']
     )
 
     time.sleep(2)
@@ -253,7 +291,7 @@ def test_cleanup_on_forced_exit(temp_dir):
     proc.send_signal(signal.SIGINT)
 
     try:
-        _stdout, _stderr = proc.communicate(timeout=10)
+        proc.communicate(timeout=10)
 
         # Log files should still be written
         assert log_dir.exists()
@@ -265,7 +303,7 @@ def test_cleanup_on_forced_exit(temp_dir):
 
 
 @pytest.mark.integration
-def test_signal_handler_registration(sample_task_dir):
+def test_signal_handler_registration(sample_task_dir, isolated_env):
     """Test that signal handlers are properly registered."""
     # This test verifies signal handling works at all
     proc = subprocess.Popen(
@@ -275,7 +313,8 @@ def test_signal_handler_registration(sample_task_dir):
          '-r'],
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
-        universal_newlines=True
+        universal_newlines=True,
+        env=isolated_env['env']
     )
 
     time.sleep(2)
@@ -293,7 +332,3 @@ def test_signal_handler_registration(sample_task_dir):
     except subprocess.TimeoutExpired:
         proc.kill()
         pytest.fail("Signal handler not working")
-
-
-if __name__ == "__main__":
-    pytest.main([__file__, "-v"])
