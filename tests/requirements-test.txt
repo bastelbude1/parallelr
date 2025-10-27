@@ -2,10 +2,10 @@
 # Install with: pip install -r tests/requirements-test.txt
 
 # Core testing framework
-pytest>=7.0.0,<8.0.0
-pytest-cov>=4.0.0,<5.0.0           # Coverage reporting
+pytest>=7.0.0,<7.1.0               # 7.1+ dropped Py3.6
+pytest-cov>=4.0.0,<4.1.0           # 4.1+ dropped Py3.6
 pytest-timeout>=2.1.0,<3.0.0       # Test timeouts
-pytest-xdist>=3.0.0,<4.0.0         # Parallel test execution
+pytest-xdist>=3.0.0,<3.1.0         # 3.1+ dropped Py3.6
 pytest-mock>=3.10.0,<4.0.0         # Mocking support
 
 # Additional testing tools
@@ -13,9 +13,9 @@ pytest-html>=3.1.0,<4.0.0          # HTML test reports
 pytest-json-report>=1.5.0,<2.0.0   # JSON test reports
 
 # Code quality
-pylint>=2.15.0,<3.0.0              # Linting
-black>=22.0.0,<23.0.0              # Code formatting
-mypy>=0.990,<1.0.0                 # Type checking
+pylint>=2.13.0,<2.14.0             # 2.14+ requires Py3.7+
+black>=22.0.0,<22.10.0             # 22.10+ dropped Py3.6
+mypy>=0.961,<0.971                 # 0.971+ dropped Py3.6
 
 # Performance testing
 pytest-benchmark>=4.0.0,<5.0.0     # Performance benchmarks
