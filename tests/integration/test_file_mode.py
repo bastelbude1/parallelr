@@ -14,7 +14,7 @@ PARALLELR_BIN = PROJECT_ROOT / 'bin' / 'parallelr.py'
 
 
 @pytest.mark.integration
-def test_file_mode_directory_execution(sample_task_dir, temp_dir):
+def test_file_mode_directory_execution(sample_task_dir):
     """Test executing tasks from a directory."""
     # Run parallelr in dry-run mode
     result = subprocess.run(
@@ -35,7 +35,7 @@ def test_file_mode_directory_execution(sample_task_dir, temp_dir):
 
 
 @pytest.mark.integration
-def test_file_mode_actual_execution(sample_task_dir, temp_dir):
+def test_file_mode_actual_execution(sample_task_dir):
     """Test actual task execution in file mode."""
     result = subprocess.run(
         [sys.executable, str(PARALLELR_BIN),
