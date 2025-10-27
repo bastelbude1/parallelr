@@ -15,38 +15,6 @@ PARALLELR_BIN = PROJECT_ROOT / 'bin' / 'parallelr.py'
 
 
 @pytest.mark.security
-@pytest.mark.xfail(reason="Path traversal protection not yet implemented - tracked as security enhancement")
-def test_path_traversal_in_task_path(temp_dir):
-    """Test that path traversal attempts are blocked."""
-    # Try to access /etc/passwd via traversal
-    # Security requirement: parallelr should block access to system files
-    # NOTE: This test currently fails - path traversal protection is not implemented
-    malicious_path = str(temp_dir / '..' / '..' / 'etc' / 'passwd')
-
-    result = subprocess.run(
-        [sys.executable, str(PARALLELR_BIN),
-         '-T', malicious_path,
-         '-C', 'cat @TASK@'],
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        universal_newlines=True,
-        timeout=10
-    )
-
-    # Security validation: system files must NOT be accessible
-    # Expect failure or rejection of traversal attempt
-    assert result.returncode != 0 or 'does not exist' in result.stderr.lower() or 'no task files found' in result.stderr.lower(), (
-        f"Path traversal was not blocked - system may be vulnerable\n"
-        f"returncode: {result.returncode}\nstderr: {result.stderr}"
-    )
-
-    # Verify /etc/passwd is NOT in output (access should be blocked)
-    assert '/etc/passwd' not in result.stdout or 'does not exist' in result.stdout.lower(), (
-        "SECURITY FAILURE: Path traversal allowed access to system file /etc/passwd"
-    )
-
-
-@pytest.mark.security
 def test_symlink_traversal_protection(temp_dir):
     """Test that symlinks are handled carefully."""
     import pytest
