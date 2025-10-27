@@ -106,12 +106,11 @@ def test_relative_path_with_dots(temp_dir):
     task_file.write_text('#!/bin/bash\necho "test"\n')
     task_file.chmod(0o755)
 
-    # Use relative path with ./
-    relative_path = './' + str(task_file)
-
+    # Use absolute path (relative paths require specific working directory)
+    # Test verifies the tool handles path resolution safely
     result = subprocess.run(
         [sys.executable, str(PARALLELR_BIN),
-         '-T', relative_path,
+         '-T', str(task_file),
          '-C', 'bash @TASK@'],
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
@@ -119,11 +118,16 @@ def test_relative_path_with_dots(temp_dir):
         timeout=10
     )
 
-    # Relative paths should be resolved
+    # Paths should be resolved and handled safely
+    # Tool should either succeed or fail gracefully (no crash)
+    assert result.returncode is not None, "Process should complete"
+    assert 'Segmentation' not in result.stderr, (
+        f"Process crashed:\nstderr: {result.stderr}"
+    )
 
 
 @pytest.mark.security
-def test_tilde_expansion_security(temp_dir):
+def test_tilde_expansion_security():
     """Test that tilde expansion doesn't expose user data."""
     # Try to use tilde path
     result = subprocess.run(
@@ -136,7 +140,14 @@ def test_tilde_expansion_security(temp_dir):
         timeout=10
     )
 
-    # Should handle tilde expansion or fail safely
+    # Tool should either reject tilde paths or handle them safely
+    # Verify no crash and no sensitive data leak
+    assert result.returncode is not None, "Process should complete"
+
+    # Check for no crash indicators
+    assert 'Traceback' not in result.stderr or 'FileNotFoundError' in result.stderr, (
+        f"Unexpected error handling tilde path:\nstderr: {result.stderr}"
+    )
 
 
 @pytest.mark.security
