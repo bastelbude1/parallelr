@@ -262,7 +262,7 @@ pytest tests/unit/test_example.py -s  # Don't capture stdout
 GitHub Actions workflow is configured to run tests automatically on:
 - Every push to any branch
 - Every pull request
-- Multiple Python versions (3.6, 3.7, 3.8, 3.9, 3.10, 3.11)
+- Python 3.6.8 (minimum supported version)
 
 See `.github/workflows/test.yml` for configuration.
 

@@ -8,38 +8,17 @@ on:
 
 jobs:
   test:
-    name: Run Tests (Python ${{ matrix.python-version }})
-    runs-on: ${{ matrix.os }}
-
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          # Python 3.6 and 3.7 require Ubuntu 20.04
-          - python-version: '3.6'
-            os: ubuntu-20.04
-          - python-version: '3.7'
-            os: ubuntu-20.04
-          # Python 3.8+ can use Ubuntu latest (24.04)
-          - python-version: '3.8'
-            os: ubuntu-latest
-          - python-version: '3.9'
-            os: ubuntu-latest
-          - python-version: '3.10'
-            os: ubuntu-latest
-          - python-version: '3.11'
-            os: ubuntu-latest
-          - python-version: '3.12'
-            os: ubuntu-latest
+    name: Run Tests (Python 3.6.8)
+    runs-on: ubuntu-20.04
 
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
 
-    - name: Set up Python ${{ matrix.python-version }}
+    - name: Set up Python 3.6.8
       uses: actions/setup-python@v5
       with:
-        python-version: ${{ matrix.python-version }}
+        python-version: '3.6.8'
 
     - name: Install dependencies
       run: |
@@ -67,7 +46,6 @@ jobs:
 
     - name: Upload coverage to Codecov
       uses: codecov/codecov-action@v4
-      if: matrix.python-version == '3.11'
       with:
         file: ./coverage.xml
         fail_ci_if_error: false
@@ -75,7 +53,7 @@ jobs:
 
   lint:
     name: Lint Code
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-20.04
 
     steps:
     - name: Checkout code
@@ -84,7 +62,7 @@ jobs:
     - name: Set up Python
       uses: actions/setup-python@v5
       with:
-        python-version: '3.11'
+        python-version: '3.6.8'
 
     - name: Install linting tools
       run: |
@@ -101,7 +79,7 @@ jobs:
 
   test-legacy:
     name: Run Legacy Bash Tests
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-20.04
 
     steps:
     - name: Checkout code
@@ -110,7 +88,7 @@ jobs:
     - name: Set up Python
       uses: actions/setup-python@v5
       with:
-        python-version: '3.11'
+        python-version: '3.6.8'
 
     - name: Install dependencies
       run: |
