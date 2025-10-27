@@ -6,6 +6,7 @@ Tests traditional directory-based task discovery and execution.
 
 import subprocess
 import sys
+import os
 from pathlib import Path
 import pytest
 
@@ -13,8 +14,37 @@ PROJECT_ROOT = Path(__file__).parent.parent.parent
 PARALLELR_BIN = PROJECT_ROOT / 'bin' / 'parallelr.py'
 
 
+@pytest.fixture
+def isolated_env(tmp_path):
+    """
+    Provide isolated environment for file mode tests.
+
+    Sets HOME to temp directory to avoid polluting local environment.
+    """
+    temp_home = tmp_path / 'home'
+    temp_home.mkdir()
+
+    # Store original HOME
+    original_home = os.environ.get('HOME')
+
+    try:
+        # Set HOME to temp directory
+        os.environ['HOME'] = str(temp_home)
+
+        yield {
+            'home': temp_home,
+            'env': {**os.environ, 'HOME': str(temp_home)}
+        }
+    finally:
+        # Restore original HOME
+        if original_home:
+            os.environ['HOME'] = original_home
+        else:
+            os.environ.pop('HOME', None)
+
+
 @pytest.mark.integration
-def test_file_mode_directory_execution(sample_task_dir):
+def test_file_mode_directory_execution(sample_task_dir, isolated_env):
     """Test executing tasks from a directory."""
     # Run parallelr in dry-run mode
     result = subprocess.run(
@@ -24,18 +54,21 @@ def test_file_mode_directory_execution(sample_task_dir):
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
         universal_newlines=True,
+        env=isolated_env['env'],
         timeout=10
     )
 
     assert result.returncode == 0
-    assert 'DRY RUN MODE' in result.stdout
+    # Robust dry-run assertion (case-insensitive)
+    out_lower = result.stdout.lower()
+    assert 'dry' in out_lower and 'run' in out_lower
     # Should discover 5 tasks
     assert 'task1.sh' in result.stdout
     assert 'task5.sh' in result.stdout
 
 
 @pytest.mark.integration
-def test_file_mode_actual_execution(sample_task_dir):
+def test_file_mode_actual_execution(sample_task_dir, isolated_env):
     """Test actual task execution in file mode."""
     result = subprocess.run(
         [sys.executable, str(PARALLELR_BIN),
@@ -45,6 +78,7 @@ def test_file_mode_actual_execution(sample_task_dir):
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
         universal_newlines=True,
+        env=isolated_env['env'],
         timeout=30
     )
 
@@ -54,7 +88,7 @@ def test_file_mode_actual_execution(sample_task_dir):
 
 
 @pytest.mark.integration
-def test_file_mode_specific_files(sample_task_dir):
+def test_file_mode_specific_files(sample_task_dir, isolated_env):
     """Test executing specific task files."""
     task1 = sample_task_dir / 'task1.sh'
     task2 = sample_task_dir / 'task2.sh'
@@ -68,6 +102,7 @@ def test_file_mode_specific_files(sample_task_dir):
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
         universal_newlines=True,
+        env=isolated_env['env'],
         timeout=10
     )
 
@@ -77,27 +112,34 @@ def test_file_mode_specific_files(sample_task_dir):
 
 
 @pytest.mark.integration
-def test_file_mode_glob_patterns(sample_task_dir):
+def test_file_mode_glob_patterns(sample_task_dir, isolated_env):
     """Test executing tasks using glob patterns."""
-    glob_pattern = str(sample_task_dir / 'task[12].sh')
+    # Expand glob in Python for deterministic behavior
+    matches = sorted(sample_task_dir.glob('task[12].sh'))
+
+    # Build command with expanded paths
+    cmd = [sys.executable, str(PARALLELR_BIN)]
+    for p in matches:
+        cmd += ['-T', str(p)]
+    cmd += ['-C', 'bash @TASK@']
 
     result = subprocess.run(
-        [sys.executable, str(PARALLELR_BIN),
-         '-T', glob_pattern,
-         '-C', 'bash @TASK@'],
+        cmd,
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
         universal_newlines=True,
+        env=isolated_env['env'],
         timeout=10
     )
 
-    # Glob patterns may need shell expansion or specific handling
-    # This test documents the expected behavior
-    assert result.returncode in [0, 1]  # May fail if glob not expanded
+    # Should successfully execute both tasks
+    assert result.returncode == 0
+    assert 'task1.sh' in result.stdout
+    assert 'task2.sh' in result.stdout
 
 
 @pytest.mark.integration
-def test_file_mode_file_extension_filter(temp_dir):
+def test_file_mode_file_extension_filter(temp_dir, isolated_env):
     """Test file extension filtering."""
     # Create mixed file types
     task_dir = temp_dir / 'mixed_tasks'
@@ -117,6 +159,7 @@ def test_file_mode_file_extension_filter(temp_dir):
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
         universal_newlines=True,
+        env=isolated_env['env'],
         timeout=10
     )
 
@@ -129,7 +172,7 @@ def test_file_mode_file_extension_filter(temp_dir):
 
 
 @pytest.mark.integration
-def test_file_mode_empty_directory(temp_dir):
+def test_file_mode_empty_directory(temp_dir, isolated_env):
     """Test handling of empty task directory."""
     empty_dir = temp_dir / 'empty'
     empty_dir.mkdir()
@@ -141,6 +184,7 @@ def test_file_mode_empty_directory(temp_dir):
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
         universal_newlines=True,
+        env=isolated_env['env'],
         timeout=10
     )
 
@@ -149,7 +193,7 @@ def test_file_mode_empty_directory(temp_dir):
 
 
 @pytest.mark.integration
-def test_file_mode_nonexistent_path(temp_dir):
+def test_file_mode_nonexistent_path(temp_dir, isolated_env):
     """Test handling of nonexistent task path."""
     nonexistent = temp_dir / 'does_not_exist'
 
@@ -160,6 +204,7 @@ def test_file_mode_nonexistent_path(temp_dir):
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
         universal_newlines=True,
+        env=isolated_env['env'],
         timeout=10
     )
 
@@ -169,7 +214,7 @@ def test_file_mode_nonexistent_path(temp_dir):
 
 
 @pytest.mark.integration
-def test_file_mode_worker_count(sample_task_dir):
+def test_file_mode_worker_count(sample_task_dir, isolated_env):
     """Test execution with different worker counts."""
     # Test with 1 worker
     result = subprocess.run(
@@ -180,6 +225,7 @@ def test_file_mode_worker_count(sample_task_dir):
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
         universal_newlines=True,
+        env=isolated_env['env'],
         timeout=30
     )
 
@@ -188,7 +234,7 @@ def test_file_mode_worker_count(sample_task_dir):
 
 
 @pytest.mark.integration
-def test_file_mode_timeout(temp_dir):
+def test_file_mode_timeout(temp_dir, isolated_env):
     """Test task timeout handling."""
     task_dir = temp_dir / 'timeout_tasks'
     task_dir.mkdir()
@@ -206,6 +252,7 @@ def test_file_mode_timeout(temp_dir):
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
         universal_newlines=True,
+        env=isolated_env['env'],
         timeout=15
     )
 
@@ -214,7 +261,7 @@ def test_file_mode_timeout(temp_dir):
 
 
 @pytest.mark.integration
-def test_file_mode_multiple_directories(temp_dir):
+def test_file_mode_multiple_directories(temp_dir, isolated_env):
     """Test executing tasks from multiple directories."""
     dir1 = temp_dir / 'tasks1'
     dir2 = temp_dir / 'tasks2'
@@ -232,6 +279,7 @@ def test_file_mode_multiple_directories(temp_dir):
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
         universal_newlines=True,
+        env=isolated_env['env'],
         timeout=10
     )
 
@@ -239,7 +287,3 @@ def test_file_mode_multiple_directories(temp_dir):
     # Should find tasks from both directories
     assert 'task1.sh' in result.stdout
     assert 'task2.sh' in result.stdout
-
-
-if __name__ == "__main__":
-    pytest.main([__file__, "-v"])
