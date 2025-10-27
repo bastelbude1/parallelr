@@ -40,37 +40,27 @@ def test_symlink_traversal_protection(temp_dir):
         timeout=10
     )
 
-    # The tool should handle symlinks safely - either reject or handle carefully
-    # Expected: non-zero exit (rejected) or zero exit but no dangerous execution
+    # Tool must not crash; following symlinks or rejecting them is acceptable
+    assert result.returncode in (0, 1), (
+        f"Symlinks must be handled safely (allow or reject), got returncode {result.returncode}\n"
+        f"stdout: {result.stdout}\n"
+        f"stderr: {result.stderr}"
+    )
 
-    # Check that result completed (didn't crash)
-    assert result.returncode is not None, "Process did not complete"
+    # Verify no dangerous operations occurred regardless of exit code
+    # The symlink points to /, so we shouldn't see evidence of root-level operations
+    dangerous_patterns = [
+        '/etc/passwd',
+        '/etc/shadow',
+        '/root/',
+        'rm -rf /',
+        'Permission denied'
+    ]
 
-    if result.returncode == 0:
-        # If it succeeded, verify no dangerous operations occurred
-        # The symlink points to /, so we shouldn't see evidence of root-level operations
-
-        # Should not show execution of dangerous root-level commands
-        dangerous_patterns = [
-            '/etc/passwd',
-            '/etc/shadow',
-            '/root/',
-            'rm -rf /',
-            'Permission denied'
-        ]
-
-        output = result.stdout + result.stderr
-        for pattern in dangerous_patterns:
-            assert pattern not in output, (
-                f"SECURITY WARNING: Dangerous pattern '{pattern}' found in output.\n"
-                f"stdout: {result.stdout}\n"
-                f"stderr: {result.stderr}"
-            )
-    else:
-        # Non-zero exit is expected and safe (symlink was rejected or handled)
-        # Verify error message is reasonable
-        assert result.returncode != 0, (
-            f"Expected safe handling, got returncode: {result.returncode}\n"
+    output = result.stdout + result.stderr
+    for pattern in dangerous_patterns:
+        assert pattern not in output, (
+            f"SECURITY WARNING: Dangerous pattern '{pattern}' found in output.\n"
             f"stdout: {result.stdout}\n"
             f"stderr: {result.stderr}"
         )
@@ -118,11 +108,16 @@ def test_relative_path_with_dots(temp_dir):
         timeout=10
     )
 
-    # Paths should be resolved and handled safely
-    # Tool should either succeed or fail gracefully (no crash)
-    assert result.returncode is not None, "Process should complete"
-    assert 'Segmentation' not in result.stderr, (
-        f"Process crashed:\nstderr: {result.stderr}"
+    # Relative paths should be resolved correctly and execute successfully
+    assert result.returncode == 0, (
+        f"Expected successful path resolution, got returncode {result.returncode}\n"
+        f"stdout: {result.stdout}\n"
+        f"stderr: {result.stderr}"
+    )
+
+    # Verify no error messages related to path resolution
+    assert "error" not in result.stderr.lower(), (
+        f"Unexpected error in stderr:\n{result.stderr}"
     )
 
 
@@ -140,13 +135,17 @@ def test_tilde_expansion_security():
         timeout=10
     )
 
-    # Tool should either reject tilde paths or handle them safely
-    # Verify no crash and no sensitive data leak
-    assert result.returncode is not None, "Process should complete"
+    # Tilde expansion must be handled safely (no crash, no permission leaks)
+    # Allow either success (tilde expanded) or failure (tilde rejected)
+    assert result.returncode in (0, 1), (
+        f"Expected safe handling of tilde path, got returncode {result.returncode}\n"
+        f"stdout: {result.stdout}\n"
+        f"stderr: {result.stderr}"
+    )
 
-    # Check for no crash indicators
-    assert 'Traceback' not in result.stderr or 'FileNotFoundError' in result.stderr, (
-        f"Unexpected error handling tilde path:\nstderr: {result.stderr}"
+    # Should not leak permission errors that could expose system info
+    assert "permission" not in result.stderr.lower(), (
+        f"Permission error leaked system information:\nstderr: {result.stderr}"
     )
 
 
@@ -215,31 +214,18 @@ def test_task_file_size_limit(temp_dir):
         timeout=30
     )
 
-    # Tool should reject files exceeding max_task_file_size (default 1MB)
+    # Expectation: Files >1MB should be rejected
     assert result.returncode != 0, (
-        f"Expected tool to reject large file, got returncode {result.returncode}\n"
+        f"Large task files should be rejected, got returncode {result.returncode}\n"
         f"File size: {file_size} bytes ({file_size / (1024*1024):.2f} MB)\n"
         f"stdout: {result.stdout}\n"
         f"stderr: {result.stderr}"
     )
 
-    # Error message should mention file size limit
-    output = result.stdout + result.stderr
-    size_limit_indicators = [
-        'max_task_file_size',
-        'file too large',
-        'exceeds',
-        'size limit',
-        'too big',
-        '1048576',  # 1MB in bytes
-        '1 MB',
-        '1MB'
-    ]
-
-    found_indicator = any(indicator.lower() in output.lower() for indicator in size_limit_indicators)
-    assert found_indicator, (
-        f"Expected error message about file size limit, but didn't find indicators.\n"
-        f"Looking for any of: {size_limit_indicators}\n"
+    # Error message should mention file size (check both stdout and stderr)
+    output = (result.stdout + result.stderr).lower()
+    assert ("size" in output or "large" in output or "too large" in output), (
+        f"Expected error message about file size, got:\n"
         f"stdout: {result.stdout}\n"
         f"stderr: {result.stderr}"
     )
