@@ -239,7 +239,7 @@ def test_task_file_size_limit(temp_dir):
 
 
 @pytest.mark.security
-def test_special_file_access_prevention(temp_dir):
+def test_special_file_access_prevention():
     """Test that special files like /dev/null are handled."""
     result = subprocess.run(
         [sys.executable, str(PARALLELR_BIN),
