@@ -251,7 +251,28 @@ def test_special_file_access_prevention(temp_dir):
         timeout=10
     )
 
-    # Should handle special files safely
+    # Tool should handle special files safely (reject non-regular files)
+    # /dev/null is a character device, not a regular file
+    assert result.returncode != 0, (
+        f"Expected tool to reject special file /dev/null, got returncode {result.returncode}\n"
+        f"stdout: {result.stdout}\nstderr: {result.stderr}"
+    )
+
+    # Should have appropriate error message (not crash)
+    output = result.stdout + result.stderr
+    assert 'No task files found' in output or 'not found' in output.lower(), (
+        f"Expected error message about no task files found\noutput: {output}"
+    )
+
+    # Verify no crash indicators (Traceback for error is expected and OK)
+    assert 'Segmentation' not in result.stderr, (
+        f"Process crashed with segmentation fault:\n{result.stderr}"
+    )
+
+    # Verify no resource leak indicators
+    assert 'leak' not in output.lower(), (
+        f"Potential resource leak detected:\n{output}"
+    )
 
 
 @pytest.mark.security
