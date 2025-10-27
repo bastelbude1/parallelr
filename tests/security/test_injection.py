@@ -325,8 +325,28 @@ def test_null_byte_injection(temp_dir):
         timeout=10
     )
 
-    # Should handle or reject null bytes
-    # Tool may fail validation or handle safely
+    # Should handle or reject null bytes safely without crashing
+    # Allow success (0) or validation failure (1), but not crashes
+    assert result.returncode in [0, 1], (
+        f"Process crashed or returned unexpected code: {result.returncode}\n"
+        f"stdout: {result.stdout}\nstderr: {result.stderr}"
+    )
+
+    # Verify no crash indicators in stderr
+    assert 'Traceback' not in result.stderr, (
+        f"Process crashed with Python traceback:\n{result.stderr}"
+    )
+    assert 'Segmentation' not in result.stderr, (
+        f"Process crashed with segmentation fault:\n{result.stderr}"
+    )
+
+    # Verify stderr does not contain raw null bytes (stdout may contain them in logs)
+    # Note: stdout in dry-run mode shows the command that would be executed,
+    # which may include escaped null bytes for logging purposes - this is acceptable
+    # What matters is that stderr (error channel) doesn't leak null bytes
+    assert '\x00' not in result.stderr, (
+        "Null bytes leaked into stderr - potential security issue"
+    )
 
 
 @pytest.mark.security
