@@ -8,12 +8,14 @@ import os
 import sys
 import tempfile
 import shutil
+import subprocess
 from pathlib import Path
 import pytest
 
 # Add project root to path for imports
 PROJECT_ROOT = Path(__file__).parent.parent
 sys.path.insert(0, str(PROJECT_ROOT / 'bin'))
+PARALLELR_BIN = PROJECT_ROOT / 'bin' / 'parallelr.py'
 
 # Import after path setup
 try:
@@ -129,6 +131,53 @@ def capture_logs(caplog):
     import logging
     caplog.set_level(logging.DEBUG)
     return caplog
+
+
+@pytest.fixture(autouse=True, scope="function")
+def cleanup_daemon_processes():
+    """
+    Ensure all daemon processes are cleaned up after each test.
+
+    This fixture runs automatically for every test (autouse=True) and ensures
+    that any parallelr daemon processes started during the test are properly
+    terminated, even if the test fails. This prevents test pollution and
+    resource leaks.
+
+    The cleanup happens in the teardown phase (after yield), ensuring it
+    runs even when assertions fail or exceptions are raised.
+    """
+    # Setup phase - runs before test
+    yield
+
+    # Teardown phase - runs after test (even if test fails)
+    try:
+        # Kill all daemon processes with automatic 'yes' confirmation
+        result = subprocess.run(
+            [sys.executable, str(PARALLELR_BIN), '-k'],
+            input='yes\n',
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            universal_newlines=True,
+            timeout=10
+        )
+        # Silence is golden - we don't care if there were no processes to kill
+    except subprocess.TimeoutExpired:
+        # If cleanup times out, force kill via PID file
+        pid_file = Path.home() / 'parallelr' / 'pids' / 'parallelr.pids'
+        if pid_file.exists():
+            try:
+                pids = pid_file.read_text().strip().split('\n')
+                for pid in pids:
+                    if pid:
+                        try:
+                            os.kill(int(pid), 9)  # SIGKILL
+                        except (ProcessLookupError, ValueError):
+                            pass  # Process already dead or invalid PID
+            except Exception:
+                pass  # Best effort cleanup
+    except Exception:
+        # Best effort cleanup - don't fail tests due to cleanup issues
+        pass
 
 
 # Test markers
