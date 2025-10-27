@@ -325,6 +325,10 @@ def test_null_byte_injection(temp_dir):
         timeout=10
     )
 
+    # Normalize newlines for cross-platform matching
+    stdout_normalized = result.stdout.replace('\r\n', '\n')
+    stderr_normalized = result.stderr.replace('\r\n', '\n')
+
     # Should handle or reject null bytes safely without crashing
     # Allow success (0) or validation failure (1), but not crashes
     assert result.returncode in [0, 1], (
@@ -332,21 +336,57 @@ def test_null_byte_injection(temp_dir):
         f"stdout: {result.stdout}\nstderr: {result.stderr}"
     )
 
-    # Verify no crash indicators in stderr
-    assert 'Traceback' not in result.stderr, (
+    # Verify no crash indicators
+    assert 'Traceback' not in stderr_normalized, (
         f"Process crashed with Python traceback:\n{result.stderr}"
     )
-    assert 'Segmentation' not in result.stderr, (
+    assert 'Segmentation' not in stderr_normalized, (
         f"Process crashed with segmentation fault:\n{result.stderr}"
     )
 
-    # Verify stderr does not contain raw null bytes (stdout may contain them in logs)
-    # Note: stdout in dry-run mode shows the command that would be executed,
-    # which may include escaped null bytes for logging purposes - this is acceptable
-    # What matters is that stderr (error channel) doesn't leak null bytes
-    assert '\x00' not in result.stderr, (
+    # Verify stderr does not contain raw null bytes
+    assert '\x00' not in stderr_normalized, (
         "Null bytes leaked into stderr - potential security issue"
     )
+
+    # Check both acceptable behaviors
+    if result.returncode == 0:
+        # Tool accepted null bytes (dry-run mode handles them)
+        # Verify task was created successfully
+        assert 'Created 1 tasks' in stdout_normalized or 'Created 1 task' in stdout_normalized, (
+            f"Expected task creation message in stdout:\n{result.stdout}"
+        )
+        # Verify dry-run mode shows the command
+        assert 'DRY RUN MODE' in stdout_normalized or '@TASK@' in stdout_normalized, (
+            f"Expected dry-run output or command template in stdout:\n{result.stdout}"
+        )
+        # stderr should be empty or only contain non-fatal warnings
+        assert stderr_normalized == '' or 'warning' in stderr_normalized.lower(), (
+            f"Expected empty stderr or warnings only, got:\n{result.stderr}"
+        )
+    else:
+        # Tool rejected null bytes (execution mode validates input)
+        assert result.returncode == 1, (
+            f"Expected returncode 1 for validation failure, got {result.returncode}\n"
+            f"stdout: {result.stdout}\nstderr: {result.stderr}"
+        )
+        # Verify error message indicates null byte or validation failure
+        output = stdout_normalized + stderr_normalized
+        null_byte_indicators = [
+            'null byte',
+            'null character',
+            'embedded null',
+            'invalid input',
+            'validation',
+            'failed'
+        ]
+        found_indicator = any(indicator.lower() in output.lower() for indicator in null_byte_indicators)
+        assert found_indicator, (
+            f"Expected error message about null bytes or validation failure.\n"
+            f"Looking for any of: {null_byte_indicators}\n"
+            f"stdout: {result.stdout}\n"
+            f"stderr: {result.stderr}"
+        )
 
 
 @pytest.mark.security
