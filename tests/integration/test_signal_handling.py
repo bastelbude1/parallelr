@@ -172,7 +172,7 @@ def test_multiple_interrupts_force_exit(temp_dir):
 
     # Should exit quickly
     try:
-        stdout, stderr = proc.communicate(timeout=5)
+        _stdout, _stderr = proc.communicate(timeout=5)
         assert proc.returncode is not None
     except subprocess.TimeoutExpired:
         proc.kill()
@@ -246,7 +246,7 @@ def test_cleanup_on_forced_exit(temp_dir):
     proc.send_signal(signal.SIGINT)
 
     try:
-        stdout, stderr = proc.communicate(timeout=10)
+        _stdout, _stderr = proc.communicate(timeout=10)
 
         # Log files should still be written
         assert log_dir.exists()
