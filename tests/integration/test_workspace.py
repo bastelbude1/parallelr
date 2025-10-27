@@ -6,23 +6,60 @@ Tests shared and isolated workspace modes.
 
 import subprocess
 import sys
+import os
+import shutil
 from pathlib import Path
 import pytest
 
 PROJECT_ROOT = Path(__file__).parent.parent.parent
 PARALLELR_BIN = PROJECT_ROOT / 'bin' / 'parallelr.py'
-WORKSPACE_DIR = Path.home() / 'parallelr' / 'workspace'
+
+
+@pytest.fixture
+def isolated_workspace(tmp_path):
+    """
+    Provide an isolated temporary workspace for testing.
+
+    Sets HOME environment variable to a temp directory so parallelr creates
+    its workspace in an isolated location. Guarantees cleanup even on failures.
+    """
+    # Create temporary home directory
+    temp_home = tmp_path / 'home'
+    temp_home.mkdir()
+
+    # Store original HOME
+    original_home = os.environ.get('HOME')
+
+    try:
+        # Set HOME to temp directory
+        os.environ['HOME'] = str(temp_home)
+
+        # Calculate workspace paths
+        workspace_dir = temp_home / 'parallelr' / 'workspace'
+        log_dir = temp_home / 'parallelr' / 'logs'
+
+        yield {
+            'home': temp_home,
+            'workspace': workspace_dir,
+            'logs': log_dir,
+            'env': {'HOME': str(temp_home)}
+        }
+    finally:
+        # Restore original HOME
+        if original_home:
+            os.environ['HOME'] = original_home
+        else:
+            os.environ.pop('HOME', None)
+
+        # Cleanup is automatic via tmp_path fixture
 
 
 @pytest.mark.integration
-def test_workspace_directory_created(sample_task_dir):
+def test_workspace_directory_created(sample_task_dir, isolated_workspace):
     """Test that workspace directory is created."""
-    # Ensure workspace doesn't exist
-    if WORKSPACE_DIR.exists():
-        # Just verify it exists, don't delete
-        pass
+    workspace_dir = isolated_workspace['workspace']
 
-    # Run task
+    # Run task with isolated HOME
     result = subprocess.run(
         [sys.executable, str(PARALLELR_BIN),
          '-T', str(sample_task_dir),
@@ -31,16 +68,17 @@ def test_workspace_directory_created(sample_task_dir):
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
         universal_newlines=True,
+        env={**os.environ, **isolated_workspace['env']},
         timeout=30
     )
 
     assert result.returncode == 0
     # Workspace should be mentioned in output or exist
-    assert WORKSPACE_DIR.exists() or 'workspace' in result.stdout.lower()
+    assert workspace_dir.exists() or 'workspace' in result.stdout.lower()
 
 
 @pytest.mark.integration
-def test_shared_workspace_mode_default(sample_task_dir):
+def test_shared_workspace_mode_default(sample_task_dir, isolated_workspace):
     """Test that shared workspace is the default mode."""
     result = subprocess.run(
         [sys.executable, str(PARALLELR_BIN),
@@ -50,6 +88,7 @@ def test_shared_workspace_mode_default(sample_task_dir):
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
         universal_newlines=True,
+        env={**os.environ, **isolated_workspace['env']},
         timeout=30
     )
 
@@ -59,8 +98,10 @@ def test_shared_workspace_mode_default(sample_task_dir):
 
 
 @pytest.mark.integration
-def test_workspace_accessible_to_tasks(temp_dir):
+def test_workspace_accessible_to_tasks(temp_dir, isolated_workspace):
     """Test that tasks can access the workspace directory."""
+    workspace_dir = isolated_workspace['workspace']
+
     # Create a task that writes to workspace
     task_file = temp_dir / 'workspace_test.sh'
     task_file.write_text('''#!/bin/bash
@@ -78,23 +119,24 @@ ls -la
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
         universal_newlines=True,
+        env={**os.environ, **isolated_workspace['env']},
         timeout=30
     )
 
     assert result.returncode == 0
-    # Verify file was created
-    test_file = WORKSPACE_DIR / 'test_file.txt'
+    # Verify file was created in isolated workspace
+    test_file = workspace_dir / 'test_file.txt'
     assert test_file.exists()
     assert 'test' in test_file.read_text()
-
-    # Cleanup
-    test_file.unlink()
+    # No manual cleanup needed - fixture handles it
 
 
 @pytest.mark.integration
-def test_workspace_persists_between_runs(temp_dir):
+def test_workspace_persists_between_runs(temp_dir, isolated_workspace):
     """Test that workspace persists between different runs."""
-    marker_file = WORKSPACE_DIR / 'persistent_marker.txt'
+    workspace_dir = isolated_workspace['workspace']
+    marker_file = workspace_dir / 'persistent_marker.txt'
+    test_env = {**os.environ, **isolated_workspace['env']}
 
     # First run - create marker
     task1 = temp_dir / 'create_marker.sh'
@@ -109,13 +151,14 @@ def test_workspace_persists_between_runs(temp_dir):
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
         universal_newlines=True,
+        env=test_env,
         timeout=30
     )
 
     assert result1.returncode == 0
     assert marker_file.exists()
 
-    # Second run - verify marker exists
+    # Second run - verify marker exists (using same isolated workspace)
     task2 = temp_dir / 'check_marker.sh'
     task2.write_text('#!/bin/bash\ntest -f ~/parallelr/workspace/persistent_marker.txt && echo "FOUND_MARKER"\n')
     task2.chmod(0o755)
@@ -128,19 +171,18 @@ def test_workspace_persists_between_runs(temp_dir):
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
         universal_newlines=True,
+        env=test_env,
         timeout=30
     )
 
     assert result2.returncode == 0
     # The marker file should still exist from the first run
     assert marker_file.exists()
-
-    # Cleanup
-    marker_file.unlink()
+    # No manual cleanup needed - fixture handles it
 
 
 @pytest.mark.integration
-def test_workspace_directory_in_summary(sample_task_dir):
+def test_workspace_directory_in_summary(sample_task_dir, isolated_workspace):
     """Test that workspace directory is shown in summary."""
     result = subprocess.run(
         [sys.executable, str(PARALLELR_BIN),
@@ -150,6 +192,7 @@ def test_workspace_directory_in_summary(sample_task_dir):
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
         universal_newlines=True,
+        env={**os.environ, **isolated_workspace['env']},
         timeout=30
     )
 
@@ -160,7 +203,7 @@ def test_workspace_directory_in_summary(sample_task_dir):
 
 
 @pytest.mark.integration
-def test_tasks_run_from_workspace(temp_dir):
+def test_tasks_run_from_workspace(temp_dir, isolated_workspace):
     """Test that tasks execute with workspace as working directory."""
     task_file = temp_dir / 'pwd_test.sh'
     task_file.write_text('#!/bin/bash\npwd\n')
@@ -174,6 +217,7 @@ def test_tasks_run_from_workspace(temp_dir):
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
         universal_newlines=True,
+        env={**os.environ, **isolated_workspace['env']},
         timeout=30
     )
 
@@ -183,9 +227,9 @@ def test_tasks_run_from_workspace(temp_dir):
 
 
 @pytest.mark.integration
-def test_workspace_logs_directory(sample_task_dir):
+def test_workspace_logs_directory(sample_task_dir, isolated_workspace):
     """Test that logs directory exists alongside workspace."""
-    log_dir = Path.home() / 'parallelr' / 'logs'
+    log_dir = isolated_workspace['logs']
 
     result = subprocess.run(
         [sys.executable, str(PARALLELR_BIN),
@@ -195,6 +239,7 @@ def test_workspace_logs_directory(sample_task_dir):
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
         universal_newlines=True,
+        env={**os.environ, **isolated_workspace['env']},
         timeout=30
     )
 
@@ -205,9 +250,9 @@ def test_workspace_logs_directory(sample_task_dir):
 
 
 @pytest.mark.integration
-def test_workspace_summary_csv_created(sample_task_dir):
+def test_workspace_summary_csv_created(sample_task_dir, isolated_workspace):
     """Test that summary CSV is created in logs directory."""
-    log_dir = Path.home() / 'parallelr' / 'logs'
+    log_dir = isolated_workspace['logs']
 
     result = subprocess.run(
         [sys.executable, str(PARALLELR_BIN),
@@ -217,6 +262,7 @@ def test_workspace_summary_csv_created(sample_task_dir):
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
         universal_newlines=True,
+        env={**os.environ, **isolated_workspace['env']},
         timeout=30
     )
 
@@ -227,9 +273,9 @@ def test_workspace_summary_csv_created(sample_task_dir):
 
 
 @pytest.mark.integration
-def test_workspace_task_output_log_created(sample_task_dir):
+def test_workspace_task_output_log_created(sample_task_dir, isolated_workspace):
     """Test that task output log is created by default."""
-    log_dir = Path.home() / 'parallelr' / 'logs'
+    log_dir = isolated_workspace['logs']
 
     result = subprocess.run(
         [sys.executable, str(PARALLELR_BIN),
@@ -239,6 +285,7 @@ def test_workspace_task_output_log_created(sample_task_dir):
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
         universal_newlines=True,
+        env={**os.environ, **isolated_workspace['env']},
         timeout=30
     )
 
@@ -249,12 +296,12 @@ def test_workspace_task_output_log_created(sample_task_dir):
 
 
 @pytest.mark.integration
-def test_workspace_no_task_output_log_flag(sample_task_dir):
+def test_workspace_no_task_output_log_flag(sample_task_dir, isolated_workspace):
     """Test --no-task-output-log flag prevents output log creation."""
-    log_dir = Path.home() / 'parallelr' / 'logs'
+    log_dir = isolated_workspace['logs']
 
     # Get count of output files before
-    output_files_before = list(log_dir.glob('*_output.txt'))
+    output_files_before = list(log_dir.glob('*_output.txt')) if log_dir.exists() else []
     count_before = len(output_files_before)
 
     result = subprocess.run(
@@ -266,6 +313,7 @@ def test_workspace_no_task_output_log_flag(sample_task_dir):
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
         universal_newlines=True,
+        env={**os.environ, **isolated_workspace['env']},
         timeout=30
     )
 
