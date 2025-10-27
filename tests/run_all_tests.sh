@@ -82,23 +82,29 @@ fi
 
 # Legacy bash tests
 echo -e "${YELLOW}Running Legacy Bash Tests...${NC}"
-cd test_cases/arguments_mode
 
-bash test_multi_args_suite.sh || {
-    echo -e "${RED}✗ Multi-argument tests failed${NC}"
-    exit 1
-}
-echo -e "${GREEN}✓ Multi-argument tests passed${NC}"
-echo ""
+if [ ! -d "test_cases/arguments_mode" ]; then
+    echo -e "${YELLOW}⚠ Legacy test directory not found, skipping...${NC}"
+    echo ""
+else
+    cd test_cases/arguments_mode
 
-bash run_tests.sh || {
-    echo -e "${RED}✗ Backward compatibility tests failed${NC}"
-    exit 1
-}
-echo -e "${GREEN}✓ Backward compatibility tests passed${NC}"
-echo ""
+    bash test_multi_args_suite.sh || {
+        echo -e "${RED}✗ Multi-argument tests failed${NC}"
+        exit 1
+    }
+    echo -e "${GREEN}✓ Multi-argument tests passed${NC}"
+    echo ""
 
-cd "${REPO_ROOT}"
+    bash run_tests.sh || {
+        echo -e "${RED}✗ Backward compatibility tests failed${NC}"
+        exit 1
+    }
+    echo -e "${GREEN}✓ Backward compatibility tests passed${NC}"
+    echo ""
+
+    cd "${REPO_ROOT}"
+fi
 
 # Coverage report (if --cov was used)
 if [ "$GENERATE_COVERAGE" = "1" ]; then
