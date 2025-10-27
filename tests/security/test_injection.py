@@ -187,12 +187,19 @@ def test_environment_variable_injection(temp_dir):
 @pytest.mark.security
 def test_backtick_injection_in_arguments(temp_dir):
     """Test that backticks in arguments don't execute commands."""
+    import os
+
     task_file = temp_dir / 'task.sh'
     task_file.write_text('#!/bin/bash\necho "$1"\n')
     task_file.chmod(0o755)
 
+    # Use unique sentinel that would be produced if whoami executed
+    current_user = os.environ.get('USER', 'unknown')
+    sentinel = f"UNIQUE_SENTINEL_{current_user}"
+
+    # Write backtick and $(...) injection attempts with sentinel
     args_file = temp_dir / 'args.txt'
-    args_file.write_text('`whoami`\n$(whoami)\n')
+    args_file.write_text(f'`whoami`{sentinel}\n$(whoami){sentinel}\n')
 
     result = subprocess.run(
         [sys.executable, str(PARALLELR_BIN),
@@ -206,9 +213,67 @@ def test_backtick_injection_in_arguments(temp_dir):
         timeout=30
     )
 
-    # Should complete
-    assert result.returncode == 0
-    # Backticks should be treated as literal strings
+    # Should complete successfully (backticks treated as literals)
+    assert result.returncode == 0, (
+        f"Expected successful execution, got returncode {result.returncode}\n"
+        f"stdout: {result.stdout}\n"
+        f"stderr: {result.stderr}"
+    )
+
+    # Key security check: Sentinel should NOT appear alone (command substitution didn't execute)
+    # If whoami executed, we'd see patterns like "baste" immediately followed by or near sentinel
+    # But the sentinel is appended directly to the substitution attempt in the args file
+    assert sentinel not in result.stdout and sentinel not in result.stderr, (
+        f"SECURITY FAILURE: Command substitution executed - "
+        f"sentinel '{sentinel}' found in output (should not appear alone if whoami didn't run)"
+    )
+
+    # Check pattern that would indicate execution: username appearing without the literal syntax
+    # If command substitution executed, we'd see: {username}{sentinel}
+    # Instead we should see: `whoami`{sentinel} or $(whoami){sentinel}
+    executed_pattern = f'{current_user}{sentinel}'
+
+    assert executed_pattern not in result.stdout, (
+        f"SECURITY FAILURE: Command substitution executed - "
+        f"pattern '{executed_pattern}' found (whoami returned username)"
+    )
+    assert executed_pattern not in result.stderr, (
+        f"SECURITY FAILURE: Command substitution executed - "
+        f"pattern '{executed_pattern}' found in stderr"
+    )
+
+    # Verify tasks completed successfully (both tasks should succeed)
+    assert 'Completed Successfully: 2' in result.stdout or 'completed: 2' in result.stdout, (
+        f"Expected 2 successful tasks, check output:\n{result.stdout}"
+    )
+
+    # Additional verification: read the task output log file
+    # The log file will contain the actual command execution details
+    import glob
+    log_files = glob.glob('/home/baste/parallelr/logs/parallelr_*_output.txt')
+    if log_files:
+        latest_log = max(log_files, key=os.path.getmtime)
+        with open(latest_log, 'r') as f:
+            log_content = f.read()
+
+        # Verify literals appear in the log (not executed)
+        assert '`whoami`' in log_content, (
+            f"Expected literal `whoami` in log file {latest_log}"
+        )
+        assert '$(whoami)' in log_content, (
+            f"Expected literal $(whoami) in log file {latest_log}"
+        )
+
+        # Verify the sentinel appears with the literal syntax, not standalone
+        # Pattern in log should be: `whoami`{sentinel} or $(whoami){sentinel}
+        backtick_pattern = f'`whoami`{sentinel}'
+        dollar_paren_pattern = f'$(whoami){sentinel}'
+
+        assert backtick_pattern in log_content or dollar_paren_pattern in log_content, (
+            f"Expected literal command substitution syntax with sentinel in log.\n"
+            f"Looking for: {backtick_pattern} or {dollar_paren_pattern}\n"
+            f"Log file: {latest_log}"
+        )
 
 
 @pytest.mark.security
