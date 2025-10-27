@@ -6,6 +6,7 @@ Tests argument file processing with various delimiters and configurations.
 
 import subprocess
 import sys
+import os
 from pathlib import Path
 import pytest
 
@@ -13,8 +14,37 @@ PROJECT_ROOT = Path(__file__).parent.parent.parent
 PARALLELR_BIN = PROJECT_ROOT / 'bin' / 'parallelr.py'
 
 
+@pytest.fixture
+def isolated_env(tmp_path):
+    """
+    Provide isolated environment for argument tests.
+
+    Sets HOME to temp directory to avoid polluting local environment.
+    """
+    temp_home = tmp_path / 'home'
+    temp_home.mkdir()
+
+    # Store original HOME
+    original_home = os.environ.get('HOME')
+
+    try:
+        # Set HOME to temp directory
+        os.environ['HOME'] = str(temp_home)
+
+        yield {
+            'home': temp_home,
+            'env': {**os.environ, 'HOME': str(temp_home)}
+        }
+    finally:
+        # Restore original HOME
+        if original_home:
+            os.environ['HOME'] = original_home
+        else:
+            os.environ.pop('HOME', None)
+
+
 @pytest.mark.integration
-def test_arguments_mode_single_argument(sample_task_file, sample_arguments_file):
+def test_arguments_mode_single_argument(sample_task_file, sample_arguments_file, isolated_env):
     """Test arguments mode with single argument per line."""
     result = subprocess.run(
         [sys.executable, str(PARALLELR_BIN),
@@ -25,6 +55,7 @@ def test_arguments_mode_single_argument(sample_task_file, sample_arguments_file)
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
         universal_newlines=True,
+        env=isolated_env['env'],
         timeout=10
     )
 
@@ -34,7 +65,7 @@ def test_arguments_mode_single_argument(sample_task_file, sample_arguments_file)
 
 
 @pytest.mark.integration
-def test_arguments_mode_multi_args_comma(sample_task_file, sample_multi_args_file):
+def test_arguments_mode_multi_args_comma(sample_task_file, sample_multi_args_file, isolated_env):
     """Test multi-argument mode with comma delimiter."""
     result = subprocess.run(
         [sys.executable, str(PARALLELR_BIN),
@@ -47,6 +78,7 @@ def test_arguments_mode_multi_args_comma(sample_task_file, sample_multi_args_fil
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
         universal_newlines=True,
+        env=isolated_env['env'],
         timeout=30
     )
 
@@ -56,39 +88,38 @@ def test_arguments_mode_multi_args_comma(sample_task_file, sample_multi_args_fil
 
 
 @pytest.mark.integration
-def test_arguments_mode_all_delimiters(temp_dir, sample_task_file):
+@pytest.mark.parametrize("delim_name,line_content", [
+    ("comma", "val1,val2,val3"),
+    ("semicolon", "val1;val2;val3"),
+    ("pipe", "val1|val2|val3"),
+    ("colon", "val1:val2:val3"),
+    ("space", "val1 val2 val3"),
+    ("tab", "val1\tval2\tval3"),
+])
+def test_arguments_mode_all_delimiters(temp_dir, sample_task_file, isolated_env, delim_name, line_content):
     """Test all supported delimiters."""
-    delimiters = {
-        'comma': 'val1,val2,val3',
-        'semicolon': 'val1;val2;val3',
-        'pipe': 'val1|val2|val3',
-        'colon': 'val1:val2:val3',
-        'space': 'val1 val2 val3',
-        'tab': 'val1\tval2\tval3'
-    }
+    args_file = temp_dir / f'args_{delim_name}.txt'
+    args_file.write_text(f'{line_content}\n')
 
-    for delim_name, line_content in delimiters.items():
-        args_file = temp_dir / f'args_{delim_name}.txt'
-        args_file.write_text(f'{line_content}\n')
-
-        result = subprocess.run(
-            [sys.executable, str(PARALLELR_BIN),
-             '-T', str(sample_task_file),
-             '-A', str(args_file),
-             '-S', delim_name,
-             '-C', 'bash @TASK@ @ARG_1@ @ARG_2@ @ARG_3@'],
-            stdout=subprocess.PIPE,
+    result = subprocess.run(
+        [sys.executable, str(PARALLELR_BIN),
+         '-T', str(sample_task_file),
+         '-A', str(args_file),
+         '-S', delim_name,
+         '-C', 'bash @TASK@ @ARG_1@ @ARG_2@ @ARG_3@'],
+        stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
         universal_newlines=True,
-            timeout=10
-        )
+        env=isolated_env['env'],
+        timeout=10
+    )
 
-        assert result.returncode == 0, f"Failed for delimiter: {delim_name}"
-        assert 'Created 1 tasks' in result.stdout or 'Created 1 task' in result.stdout
+    assert result.returncode == 0, f"Failed for delimiter: {delim_name}"
+    assert 'Created 1 tasks' in result.stdout or 'Created 1 task' in result.stdout
 
 
 @pytest.mark.integration
-def test_arguments_mode_indexed_placeholders(sample_task_file, temp_dir):
+def test_arguments_mode_indexed_placeholders(sample_task_file, temp_dir, isolated_env):
     """Test indexed placeholder replacement."""
     args_file = temp_dir / 'indexed_args.txt'
     args_file.write_text('host1,8080,prod\n')
@@ -102,6 +133,7 @@ def test_arguments_mode_indexed_placeholders(sample_task_file, temp_dir):
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
         universal_newlines=True,
+        env=isolated_env['env'],
         timeout=10
     )
 
@@ -113,7 +145,7 @@ def test_arguments_mode_indexed_placeholders(sample_task_file, temp_dir):
 
 
 @pytest.mark.integration
-def test_arguments_mode_env_var_mapping(sample_task_file, sample_multi_args_file):
+def test_arguments_mode_env_var_mapping(sample_task_file, sample_multi_args_file, isolated_env):
     """Test environment variable mapping to arguments."""
     result = subprocess.run(
         [sys.executable, str(PARALLELR_BIN),
@@ -125,6 +157,7 @@ def test_arguments_mode_env_var_mapping(sample_task_file, sample_multi_args_file
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
         universal_newlines=True,
+        env=isolated_env['env'],
         timeout=10
     )
 
@@ -136,7 +169,7 @@ def test_arguments_mode_env_var_mapping(sample_task_file, sample_multi_args_file
 
 
 @pytest.mark.integration
-def test_arguments_mode_inconsistent_args_validation(sample_task_file, temp_dir):
+def test_arguments_mode_inconsistent_args_validation(sample_task_file, temp_dir, isolated_env):
     """Test validation of inconsistent argument counts."""
     args_file = temp_dir / 'inconsistent.txt'
     args_file.write_text('val1,val2,val3\nval1,val2\nval1,val2,val3\n')
@@ -150,6 +183,7 @@ def test_arguments_mode_inconsistent_args_validation(sample_task_file, temp_dir)
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
         universal_newlines=True,
+        env=isolated_env['env'],
         timeout=10
     )
 
@@ -159,7 +193,7 @@ def test_arguments_mode_inconsistent_args_validation(sample_task_file, temp_dir)
 
 
 @pytest.mark.integration
-def test_arguments_mode_invalid_placeholder_validation(sample_task_file, temp_dir):
+def test_arguments_mode_invalid_placeholder_validation(sample_task_file, temp_dir, isolated_env):
     """Test validation of invalid placeholder indexes."""
     args_file = temp_dir / 'two_args.txt'
     args_file.write_text('val1,val2\n')
@@ -173,6 +207,7 @@ def test_arguments_mode_invalid_placeholder_validation(sample_task_file, temp_di
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
         universal_newlines=True,
+        env=isolated_env['env'],
         timeout=10
     )
 
@@ -182,7 +217,7 @@ def test_arguments_mode_invalid_placeholder_validation(sample_task_file, temp_di
 
 
 @pytest.mark.integration
-def test_arguments_mode_separator_without_args_file(sample_task_file):
+def test_arguments_mode_separator_without_args_file(sample_task_file, isolated_env):
     """Test that separator requires arguments file."""
     result = subprocess.run(
         [sys.executable, str(PARALLELR_BIN),
@@ -192,6 +227,7 @@ def test_arguments_mode_separator_without_args_file(sample_task_file):
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
         universal_newlines=True,
+        env=isolated_env['env'],
         timeout=10
     )
 
@@ -201,7 +237,7 @@ def test_arguments_mode_separator_without_args_file(sample_task_file):
 
 
 @pytest.mark.integration
-def test_arguments_mode_empty_env_var_validation(sample_task_file, sample_arguments_file):
+def test_arguments_mode_empty_env_var_validation(sample_task_file, sample_arguments_file, isolated_env):
     """Test validation of empty environment variable names."""
     result = subprocess.run(
         [sys.executable, str(PARALLELR_BIN),
@@ -212,6 +248,7 @@ def test_arguments_mode_empty_env_var_validation(sample_task_file, sample_argume
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
         universal_newlines=True,
+        env=isolated_env['env'],
         timeout=10
     )
 
@@ -221,7 +258,7 @@ def test_arguments_mode_empty_env_var_validation(sample_task_file, sample_argume
 
 
 @pytest.mark.integration
-def test_arguments_mode_more_env_vars_than_args(sample_task_file, sample_arguments_file):
+def test_arguments_mode_more_env_vars_than_args(sample_task_file, sample_arguments_file, isolated_env):
     """Test error when more env vars than arguments."""
     result = subprocess.run(
         [sys.executable, str(PARALLELR_BIN),
@@ -232,6 +269,7 @@ def test_arguments_mode_more_env_vars_than_args(sample_task_file, sample_argumen
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
         universal_newlines=True,
+        env=isolated_env['env'],
         timeout=10
     )
 
@@ -241,7 +279,7 @@ def test_arguments_mode_more_env_vars_than_args(sample_task_file, sample_argumen
 
 
 @pytest.mark.integration
-def test_arguments_mode_fewer_env_vars_than_args(sample_task_file, sample_multi_args_file):
+def test_arguments_mode_fewer_env_vars_than_args(sample_task_file, sample_multi_args_file, isolated_env):
     """Test warning when fewer env vars than arguments."""
     result = subprocess.run(
         [sys.executable, str(PARALLELR_BIN),
@@ -254,6 +292,7 @@ def test_arguments_mode_fewer_env_vars_than_args(sample_task_file, sample_multi_
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
         universal_newlines=True,
+        env=isolated_env['env'],
         timeout=30
     )
 
@@ -263,7 +302,7 @@ def test_arguments_mode_fewer_env_vars_than_args(sample_task_file, sample_multi_
 
 
 @pytest.mark.integration
-def test_arguments_mode_backward_compatibility(sample_task_file, sample_arguments_file):
+def test_arguments_mode_backward_compatibility(sample_task_file, sample_arguments_file, isolated_env):
     """Test backward compatibility with single arguments (no separator)."""
     result = subprocess.run(
         [sys.executable, str(PARALLELR_BIN),
@@ -274,13 +313,10 @@ def test_arguments_mode_backward_compatibility(sample_task_file, sample_argument
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
         universal_newlines=True,
+        env=isolated_env['env'],
         timeout=30
     )
 
     assert result.returncode == 0
     # Should work with @ARG@ placeholder
     assert 'Created 3 tasks' in result.stdout
-
-
-if __name__ == "__main__":
-    pytest.main([__file__, "-v"])
