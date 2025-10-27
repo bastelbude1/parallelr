@@ -136,7 +136,6 @@ class TestPlaceholderValidation:
     def test_placeholder_validation_no_placeholders(self):
         """Test validation passes when no indexed placeholders."""
         command_template = "bash @TASK@"
-        num_args = 5
 
         import re
         matches = re.findall(r'@ARG_(\d+)@', command_template)
@@ -168,7 +167,6 @@ class TestSeparatorValidation:
     def test_no_separator_without_arguments_file_valid(self):
         """Test that no separator without arguments file is valid."""
         has_separator = False
-        has_arguments_file = False
 
         # This should be valid (file mode)
         assert not has_separator
