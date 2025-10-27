@@ -32,7 +32,7 @@ def test_sigint_graceful_shutdown(temp_dir):
          '-r'],
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
-        text=True
+        universal_newlines=True
     )
 
     # Give it time to start
@@ -70,7 +70,7 @@ def test_sigterm_graceful_shutdown(temp_dir):
          '-r'],
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
-        text=True
+        universal_newlines=True
     )
 
     # Give it time to start
@@ -158,7 +158,7 @@ def test_multiple_interrupts_force_exit(temp_dir):
          '-r'],
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
-        text=True
+        universal_newlines=True
     )
 
     time.sleep(2)
@@ -199,7 +199,7 @@ def test_task_cancellation_on_interrupt(temp_dir):
          '-r', '-m', '2'],
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
-        text=True
+        universal_newlines=True
     )
 
     time.sleep(3)
@@ -237,7 +237,7 @@ def test_cleanup_on_forced_exit(temp_dir):
          '-r'],
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
-        text=True
+        universal_newlines=True
     )
 
     time.sleep(2)
@@ -268,7 +268,7 @@ def test_signal_handler_registration(sample_task_dir):
          '-r'],
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
-        text=True
+        universal_newlines=True
     )
 
     time.sleep(2)
