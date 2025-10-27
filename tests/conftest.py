@@ -139,12 +139,12 @@ def cleanup_daemon_processes():
     # Teardown phase - runs after test (even if test fails)
     try:
         # Kill all daemon processes with automatic 'yes' confirmation
-        result = subprocess.run(
+        subprocess.run(
             [sys.executable, str(PARALLELR_BIN), '-k'],
             input='yes\n',
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
-            universal_newlines=True,
+            encoding='utf-8',
             timeout=10
         )
         # Silence is golden - we don't care if there were no processes to kill
@@ -153,18 +153,19 @@ def cleanup_daemon_processes():
         pid_file = Path.home() / 'parallelr' / 'pids' / 'parallelr.pids'
         if pid_file.exists():
             try:
-                pids = pid_file.read_text().strip().split('\n')
+                pids = pid_file.read_text(encoding='utf-8').strip().split('\n')
                 for pid in pids:
                     if pid:
                         try:
                             os.kill(int(pid), 9)  # SIGKILL
                         except (ProcessLookupError, ValueError):
                             pass  # Process already dead or invalid PID
-            except Exception:
-                pass  # Best effort cleanup
-    except Exception:
-        # Best effort cleanup - don't fail tests due to cleanup issues
-        pass
+            except Exception as exc:
+                # Best effort cleanup - don't fail but make visible
+                sys.stderr.write(f"[cleanup] PID file cleanup error: {exc}\n")
+    except Exception as exc:
+        # Best effort cleanup - don't fail tests but make errors visible
+        sys.stderr.write(f"[cleanup] daemon kill error: {exc}\n")
 
 
 # Test markers
