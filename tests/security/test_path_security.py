@@ -195,6 +195,8 @@ def test_workspace_path_boundaries(temp_dir):
 @pytest.mark.security
 def test_task_file_size_limit(temp_dir):
     """Test that excessively large task files are rejected."""
+    import os
+
     # Create a large task file (>1MB)
     large_task = temp_dir / 'large_task.sh'
 
@@ -205,18 +207,60 @@ def test_task_file_size_limit(temp_dir):
             f.write(f'# Comment line {i}\n')
         f.write('echo "test"\n')
 
+    # Verify file is actually > 1MB
+    file_size = os.path.getsize(large_task)
+    assert file_size > 1024 * 1024, f"Test file should be >1MB, got {file_size} bytes"
+
     result = subprocess.run(
         [sys.executable, str(PARALLELR_BIN),
          '-T', str(large_task),
-         '-C', 'bash @TASK@'],
+         '-C', 'bash @TASK@',
+         '-r'],  # Enable execution to trigger file size validation
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
         universal_newlines=True,
-        timeout=10
+        timeout=30
     )
 
-    # May reject large files or process them
-    # Tool has max_task_file_size validation
+    # Tool should reject files exceeding max_task_file_size (default 1MB)
+    assert result.returncode != 0, (
+        f"Expected tool to reject large file, got returncode {result.returncode}\n"
+        f"File size: {file_size} bytes ({file_size / (1024*1024):.2f} MB)\n"
+        f"stdout: {result.stdout}\n"
+        f"stderr: {result.stderr}"
+    )
+
+    # Error message should mention file size limit
+    output = result.stdout + result.stderr
+    size_limit_indicators = [
+        'max_task_file_size',
+        'file too large',
+        'exceeds',
+        'size limit',
+        'too big',
+        '1048576',  # 1MB in bytes
+        '1 MB',
+        '1MB'
+    ]
+
+    found_indicator = any(indicator.lower() in output.lower() for indicator in size_limit_indicators)
+    assert found_indicator, (
+        f"Expected error message about file size limit, but didn't find indicators.\n"
+        f"Looking for any of: {size_limit_indicators}\n"
+        f"stdout: {result.stdout}\n"
+        f"stderr: {result.stderr}"
+    )
+
+    # Task should NOT have been executed successfully
+    # Check that the task was marked as failed, not completed
+    assert 'Completed Successfully: 0' in result.stdout, (
+        f"Task should not have completed successfully.\n"
+        f"stdout: {result.stdout}"
+    )
+    assert 'Failed: 1' in result.stdout, (
+        f"Task should be marked as failed.\n"
+        f"stdout: {result.stdout}"
+    )
 
 
 @pytest.mark.security
