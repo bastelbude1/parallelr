@@ -18,6 +18,7 @@ class TestEnvironmentVariableValidation:
 
     def test_valid_env_var_simple(self):
         """Test validation of simple environment variable names."""
+        import pytest
         # This tests the validation logic inline in the script
         # We'll test it via the actual argument parsing if possible
         valid_names = ["VAR", "VAR1", "VAR_NAME", "VAR_1_NAME", "_VAR"]
@@ -26,10 +27,11 @@ class TestEnvironmentVariableValidation:
             # Valid names should have: alphanumeric + underscore, not start with digit
             assert name.replace('_', '').isalnum() or name.startswith('_')
             if name and name[0].isdigit():
-                assert False, f"{name} should not start with digit"
+                pytest.fail(f"{name} should not start with digit")
 
     def test_invalid_env_var_starts_with_digit(self):
         """Test validation rejects env vars starting with digit."""
+        import pytest
         invalid_names = ["1VAR", "2TEST", "9_VAR"]
 
         for name in invalid_names:
@@ -37,7 +39,7 @@ class TestEnvironmentVariableValidation:
             if name and name[0].isdigit():
                 assert True  # Expected to be invalid
             else:
-                assert False, f"{name} should be invalid"
+                pytest.fail(f"{name} should be invalid")
 
     def test_invalid_env_var_special_chars(self):
         """Test validation rejects env vars with special characters."""

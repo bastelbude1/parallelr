@@ -114,6 +114,7 @@ def test_configuration_error_inheritance():
 
 def test_exception_catching_hierarchy():
     """Test that exceptions can be caught at different levels."""
+    import pytest
     from parallelr import (
         UnmatchedPlaceholderError,
         SecurityError,
@@ -126,7 +127,7 @@ def test_exception_catching_hierarchy():
     except SecurityError:
         pass  # Expected
     except Exception:
-        assert False, "Should have been caught as SecurityError"
+        pytest.fail("Should have been caught as SecurityError")
 
     # Should be catchable as ParallelTaskExecutorError
     try:
@@ -134,7 +135,7 @@ def test_exception_catching_hierarchy():
     except ParallelTaskExecutorError:
         pass  # Expected
     except Exception:
-        assert False, "Should have been caught as ParallelTaskExecutorError"
+        pytest.fail("Should have been caught as ParallelTaskExecutorError")
 
     # Should be catchable as Exception
     try:
