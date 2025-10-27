@@ -18,12 +18,15 @@ PARALLELR_BIN = PROJECT_ROOT / 'bin' / 'parallelr.py'
 def test_shell_injection_in_task_path(temp_dir):
     """Test that shell injection in task path is prevented."""
     # Try to inject shell commands via task path
-    malicious_path = str(temp_dir / 'task.sh; rm -rf /tmp/test_injection')
+    # Use deterministic sentinel in temp_dir to verify injection prevention
+    sentinel = temp_dir / 'injection_path_sentinel.txt'
+    malicious_path = str(temp_dir / f'task.sh; touch {sentinel}')
 
     result = subprocess.run(
         [sys.executable, str(PARALLELR_BIN),
          '-T', malicious_path,
-         '-C', 'bash @TASK@'],
+         '-C', 'bash @TASK@',
+         '-r'],
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
         universal_newlines=True,
@@ -32,8 +35,8 @@ def test_shell_injection_in_task_path(temp_dir):
 
     # Should fail safely (file doesn't exist)
     assert result.returncode != 0
-    # Should not execute the injected command
-    assert not Path('/tmp/test_injection_happened').exists()
+    # Should not execute the injected command (sentinel should not exist)
+    assert not sentinel.exists()
 
 
 @pytest.mark.security
