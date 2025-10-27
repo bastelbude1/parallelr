@@ -7,7 +7,6 @@ Tests shared and isolated workspace modes.
 import subprocess
 import sys
 import os
-import shutil
 from pathlib import Path
 import pytest
 
@@ -332,7 +331,3 @@ def test_workspace_no_task_output_log_flag(sample_task_dir, isolated_workspace):
 
     # Count should be the same (no new output file created)
     assert count_after == count_before
-
-
-if __name__ == "__main__":
-    pytest.main([__file__, "-v"])
