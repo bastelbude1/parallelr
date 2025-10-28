@@ -3,6 +3,16 @@ Unit tests for input validation functions.
 
 Tests environment variable validation, argument validation,
 placeholder validation, and other input validators.
+
+NOTE: These tests currently validate the SPECIFICATION (rules) rather than
+the IMPLEMENTATION. This is valuable as documentation but carries drift risk.
+
+IMPROVEMENT OPPORTUNITY: Consider refactoring validators in bin/parallelr.py
+into importable functions that can be directly tested here. This would ensure
+tests and implementation stay in sync.
+
+Alternative: Convert to integration tests that invoke parallelr with various
+inputs and verify the exit codes/error messages.
 """
 
 import sys
