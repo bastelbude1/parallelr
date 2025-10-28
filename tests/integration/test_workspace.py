@@ -7,15 +7,14 @@ Tests shared and isolated workspace modes.
 import subprocess
 import os
 import uuid
-import shutil
 from pathlib import Path
 import pytest
 
 from conftest import PARALLELR_BIN, PYTHON_FOR_PARALLELR
 
-# Skip all tests if bash is not available (POSIX dependency)
-pytestmark = pytest.mark.skipif(shutil.which("bash") is None,
-                                reason="Requires bash (POSIX)")
+# Skip all tests if not on POSIX (bash/workspace tests)
+pytestmark = pytest.mark.skipif(os.name != "posix",
+                                reason="Bash/Workspace only tested on POSIX")
 
 # Early abort if parallelr.py is missing
 if not PARALLELR_BIN.exists():
