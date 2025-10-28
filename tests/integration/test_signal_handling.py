@@ -136,16 +136,13 @@ def test_sigterm_graceful_shutdown(temp_dir, isolated_env):
     # Send SIGTERM
     proc.send_signal(signal.SIGTERM)
 
-    # Wait for graceful shutdown
-    try:
-        stdout, stderr = proc.communicate(timeout=10)
-        # Should have exited
-        assert proc.returncode is not None
-        output = stdout + stderr
-        assert 'shutdown' in output.lower() or 'terminated' in output.lower() or 'cancelled' in output.lower()
-    except subprocess.TimeoutExpired:
-        proc.kill()
-        pytest.fail("Process did not shut down gracefully after SIGTERM")
+    # Wait for graceful shutdown with robust termination
+    stdout, stderr = terminate_process_gracefully(proc, timeout=10)
+
+    # Should have exited
+    assert proc.returncode is not None
+    output = stdout + stderr
+    assert 'shutdown' in output.lower() or 'terminated' in output.lower() or 'cancelled' in output.lower()
 
 
 @pytest.mark.integration
@@ -239,13 +236,9 @@ def test_multiple_interrupts_force_exit(temp_dir, isolated_env):
     # Send second SIGINT (should force exit)
     proc.send_signal(signal.SIGINT)
 
-    # Should exit quickly
-    try:
-        proc.communicate(timeout=5)
-        assert proc.returncode is not None
-    except subprocess.TimeoutExpired:
-        proc.kill()
-        pytest.fail("Process did not exit after multiple SIGINTs")
+    # Should exit quickly with robust termination
+    stdout, stderr = terminate_process_gracefully(proc, timeout=5)
+    assert proc.returncode is not None
 
 
 @pytest.mark.integration
@@ -277,16 +270,12 @@ def test_task_cancellation_on_interrupt(temp_dir, isolated_env):
     # Send SIGINT
     proc.send_signal(signal.SIGINT)
 
-    # Wait for shutdown
-    try:
-        stdout, stderr = proc.communicate(timeout=10)
-        output = stdout + stderr
+    # Wait for shutdown with robust termination
+    stdout, stderr = terminate_process_gracefully(proc, timeout=10)
+    output = stdout + stderr
 
-        # Should show shutdown/cancelled tasks
-        assert ('cancel' in output.lower() or 'interrupt' in output.lower() or 'shutdown' in output.lower())
-    except subprocess.TimeoutExpired:
-        proc.kill()
-        pytest.fail("Process did not shut down after SIGINT")
+    # Should show shutdown/cancelled tasks
+    assert ('cancel' in output.lower() or 'interrupt' in output.lower() or 'shutdown' in output.lower())
 
 
 @pytest.mark.integration
@@ -316,16 +305,13 @@ def test_cleanup_on_forced_exit(temp_dir, isolated_env):
     # Send SIGINT
     proc.send_signal(signal.SIGINT)
 
-    try:
-        proc.communicate(timeout=10)
+    # Wait for shutdown with robust termination
+    stdout, stderr = terminate_process_gracefully(proc, timeout=10)
 
-        # Log files should still be written
-        assert log_dir.exists()
-        log_files = list(log_dir.glob('parallelr_*.log'))
-        assert len(log_files) > 0
-
-    except subprocess.TimeoutExpired:
-        proc.kill()
+    # Log files should still be written
+    assert log_dir.exists()
+    log_files = list(log_dir.glob('parallelr_*.log'))
+    assert len(log_files) > 0
 
 
 @pytest.mark.integration
@@ -351,10 +337,6 @@ def test_signal_handler_registration(sample_task_dir, isolated_env):
     # Send SIGTERM
     proc.send_signal(signal.SIGTERM)
 
-    # Should respond to signal
-    try:
-        proc.communicate(timeout=10)
-        assert proc.returncode is not None
-    except subprocess.TimeoutExpired:
-        proc.kill()
-        pytest.fail("Signal handler not working")
+    # Should respond to signal with robust termination
+    stdout, stderr = terminate_process_gracefully(proc, timeout=10)
+    assert proc.returncode is not None
