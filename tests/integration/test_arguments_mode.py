@@ -25,28 +25,22 @@ def isolated_env(tmp_path):
     """
     Provide isolated environment for argument tests.
 
-    Sets HOME to temp directory to avoid polluting local environment.
+    Creates a subprocess-only environment without mutating global os.environ.
+    Safe for parallel test execution.
     """
     temp_home = tmp_path / 'home'
     temp_home.mkdir()
 
-    # Store original HOME
-    original_home = os.environ.get('HOME')
+    # Create isolated environment copy for subprocess use only
+    # No global os.environ mutation - safe for parallel tests
+    env_copy = {**os.environ, 'HOME': str(temp_home)}
 
-    try:
-        # Set HOME to temp directory
-        os.environ['HOME'] = str(temp_home)
+    yield {
+        'home': temp_home,
+        'env': env_copy
+    }
 
-        yield {
-            'home': temp_home,
-            'env': {**os.environ, 'HOME': str(temp_home)}
-        }
-    finally:
-        # Restore original HOME
-        if original_home:
-            os.environ['HOME'] = original_home
-        else:
-            os.environ.pop('HOME', None)
+    # Cleanup is automatic via tmp_path fixture
 
 
 @pytest.mark.integration
