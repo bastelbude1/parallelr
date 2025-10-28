@@ -13,32 +13,17 @@ concurrency:
 
 jobs:
   test:
-    name: Run Tests (Python 3.9 test suite, Python 3.6.8 for parallelr)
-    runs-on: ubuntu-22.04
+    name: Run Tests (Python 3.9)
+    runs-on: ubuntu-latest
 
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
 
-    - name: Set up Python 3.9 for test suite
+    - name: Set up Python 3.9
       uses: actions/setup-python@v5
       with:
         python-version: '3.9'
-
-    - name: Install Python 3.6.8 for parallelr execution
-      run: |
-        sudo add-apt-repository ppa:deadsnakes/ppa -y
-        sudo apt-get update
-        sudo apt-get install -y python3.6 python3.6-distutils
-        curl -sS https://bootstrap.pypa.io/pip/3.6/get-pip.py | sudo python3.6
-        sudo python3.6 -m pip install pip==21.3.1 setuptools==58.0.4 wheel==0.36.2
-
-    - name: Verify Python installations
-      run: |
-        echo "Test suite Python version:"
-        python --version
-        echo "Parallelr Python version:"
-        python3.6 --version
 
     - name: Install test dependencies
       run: |
@@ -70,7 +55,7 @@ jobs:
 
   lint:
     name: Lint Code (Python 3.9)
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-latest
 
     steps:
     - name: Checkout code
@@ -95,25 +80,17 @@ jobs:
         flake8 bin/parallelr.py --max-line-length=120 --ignore=E501,W503 || true
 
   test-legacy:
-    name: Run Legacy Bash Tests (Python 3.6.8 for parallelr)
-    runs-on: ubuntu-22.04
+    name: Run Legacy Bash Tests (Python 3.9)
+    runs-on: ubuntu-latest
 
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
 
-    - name: Set up Python 3.9 for test environment
+    - name: Set up Python 3.9
       uses: actions/setup-python@v5
       with:
         python-version: '3.9'
-
-    - name: Install Python 3.6.8 for parallelr execution
-      run: |
-        sudo add-apt-repository ppa:deadsnakes/ppa -y
-        sudo apt-get update
-        sudo apt-get install -y python3.6 python3.6-distutils
-        curl -sS https://bootstrap.pypa.io/pip/3.6/get-pip.py | sudo python3.6
-        sudo python3.6 -m pip install pip==21.3.1 setuptools==58.0.4 wheel==0.36.2
 
     - name: Install dependencies
       run: |
