@@ -436,7 +436,7 @@ def test_newline_injection_in_arguments(temp_dir):
     )
 
     # Two lines in args file should create two tasks - verify by counting output lines
-    lines = [l for l in result.stdout.splitlines() if l.strip()]
+    lines = [line for line in result.stdout.splitlines() if line.strip()]
     assert len(lines) >= 2, (
         f"Erwarte mindestens zwei Ausgaben fuer zwei Argumentzeilen\n"
         f"Got {len(lines)} lines in output:\n{result.stdout}"
