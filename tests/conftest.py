@@ -38,11 +38,14 @@ def get_python_for_parallelr():
     try:
         result = subprocess.run(
             ['python', '--version'],
-            capture_output=True,
-            text=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            universal_newlines=True,
             timeout=5
         )
-        if result.returncode == 0 and 'Python 3.6' in result.stdout:
+        # Check both stdout and stderr as --version output location varies
+        output = result.stdout + result.stderr
+        if result.returncode == 0 and 'Python 3.6' in output:
             return 'python'
     except (FileNotFoundError, subprocess.TimeoutExpired):
         pass
@@ -51,8 +54,9 @@ def get_python_for_parallelr():
     try:
         result = subprocess.run(
             ['python3.6', '--version'],
-            capture_output=True,
-            text=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            universal_newlines=True,
             timeout=5
         )
         if result.returncode == 0:
