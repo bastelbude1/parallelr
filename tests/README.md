@@ -26,8 +26,8 @@ This test suite provides comprehensive coverage of parallelr functionality inclu
 ### Install Test Dependencies
 
 ```bash
-# Verify Python version first
-python -V  # Must show Python 3.6.8 or higher
+# Verify Python version (must be exactly Python 3.6.8 for local testing)
+python -V  # Must show Python 3.6.8
 
 # From repository root
 pip install -r tests/requirements-test.txt
