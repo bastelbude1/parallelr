@@ -22,7 +22,7 @@ def get_python_for_parallelr():
 
     parallelr requires Python 3.6.8. This function detects the appropriate
     interpreter:
-    - In CI (GitHub Actions): use python3.6 explicitly
+    - In CI (GitHub Actions): use current interpreter (Python 3.9+)
     - On user's server: use 'python' (which is 3.6.8) not 'python3' (which is 3.13+)
     - Otherwise: fall back to current interpreter
 
@@ -31,8 +31,8 @@ def get_python_for_parallelr():
     """
     # Check if we're in CI environment
     if os.environ.get('CI') or os.environ.get('GITHUB_ACTIONS'):
-        # In CI, we explicitly install python3.6
-        return 'python3.6'
+        # In CI, use the current interpreter (Python 3.9+)
+        return sys.executable
 
     # Check if 'python' is Python 3.6.x (user's server setup)
     try:
