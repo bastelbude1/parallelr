@@ -5,19 +5,13 @@ Tests background daemon execution, PID management, and process control.
 """
 
 import subprocess
-import sys
 import time
-from pathlib import Path
-import pytest
-\n# Import from conftest
-import sys
-sys.path.insert(0, str(Path(__file__).parent.parent))
-from conftest import PARALLELR_BIN, PYTHON_FOR_PARALLELR
 import signal
 import os
+from pathlib import Path
+import pytest
 
-PROJECT_ROOT = Path(__file__).parent.parent.parent
-PARALLELR_BIN = PROJECT_ROOT / 'bin' / 'parallelr.py'
+# PARALLELR_BIN and PYTHON_FOR_PARALLELR are automatically available from conftest.py
 
 # Skip all daemon tests on non-POSIX platforms (daemon/signal handling is POSIX-specific)
 pytestmark = pytest.mark.skipif(os.name != "posix",
