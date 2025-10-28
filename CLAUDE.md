@@ -17,12 +17,12 @@ This project uses **different Python versions for local vs CI testing**:
 | Environment | Python Version | Purpose | When to Use |
 |------------|----------------|---------|-------------|
 | **Local Development** | **3.6.8 ONLY** | Verify production compatibility | **ALWAYS** - Test with exact production version before committing |
-| **GitHub CI/CD** | **3.9+** | Modern tooling (pytest 8.x, linters, coverage) | **Automatic** - Runs on every push |
+| **GitHub CI/CD** | **3.9+** | Modern tooling (pytest 7.x, linters, coverage) | **Automatic** - Runs on every push |
 
 **Why this dual approach?**
 
 1. **Production Requirement**: The target production environment uses Python 3.6.8 exclusively
-2. **Tool Compatibility**: Modern testing tools (pytest 8.x, coverage.py 7.x, pylint 3.x) require Python 3.9+
+2. **Tool Compatibility**: Modern testing tools (pytest 7.x, pytest-cov 4.x, pylint 3.x) require Python 3.8+, while CI runs on 3.9+
 3. **Safety**: Testing on both ensures code works on 3.6.8 while leveraging modern tooling
 4. **Same Test Suite**: Both environments run identical tests - only the interpreter version differs
 

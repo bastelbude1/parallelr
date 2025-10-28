@@ -1084,7 +1084,7 @@ parallelr -T ./tasks -C "bash @TASK@"
 
 ## Testing
 
-The project includes a comprehensive test suite with 113 tests covering functionality, edge cases, and security.
+The project includes a comprehensive test suite covering functionality, edge cases, and security.
 
 ### Dual Python Testing Strategy
 
@@ -1111,9 +1111,9 @@ pip install -r tests/requirements-test-py36.txt
 pytest tests/ -v
 
 # Run specific test categories
-pytest tests/unit/ -v          # Unit tests (42 tests)
-pytest tests/integration/ -v   # Integration tests (47 tests)
-pytest tests/security/ -v      # Security tests (20 tests)
+pytest tests/unit/ -v          # Unit tests
+pytest tests/integration/ -v   # Integration tests
+pytest tests/security/ -v      # Security tests
 
 # Run with coverage
 pytest tests/ --cov=bin/parallelr.py --cov-report=html
