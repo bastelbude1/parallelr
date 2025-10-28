@@ -19,38 +19,28 @@ def isolated_workspace(tmp_path):
     """
     Provide an isolated temporary workspace for testing.
 
-    Sets HOME environment variable to a temp directory so parallelr creates
-    its workspace in an isolated location. Guarantees cleanup even on failures.
+    Uses subprocess env parameter to isolate HOME without mutating global
+    os.environ. Guarantees cleanup even on failures.
     """
     # Create temporary home directory
     temp_home = tmp_path / 'home'
     temp_home.mkdir()
 
-    # Store original HOME
-    original_home = os.environ.get('HOME')
+    # Calculate workspace paths
+    workspace_dir = temp_home / 'parallelr' / 'workspace'
+    log_dir = temp_home / 'parallelr' / 'logs'
 
-    try:
-        # Set HOME to temp directory
-        os.environ['HOME'] = str(temp_home)
+    # Create isolated environment for subprocess (no global mutation)
+    isolated_env = {**os.environ, 'HOME': str(temp_home)}
 
-        # Calculate workspace paths
-        workspace_dir = temp_home / 'parallelr' / 'workspace'
-        log_dir = temp_home / 'parallelr' / 'logs'
+    yield {
+        'home': temp_home,
+        'workspace': workspace_dir,
+        'logs': log_dir,
+        'env': isolated_env
+    }
 
-        yield {
-            'home': temp_home,
-            'workspace': workspace_dir,
-            'logs': log_dir,
-            'env': {'HOME': str(temp_home)}
-        }
-    finally:
-        # Restore original HOME
-        if original_home:
-            os.environ['HOME'] = original_home
-        else:
-            os.environ.pop('HOME', None)
-
-        # Cleanup is automatic via tmp_path fixture
+    # Cleanup is automatic via tmp_path fixture
 
 
 @pytest.mark.integration
