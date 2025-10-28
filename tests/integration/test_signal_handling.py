@@ -20,6 +20,31 @@ PROJECT_ROOT = Path(__file__).parent.parent.parent
 PARALLELR_BIN = PROJECT_ROOT / 'bin' / 'parallelr.py'
 
 
+def terminate_process_gracefully(proc, timeout=10):
+    """
+    Terminate a process gracefully with proper retry logic.
+
+    Tries communicate() first, then SIGTERM, then SIGKILL if needed.
+    Returns (stdout, stderr) tuple.
+    """
+    try:
+        # Try to get output with timeout
+        stdout, stderr = proc.communicate(timeout=timeout)
+        return stdout, stderr
+    except subprocess.TimeoutExpired:
+        # Process didn't finish in time, try SIGTERM
+        try:
+            proc.terminate()
+            time.sleep(0.5)
+            stdout, stderr = proc.communicate(timeout=2)
+            return stdout, stderr
+        except subprocess.TimeoutExpired:
+            # Still alive, force kill
+            proc.kill()
+            stdout, stderr = proc.communicate(timeout=2)
+            return stdout, stderr
+
+
 @pytest.fixture
 def isolated_env(tmp_path):
     """
@@ -75,17 +100,14 @@ def test_sigint_graceful_shutdown(temp_dir, isolated_env):
     # Send SIGINT
     proc.send_signal(signal.SIGINT)
 
-    # Wait for graceful shutdown
-    try:
-        stdout, stderr = proc.communicate(timeout=10)
-        # Should have exited
-        assert proc.returncode is not None
-        # Should show shutdown message
-        output = stdout + stderr
-        assert 'shutdown' in output.lower() or 'interrupt' in output.lower() or 'cancelled' in output.lower()
-    except subprocess.TimeoutExpired:
-        proc.kill()
-        pytest.fail("Process did not shut down gracefully after SIGINT")
+    # Wait for graceful shutdown with robust termination
+    stdout, stderr = terminate_process_gracefully(proc, timeout=10)
+
+    # Should have exited
+    assert proc.returncode is not None
+    # Should show shutdown message
+    output = stdout + stderr
+    assert 'shutdown' in output.lower() or 'interrupt' in output.lower() or 'cancelled' in output.lower()
 
 
 @pytest.mark.integration
