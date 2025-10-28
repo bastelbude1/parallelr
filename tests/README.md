@@ -66,19 +66,19 @@ GENERATE_COVERAGE=1 bash tests/run_all_tests.sh
 
 ```
 tests/
-├── unit/                    # Unit tests (42 tests) ✅
-│   ├── test_placeholders.py    # Placeholder replacement logic (17 tests)
-│   ├── test_validators.py      # Input validation functions (16 tests)
-│   └── test_exceptions.py      # Exception classes (9 tests)
-├── integration/             # Integration tests (47 tests) ✅
-│   ├── test_file_mode.py       # File mode execution (11 tests)
-│   ├── test_arguments_mode.py  # Arguments mode (12 tests)
-│   ├── test_daemon_mode.py     # Daemon execution (8 tests)
-│   ├── test_workspace.py       # Workspace management (10 tests)
-│   └── test_signal_handling.py # Signal handling (7 tests)
-├── security/                # Security tests (20 tests) ✅
-│   ├── test_injection.py       # Injection prevention (10 tests)
-│   └── test_path_security.py   # Path security (10 tests)
+├── unit/                    # Unit tests ✅
+│   ├── test_placeholders.py    # Placeholder replacement logic
+│   ├── test_validators.py      # Input validation functions
+│   └── test_exceptions.py      # Exception classes
+├── integration/             # Integration tests ✅
+│   ├── test_file_mode.py       # File mode execution
+│   ├── test_arguments_mode.py  # Arguments mode
+│   ├── test_daemon_mode.py     # Daemon execution
+│   ├── test_workspace.py       # Workspace management
+│   └── test_signal_handling.py # Signal handling
+├── security/                # Security tests ✅
+│   ├── test_injection.py       # Injection prevention
+│   └── test_path_security.py   # Path security
 ├── conftest.py              # Shared fixtures
 ├── requirements-test.txt    # Test dependencies
 └── run_all_tests.sh         # Master test runner
@@ -237,25 +237,14 @@ pytest tests/unit/test_example.py -s  # Don't capture stdout
 
 ## 📈 Current Coverage Status
 
-### Unit Tests: 100% Complete ✅
-- ✅ test_placeholders.py (15 tests)
-- ✅ test_validators.py (18 tests)
-- ✅ test_exceptions.py (9 tests)
+The test suite provides comprehensive coverage across all major functionality areas:
 
-### Integration Tests: 100% Complete ✅
-- ✅ test_file_mode.py (10 tests)
-- ✅ test_arguments_mode.py (12 tests)
-- ✅ test_daemon_mode.py (8 tests)
-- ✅ test_workspace.py (10 tests)
-- ✅ test_signal_handling.py (7 tests)
+### Test Categories
+- ✅ **Unit Tests**: Complete - Placeholder logic, validators, exception handling
+- ✅ **Integration Tests**: Complete - File mode, arguments mode, daemon mode, workspace, signals
+- ✅ **Security Tests**: Complete - Injection prevention, path validation, resource limits
 
-### Security Tests: 100% Complete ✅
-- ✅ test_injection.py (10 tests)
-- ✅ test_path_security.py (9 tests)
-
-**Total: 108 tests - All passing ✅**
-
-**Goal Achievement**: 108/108 tests (100%) - Target met!
+Run `pytest --collect-only` to see the current total test count.
 
 ## 🚦 CI/CD Integration
 
