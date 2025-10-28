@@ -23,28 +23,21 @@ def isolated_env(tmp_path):
     """
     Provide isolated environment for file mode tests.
 
-    Sets HOME to temp directory to avoid polluting local environment.
+    Returns a dict with 'home' and 'env' keys. The 'env' dict contains
+    a copy of os.environ with HOME set to temp directory, avoiding
+    global os.environ mutation.
     """
     temp_home = tmp_path / 'home'
     temp_home.mkdir()
 
-    # Store original HOME
-    original_home = os.environ.get('HOME')
+    # Create isolated environment dict without mutating global os.environ
+    env = os.environ.copy()
+    env['HOME'] = str(temp_home)
 
-    try:
-        # Set HOME to temp directory
-        os.environ['HOME'] = str(temp_home)
-
-        yield {
-            'home': temp_home,
-            'env': {**os.environ, 'HOME': str(temp_home)}
-        }
-    finally:
-        # Restore original HOME
-        if original_home:
-            os.environ['HOME'] = original_home
-        else:
-            os.environ.pop('HOME', None)
+    yield {
+        'home': temp_home,
+        'env': env
+    }
 
 
 @pytest.mark.integration
