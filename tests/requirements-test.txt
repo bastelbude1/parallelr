@@ -1,8 +1,8 @@
-# Test Dependencies for parallelr Test Suite (Python 3.11+)
+# Test Dependencies for parallelr Test Suite (Python 3.9+)
 # Install with: pip install -r tests/requirements-test.txt
-# Target: Python 3.11/3.12 (for local development)
+# Target: GitHub CI/CD (Python 3.9) and local development (Python 3.11+)
 #
-# NOTE: CI/CD uses requirements-test-py36.txt for Python 3.6.8 compatibility
+# NOTE: For Python 3.6.8 compatibility testing, use requirements-test-py36.txt
 
 # Core testing framework
 pytest>=7.4.0,<8.0.0               # Python 3.8+, supports 3.11/3.12
