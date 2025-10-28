@@ -120,10 +120,10 @@ def test_file_mode_glob_patterns(sample_task_dir, isolated_env):
     matches = sorted(sample_task_dir.glob('task[12].sh'))
 
     # Build command with expanded paths
-    cmd = [sys.executable, str(PARALLELR_BIN)]
+    cmd = [PYTHON_FOR_PARALLELR, str(PARALLELR_BIN)]
     for p in matches:
         cmd += ['-T', str(p)]
-    cmd += ['-r', '-C', 'bash @TASK@']
+    cmd += ['-C', 'bash @TASK@', '-r']
 
     result = subprocess.run(
         cmd,
