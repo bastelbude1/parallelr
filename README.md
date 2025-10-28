@@ -1074,7 +1074,7 @@ parallelr -T ./tasks -C "bash @TASK@"
 
 ## Testing
 
-The project includes a comprehensive test suite with 109+ tests covering functionality, edge cases, and security.
+The project includes a comprehensive test suite with 113 tests covering functionality, edge cases, and security.
 
 ### Requirements
 
