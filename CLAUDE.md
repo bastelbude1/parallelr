@@ -144,11 +144,12 @@ pytest tests/ --cov=bin/parallelr.py --cov-report=html
 - Legacy bash test suites
 
 **CI uses modern tool versions:**
-- pytest 8.x (requires Python 3.9+)
-- coverage.py 7.x (requires Python 3.9+)
-- pylint 3.x (requires Python 3.9+)
+CI runs with Python 3.9+ and uses modern testing tools for better performance and features. However, test dependencies are pinned for compatibility - see `tests/requirements-test.txt` for exact versions:
+- pytest 7.x (Python 3.8+ compatible)
+- pytest-cov 4.x for coverage reporting
+- pylint 3.x for code quality checks
 
-**IMPORTANT**: Even though CI uses Python 3.9, all code must still be 3.6.8-compatible!
+**IMPORTANT**: CI may run newer tool versions, but all production code in `bin/parallelr.py` must remain compatible with Python 3.6.8 as specified in the requirements files!
 
 ### Verification Checklist
 
