@@ -165,35 +165,37 @@ def test_sighup_ignored_in_daemon(temp_dir, isolated_env):
     assert result.returncode == 0
     time.sleep(2)
 
-    # Try to get PID from isolated environment
+    # Get PID from isolated environment (strict check)
     pid_file = isolated_env['home'] / 'parallelr' / 'pids' / 'parallelr.pids'
-    if pid_file.exists():
-        pids = pid_file.read_text().strip().split('\n')
-        if pids and pids[0]:
-            pid = int(pids[0].strip())
+    assert pid_file.exists(), "PID file not created - daemon did not start properly"
 
-            # Send SIGHUP - this should be ignored by daemon
-            try:
-                os.kill(pid, signal.SIGHUP)
-            except ProcessLookupError:
-                # Process already dead before we could send SIGHUP
-                # This is expected for fast-running tasks - daemon may have completed
-                pass
-            except PermissionError:
-                # Permission denied to send signal
-                pass
-            else:
-                # SIGHUP was sent successfully, now check if process still running
-                time.sleep(1)
-                try:
-                    os.kill(pid, 0)  # Signal 0 just checks existence
-                    # If we get here, process is still running (good!)
-                except ProcessLookupError:
-                    # Process died after SIGHUP - this is a test failure
-                    pytest.fail(f"Daemon process {pid} died after SIGHUP - daemon should ignore SIGHUP and continue running")
-                except PermissionError:
-                    # Process exists but we don't have permission (still running)
-                    pass
+    pids = [p.strip() for p in pid_file.read_text().strip().split('\n') if p.strip()]
+    assert pids, "PID file is empty - no daemon PID recorded"
+
+    pid = int(pids[0])
+
+    # Send SIGHUP - this should be ignored by daemon
+    try:
+        os.kill(pid, signal.SIGHUP)
+    except ProcessLookupError:
+        # Process already dead before we could send SIGHUP
+        # This is expected for fast-running tasks - daemon may have completed
+        pass
+    except PermissionError:
+        # Permission denied to send signal
+        pass
+    else:
+        # SIGHUP was sent successfully, now check if process still running
+        time.sleep(1)
+        try:
+            os.kill(pid, 0)  # Signal 0 just checks existence
+            # If we get here, process is still running (good!)
+        except ProcessLookupError:
+            # Process died after SIGHUP - this is a test failure
+            pytest.fail(f"Daemon process {pid} died after SIGHUP - daemon should ignore SIGHUP and continue running")
+        except PermissionError:
+            # Process exists but we don't have permission (still running)
+            pass
 
     # Cleanup
     subprocess.run([PYTHON_FOR_PARALLELR, str(PARALLELR_BIN), '-k'],
