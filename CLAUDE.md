@@ -157,9 +157,9 @@ python bin/parallelr.py -T ./tasks -C "python3 @TASK@"
 - **Script**: `bin/parallelr.py`
 - **Script config**: `cfg/parallelr.yaml`
 - **User config**: `~/parallelr/cfg/parallelr.yaml`
-- **Logs**: `~/parallelr/logs/tasker_{PID}.log` (rotating, max 10MB, 5 backups)
+- **Logs**: `~/parallelr/logs/parallelr_{PID}_{timestamp}.log` (rotating, max 10MB, 5 backups)
 - **Summary**: `~/parallelr/logs/summary_{PID}_{timestamp}.csv`
-- **Task output**: `~/parallelr/logs/TaskResults_{PID}_{timestamp}.txt` (enabled by default, disable with `--no-task-output-log`)
+- **Task output**: `~/parallelr/logs/parallelr_{PID}_{timestamp}_output.txt` (enabled by default, disable with `--no-task-output-log`)
 - **PID tracking**: `~/parallelr/pids/parallelr.pids`
 - **Workspace**: `~/parallelr/workspace/` or `~/parallelr/workspace/pid{PID}_worker{N}/`
 

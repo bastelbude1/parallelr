@@ -39,10 +39,15 @@ import json
 import shlex
 import select
 import errno
-import fcntl
 import re
-from pathlib import Path
 from datetime import datetime
+
+# POSIX-only import with fallback for Windows compatibility
+try:
+    import fcntl
+    HAS_FCNTL = True
+except ImportError:
+    HAS_FCNTL = False
 from concurrent.futures import ThreadPoolExecutor, Future, as_completed
 from enum import Enum
 
@@ -431,7 +436,7 @@ class Configuration:
                 for pid in sorted(existing_pids):
                     f.write(f"{pid}\n")
         except Exception as e:
-            print(f"Warning: Could not register process: {e}")
+            logging.getLogger(__name__).warning("Could not register process: %s", e)
 
     def unregister_process(self, process_id):
         """Remove this process from the PID file."""
@@ -455,9 +460,9 @@ class Configuration:
                         f.write(f"{pid}\n")
             else:
                 pidfile.unlink()
-                
+
         except Exception as e:
-            print(f"Warning: Could not unregister process: {e}")
+            logging.getLogger(__name__).warning("Could not unregister process: %s", e)
 
     def get_running_processes(self):
         """Get list of registered running processes."""
@@ -716,11 +721,12 @@ class SecureTaskExecutor:
                 stdout_fd = self._process.stdout.fileno()
                 stderr_fd = self._process.stderr.fileno()
 
-                # Make file descriptors non-blocking
-                fl = fcntl.fcntl(stdout_fd, fcntl.F_GETFL)
-                fcntl.fcntl(stdout_fd, fcntl.F_SETFL, fl | os.O_NONBLOCK)
-                fl = fcntl.fcntl(stderr_fd, fcntl.F_GETFL)
-                fcntl.fcntl(stderr_fd, fcntl.F_SETFL, fl | os.O_NONBLOCK)
+                # Make file descriptors non-blocking (POSIX only)
+                if HAS_FCNTL:
+                    fl = fcntl.fcntl(stdout_fd, fcntl.F_GETFL)
+                    fcntl.fcntl(stdout_fd, fcntl.F_SETFL, fl | os.O_NONBLOCK)
+                    fl = fcntl.fcntl(stderr_fd, fcntl.F_GETFL)
+                    fcntl.fcntl(stderr_fd, fcntl.F_SETFL, fl | os.O_NONBLOCK)
                 timeout_time = time.time() + self.timeout
 
                 while self._process.poll() is None:
@@ -734,22 +740,26 @@ class SecureTaskExecutor:
                     if current_cpu > result.cpu_usage:
                         result.cpu_usage = current_cpu
 
-                    # Check for available data
-                    ready, _, _ = select.select([stdout_fd, stderr_fd], [], [], 0.1)
+                    # Check for available data (POSIX only - select on Windows doesn't work with pipes)
+                    if HAS_FCNTL:
+                        ready, _, _ = select.select([stdout_fd, stderr_fd], [], [], 0.1)
 
-                    for fd in ready:
-                        try:
-                            if fd == stdout_fd:
-                                data = os.read(fd, 4096).decode('utf-8', errors='replace')
-                                if data:
-                                    stdout_lines.append(data)
-                            elif fd == stderr_fd:
-                                data = os.read(fd, 4096).decode('utf-8', errors='replace')
-                                if data:
-                                    stderr_lines.append(data)
-                        except OSError as e:
-                            if e.errno != errno.EAGAIN:
-                                break
+                        for fd in ready:
+                            try:
+                                if fd == stdout_fd:
+                                    data = os.read(fd, 4096).decode('utf-8', errors='replace')
+                                    if data:
+                                        stdout_lines.append(data)
+                                elif fd == stderr_fd:
+                                    data = os.read(fd, 4096).decode('utf-8', errors='replace')
+                                    if data:
+                                        stderr_lines.append(data)
+                            except OSError as e:
+                                if e.errno != errno.EAGAIN:
+                                    break
+                    else:
+                        # Windows fallback: just sleep briefly
+                        time.sleep(0.1)
 
                 # Read any remaining output
                 try:
@@ -1430,7 +1440,7 @@ class ParallelTaskManager:
                             for future in as_completed(self.futures.keys(), timeout=self.wait_time):
                                 self._handle_completed_task(future)
                                 break
-                        except:
+                        except concurrent.futures.TimeoutError:
                             time.sleep(self.wait_time)
                 
                 if self.shutdown_requested:
