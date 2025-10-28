@@ -15,12 +15,7 @@ Alternative: Convert to integration tests that invoke parallelr with various
 inputs and verify the exit codes/error messages.
 """
 
-import sys
-from pathlib import Path
 import pytest
-
-# Add bin directory to path
-sys.path.insert(0, str(Path(__file__).parent.parent.parent / 'bin'))
 
 
 class TestEnvironmentVariableValidation:
@@ -28,7 +23,6 @@ class TestEnvironmentVariableValidation:
 
     def test_valid_env_var_simple(self):
         """Test validation of simple environment variable names."""
-        import pytest
         # This tests the validation logic inline in the script
         # We'll test it via the actual argument parsing if possible
         valid_names = ["VAR", "VAR1", "VAR_NAME", "VAR_1_NAME", "_VAR"]
@@ -41,7 +35,6 @@ class TestEnvironmentVariableValidation:
 
     def test_invalid_env_var_starts_with_digit(self):
         """Test validation rejects env vars starting with digit."""
-        import pytest
         invalid_names = ["1VAR", "2TEST", "9_VAR"]
 
         for name in invalid_names:
@@ -263,7 +256,3 @@ class TestEnvVarArgumentCountValidation:
 
         # This should trigger an error and stop execution
         assert len(env_vars) > len(arguments)
-
-
-if __name__ == "__main__":
-    pytest.main([__file__, "-v"])
