@@ -27,7 +27,11 @@ result = subprocess.run(['cmd'],
 - Walrus operator `:=` (Python 3.8+)
 - `list[str]` type hints without `from typing import List`
 
-Our CI/CD tests against Python 3.6, 3.7, 3.8, 3.9, 3.10, 3.11, 3.12 to ensure compatibility.
+Our dual Python testing strategy:
+- **Local testing**: Python 3.6.8 exactly - ensures backward compatibility
+- **CI/CD testing**: Python 3.9 - verifies implementation correctness
+
+This approach validates both legacy compatibility and modern Python behavior without complex CI setup.
 
 ## Table of Contents
 
@@ -637,38 +641,22 @@ pytest -m "security or integration"
 
 ### 2. requirements-test.txt
 
-**Location**: `tests/requirements-test.txt`
+**Location**: `tests/requirements-test-py36.txt`
 
-**Purpose**: Isolate test dependencies from runtime dependencies
+**Purpose**: Isolate test dependencies from runtime dependencies, pinned for Python 3.6.8 compatibility
 
 ```python
-# Core testing framework
-pytest>=7.0.0,<8.0.0
-pytest-cov>=4.0.0,<5.0.0           # Coverage reporting
-pytest-timeout>=2.1.0,<3.0.0       # Test timeouts
-pytest-xdist>=3.0.0,<4.0.0         # Parallel test execution
-pytest-mock>=3.10.0,<4.0.0         # Mocking support
+# Core testing framework - Python 3.6.8 compatible versions
+pytest>=4.6.0,<5.0.0                # pytest 5.0+ requires Python 3.5+, but 7.0+ requires 3.7+
+pytest-cov>=2.8.0,<4.0.0            # Coverage plugin (v4+ requires Python 3.8+)
+pytest-timeout>=1.3.0,<2.0.0        # Test timeouts
 
-# Additional testing tools
-pytest-html>=3.1.0,<4.0.0          # HTML test reports
-pytest-json-report>=1.5.0,<2.0.0   # JSON test reports
-
-# Code quality
-pylint>=2.15.0,<3.0.0              # Linting
-black>=22.0.0,<23.0.0              # Code formatting
-mypy>=0.990,<1.0.0                 # Type checking
-
-# Performance testing
-pytest-benchmark>=4.0.0,<5.0.0     # Performance benchmarks
-memory-profiler>=0.60.0,<1.0.0     # Memory profiling
-
-# Security testing
-safety>=2.3.0,<3.0.0               # Dependency vulnerability scanner
-
-# Utilities
-psutil>=5.9.0                      # Process monitoring
-pyyaml>=6.0                        # YAML support
+# Utilities - pinned to Python 3.6.8-compatible versions
+psutil==5.9.8                       # Process monitoring (last 5.x with Python 3.6 support)
+pyyaml==5.4.1                       # YAML support (6.0+ requires Python 3.8+)
 ```
+
+**Important**: All versions are carefully pinned to ensure Python 3.6.8 compatibility. Newer versions of these packages may drop support for Python 3.6.
 
 **Why Separate File**:
 - Development dependencies don't bloat production installs
