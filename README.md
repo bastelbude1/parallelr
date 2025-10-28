@@ -1,6 +1,7 @@
 # parallelr - Parallel Task Executor
 
 [![CI](https://github.com/bastelbude1/parallelr/actions/workflows/ci.yml/badge.svg)](https://github.com/bastelbude1/parallelr/actions/workflows/ci.yml)
+[![codecov](https://codecov.io/gh/bastelbude1/parallelr/branch/master/graph/badge.svg)](https://codecov.io/gh/bastelbude1/parallelr)
 
 A robust, production-ready Python framework for executing tasks in parallel with comprehensive configuration, monitoring, and error handling capabilities.
 
