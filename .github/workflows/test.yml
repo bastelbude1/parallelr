@@ -14,23 +14,18 @@ concurrency:
 jobs:
   test:
     name: Run Tests (Python 3.6.8)
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-latest
+    container:
+      image: python:3.6.8-slim
 
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
 
-    - name: Set up Python 3.6 via deadsnakes PPA
-      run: |
-        sudo add-apt-repository ppa:deadsnakes/ppa -y
-        sudo apt-get update
-        sudo apt-get install -y python3.6 python3.6-distutils python3.6-dev
-        curl -sS https://bootstrap.pypa.io/pip/3.6/get-pip.py | sudo python3.6
-
     - name: Install dependencies
       run: |
-        python3.6 -m pip install pip==21.3.1 setuptools==58.0.4 wheel==0.36.2
-        python3.6 -m pip install -r tests/requirements-test-py36.txt
+        python -m pip install pip==21.3.1 setuptools==58.0.4 wheel==0.36.2
+        python -m pip install -r tests/requirements-test-py36.txt
 
     - name: Run unit tests
       run: |
@@ -57,23 +52,18 @@ jobs:
 
   lint:
     name: Lint Code (Python 3.6.8)
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-latest
+    container:
+      image: python:3.6.8-slim
 
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
 
-    - name: Set up Python 3.6 via deadsnakes PPA
-      run: |
-        sudo add-apt-repository ppa:deadsnakes/ppa -y
-        sudo apt-get update
-        sudo apt-get install -y python3.6 python3.6-distutils python3.6-dev
-        curl -sS https://bootstrap.pypa.io/pip/3.6/get-pip.py | sudo python3.6
-
     - name: Install linting tools
       run: |
-        python3.6 -m pip install pip==21.3.1 setuptools==58.0.4 wheel==0.36.2
-        python3.6 -m pip install 'pylint>=2.13.0,<2.14.0' 'flake8>=4.0.0,<5.0.0'
+        python -m pip install pip==21.3.1 setuptools==58.0.4 wheel==0.36.2
+        python -m pip install 'pylint>=2.13.0,<2.14.0' 'flake8>=4.0.0,<5.0.0'
 
     - name: Run pylint
       run: |
@@ -85,23 +75,18 @@ jobs:
 
   test-legacy:
     name: Run Legacy Bash Tests (Python 3.6.8)
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-latest
+    container:
+      image: python:3.6.8-slim
 
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
 
-    - name: Set up Python 3.6 via deadsnakes PPA
-      run: |
-        sudo add-apt-repository ppa:deadsnakes/ppa -y
-        sudo apt-get update
-        sudo apt-get install -y python3.6 python3.6-distutils python3.6-dev
-        curl -sS https://bootstrap.pypa.io/pip/3.6/get-pip.py | sudo python3.6
-
     - name: Install dependencies
       run: |
-        python3.6 -m pip install pip==21.3.1 setuptools==58.0.4 wheel==0.36.2
-        python3.6 -m pip install -r tests/requirements-test-py36.txt
+        python -m pip install pip==21.3.1 setuptools==58.0.4 wheel==0.36.2
+        python -m pip install -r tests/requirements-test-py36.txt
 
     - name: Run multi-argument tests
       run: |
