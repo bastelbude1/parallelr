@@ -1,0 +1,32 @@
+# Test Dependencies for parallelr Test Suite (Python 3.9+)
+# Install with: pip install -r tests/requirements-test.txt
+# Target: GitHub CI/CD (Python 3.9) and local development (Python 3.11+)
+#
+# NOTE: For Python 3.6.8 compatibility testing, use requirements-test-py36.txt
+
+# Core testing framework
+pytest>=7.4.0,<8.0.0               # Python 3.8+, supports 3.11/3.12
+pytest-cov>=4.1.0,<5.0.0           # Coverage plugin for pytest
+pytest-timeout>=2.1.0,<3.0.0       # Test timeouts
+pytest-xdist>=3.3.0,<4.0.0         # Parallel test execution
+pytest-mock>=3.11.0,<4.0.0         # Mocking support
+
+# Additional testing tools
+pytest-html>=3.2.0,<4.0.0          # HTML test reports
+pytest-json-report>=1.5.0,<2.0.0   # JSON test reports
+
+# Code quality
+pylint>=3.0.0,<4.0.0               # Python 3.8+, supports 3.11/3.12
+black>=23.0.0,<24.0.0              # Python 3.8+, supports 3.11/3.12
+mypy>=1.0.0,<2.0.0                 # Python 3.8+, supports 3.11/3.12
+
+# Performance testing
+pytest-benchmark>=4.0.0,<5.0.0     # Performance benchmarks
+memory-profiler>=0.61.0,<1.0.0     # Memory profiling
+
+# Security testing
+safety>=2.3.0,<4.0.0               # Dependency vulnerability scanner
+
+# Utilities - pinned to bundled versions for reproducibility
+psutil==7.1.0                      # Process monitoring (matches bundled version)
+pyyaml==6.0.1                      # YAML support (matches bundled version)

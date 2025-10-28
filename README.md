@@ -1,5 +1,8 @@
 # parallelr - Parallel Task Executor
 
+[![CI](https://github.com/bastelbude1/parallelr/actions/workflows/ci.yml/badge.svg)](https://github.com/bastelbude1/parallelr/actions/workflows/ci.yml)
+[![codecov](https://codecov.io/gh/bastelbude1/parallelr/branch/master/graph/badge.svg)](https://codecov.io/gh/bastelbude1/parallelr)
+
 A robust, production-ready Python framework for executing tasks in parallel with comprehensive configuration, monitoring, and error handling capabilities.
 
 [[_TOC_]]
@@ -7,6 +10,13 @@ A robust, production-ready Python framework for executing tasks in parallel with
 ## Overview
 
 **parallelr** is a Python 3.6.8+ compatible parallel task execution framework designed for reliability, flexibility, and production use. It executes multiple tasks concurrently using a configurable worker pool, with built-in timeout handling, resource monitoring, comprehensive logging, and automatic error detection.
+
+**Testing Strategy**: This project uses a **dual Python testing approach** to ensure both backward compatibility and implementation correctness:
+
+- **Local Development & Production**: Python **3.6.8** - The production environment requires Python 3.6.8, and all local testing MUST use this version to verify compatibility
+- **GitHub CI/CD**: Python **3.9+** - CI pipeline uses Python 3.9 for modern tooling support (pytest, linters) while maintaining 3.6.8-compatible syntax
+
+**Why this approach?** The code must run on Python 3.6.8 in production, but testing tools (pytest, coverage, linters) work better on modern Python versions. Both environments execute the same test suite to guarantee the code works correctly on both versions.
 
 Perfect for batch processing, data pipelines, test suites, or any scenario where you need to execute multiple independent tasks efficiently.
 
@@ -64,7 +74,7 @@ ptasker -T /path/to/test_cases/*.txt -r
 python bin/ptasker -T /path/to/test_cases -p myproject -r
 
 # 5. Run as daemon
-ptasker -T /path/to/test_cases -p myproject -r -d
+ptasker -T /path/to/test_cases -p myproject -r -D
 
 # 6. Validate ptasker configuration
 ptasker --validate-config
@@ -135,7 +145,9 @@ parallelr --check-dependencies
 | `-d, --debug` | Enable debug mode (set log level to DEBUG) |
 | `-D, --daemon` | Run as background daemon (detached from session) |
 | `--enable-stop-limits` | Enable automatic halt on excessive failures |
-| `--no-task-output-log` | Disable detailed stdout/stderr logging to TaskResults file (enabled by default) |
+| `--no-task-output-log` | Disable detailed stdout/stderr logging to output file (enabled by default) |
+
+> **Note:** Be careful to distinguish between `-d` (lowercase, debug mode) and `-D` (uppercase, daemon mode). These are different flags with different purposes.
 
 #### Process Management
 
@@ -180,7 +192,7 @@ parallelr -T ./scripts -C "bash @TASK@" -r -t 600
 parallelr -T ./tasks -C "curl @TASK@" -r -s 2.0
 
 # Run as daemon with auto-stop protection
-parallelr -T ./tasks -C "python3 @TASK@" -r -d --enable-stop-limits
+parallelr -T ./tasks -C "python3 @TASK@" -r -D --enable-stop-limits
 
 # Execute without detailed output logging (logging is enabled by default)
 parallelr -T ./tasks -C "./process.sh @TASK@" -r --no-task-output-log
@@ -670,7 +682,7 @@ Run parallelr as a background daemon, detached from your terminal session.
 
 ```bash
 # Start as daemon
-parallelr -T ./tasks -C "bash @TASK@" -r -d
+parallelr -T ./tasks -C "bash @TASK@" -r -D
 
 # Check running daemons
 parallelr --list-workers
@@ -1070,6 +1082,71 @@ parallelr -T ./tasks -C "bash @TASK@"
 
 ---
 
+## Testing
+
+The project includes a comprehensive test suite covering functionality, edge cases, and security.
+
+### Dual Python Testing Strategy
+
+**CRITICAL**: This project uses different Python versions for local and CI testing:
+
+| Environment | Python Version | Purpose | Requirement |
+|------------|----------------|---------|-------------|
+| **Local Development** | **3.6.8 ONLY** | Verify production compatibility | **MANDATORY** - Must test with exact production version |
+| **GitHub CI/CD** | **3.9+** | Modern tooling (pytest, linters, coverage) | Uses 3.6.8-compatible syntax |
+
+**Why?** The production environment runs Python 3.6.8, so all code must be compatible. However, modern testing tools work better on Python 3.9+. The same test suite runs on both versions to ensure correctness.
+
+### Local Testing (Python 3.6.8)
+
+```bash
+# CRITICAL: Verify you have exactly Python 3.6.8
+python -V  # Must show: Python 3.6.8
+python --version  # If different, find python3.6 interpreter
+
+# Install test dependencies (Python 3.6.8 compatible versions)
+pip install -r tests/requirements-test-py36.txt
+
+# Run all tests
+pytest tests/ -v
+
+# Run specific test categories
+pytest tests/unit/ -v          # Unit tests
+pytest tests/integration/ -v   # Integration tests
+pytest tests/security/ -v      # Security tests
+
+# Run with coverage
+pytest tests/ --cov=bin/parallelr.py --cov-report=html
+```
+
+### CI Testing (Python 3.9+)
+
+GitHub Actions automatically runs tests on **Python 3.9** with:
+- Full pytest suite
+- Code coverage reporting
+- Linting (pylint, flake8)
+- Legacy bash test suites
+
+**Both local (3.6.8) and CI (3.9) tests must pass before merging.**
+
+### Test Categories
+
+- **Unit Tests (42)**: Placeholder replacement, input validation, exception handling
+- **Integration Tests (47)**: File mode, arguments mode, daemon mode, workspace management, signal handling
+- **Security Tests (20)**: Command injection prevention, path traversal validation
+
+### Python Compatibility Notes
+
+**All code must work on Python 3.6.8:**
+- ✅ Use `stdout=subprocess.PIPE, stderr=subprocess.PIPE, universal_newlines=True`
+- ❌ Never use `capture_output=True` or `text=True` (Python 3.7+)
+- ✅ Use `typing.List[str]` for type hints
+- ❌ Never use `list[str]` (Python 3.9+)
+
+For detailed testing documentation, see [tests/README.md](tests/README.md).
+
+---
+
 ## Quick Reference
 
 ### Essential Commands
@@ -1085,7 +1162,7 @@ parallelr -T <dir> -C "<command> @TASK@" -r
 parallelr -T <dir> -C "<command> @TASK@" -r -m 10 -t 300
 
 # Daemon mode
-parallelr -T <dir> -C "<command> @TASK@" -r -d
+parallelr -T <dir> -C "<command> @TASK@" -r -D
 
 # List workers
 parallelr --list-workers
