@@ -21,7 +21,7 @@ PARALLELR_BIN = PROJECT_ROOT / 'bin' / 'parallelr.py'
 
 # Skip all daemon tests on non-POSIX platforms (daemon/signal handling is POSIX-specific)
 pytestmark = pytest.mark.skipif(os.name != "posix",
-                                reason="Daemon/Signale sind nur auf POSIX stabil getestet")
+                                reason="Daemon and signal handling only stable on POSIX")
 
 
 def poll_until(condition_func, timeout=20, interval=0.5):
