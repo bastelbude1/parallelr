@@ -17,8 +17,6 @@ PARALLELR_BIN = PROJECT_ROOT / 'bin' / 'parallelr.py'
 @pytest.mark.security
 def test_symlink_traversal_protection(temp_dir):
     """Test that symlinks are handled carefully."""
-    import pytest
-
     # Create a symlink to sensitive location
     link_path = temp_dir / 'link_to_root'
     target_path = Path('/')
