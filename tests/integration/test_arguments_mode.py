@@ -5,17 +5,11 @@ Tests argument file processing with various delimiters and configurations.
 """
 
 import subprocess
-import sys
 import os
 from pathlib import Path
 import pytest
-\n# Import from conftest
-import sys
-sys.path.insert(0, str(Path(__file__).parent.parent))
-from conftest import PARALLELR_BIN, PYTHON_FOR_PARALLELR
 
-PROJECT_ROOT = Path(__file__).parent.parent.parent
-PARALLELR_BIN = PROJECT_ROOT / 'bin' / 'parallelr.py'
+# PARALLELR_BIN and PYTHON_FOR_PARALLELR are automatically available from conftest.py
 
 
 @pytest.fixture
