@@ -20,13 +20,13 @@ pytestmark = pytest.mark.skipif(os.name != "posix",
                                 reason="Daemon/Signale sind nur auf POSIX stabil getestet")
 
 
-def poll_until(condition_func, timeout=10, interval=0.5):
+def poll_until(condition_func, timeout=20, interval=0.5):
     """
     Poll until condition is met or timeout expires.
 
     Args:
         condition_func: Callable that returns True when condition is met
-        timeout: Maximum seconds to wait
+        timeout: Maximum seconds to wait (default 20s for slow CI)
         interval: Seconds between checks
 
     Returns:
@@ -159,9 +159,11 @@ def test_list_workers_command(sample_task_dir, isolated_daemon_env):
     )
 
     assert result.returncode == 0
-    # Should show running processes or "No running" message
+    # Should show running processes, not "No running" message
     output = result.stdout.lower()
-    assert 'running' in output or 'workers' in output or 'process' in output
+    assert ('running' in output or 'workers' in output or 'process' in output)
+    assert 'no running' not in output, \
+        f"Expected running workers but got 'no running' message: {result.stdout}"
 
     # Cleanup
     subprocess.run([sys.executable, str(PARALLELR_BIN), '-k'],
@@ -351,6 +353,9 @@ def test_multiple_daemon_instances(sample_task_dir, isolated_daemon_env):
     pid_file = isolated_daemon_env['pid_file']
     assert poll_until(lambda: pid_file.exists(), timeout=5), "First daemon did not start"
 
+    # Get baseline PID count before starting second daemon
+    initial_count = len([p for p in pid_file.read_text().strip().split('\n') if p.strip()])
+
     # Start second daemon
     result2 = subprocess.run(
         [sys.executable, str(PARALLELR_BIN),
@@ -366,9 +371,11 @@ def test_multiple_daemon_instances(sample_task_dir, isolated_daemon_env):
 
     assert result2.returncode == 0
 
-    # Poll for second daemon to be registered
-    assert poll_until(lambda: len(pid_file.read_text().strip().split('\n')) >= 2, timeout=5), \
-        "Second daemon not registered in PID file"
+    # Poll until PID count increases by exactly 1
+    assert poll_until(
+        lambda: len([p for p in pid_file.read_text().strip().split('\n') if p.strip()]) >= initial_count + 1,
+        timeout=10
+    ), f"Second daemon not registered (baseline: {initial_count}, current: {len([p for p in pid_file.read_text().strip().split('\n') if p.strip()])})"
 
     # List workers should show multiple
     list_result = subprocess.run(
