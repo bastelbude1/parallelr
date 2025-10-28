@@ -64,7 +64,7 @@ ptasker -T /path/to/test_cases/*.txt -r
 python bin/ptasker -T /path/to/test_cases -p myproject -r
 
 # 5. Run as daemon
-ptasker -T /path/to/test_cases -p myproject -r -d
+ptasker -T /path/to/test_cases -p myproject -r -D
 
 # 6. Validate ptasker configuration
 ptasker --validate-config
@@ -137,6 +137,8 @@ parallelr --check-dependencies
 | `--enable-stop-limits` | Enable automatic halt on excessive failures |
 | `--no-task-output-log` | Disable detailed stdout/stderr logging to TaskResults file (enabled by default) |
 
+> **Note:** Be careful to distinguish between `-d` (lowercase, debug mode) and `-D` (uppercase, daemon mode). These are different flags with different purposes.
+
 #### Process Management
 
 | Argument | Description |
@@ -180,7 +182,7 @@ parallelr -T ./scripts -C "bash @TASK@" -r -t 600
 parallelr -T ./tasks -C "curl @TASK@" -r -s 2.0
 
 # Run as daemon with auto-stop protection
-parallelr -T ./tasks -C "python3 @TASK@" -r -d --enable-stop-limits
+parallelr -T ./tasks -C "python3 @TASK@" -r -D --enable-stop-limits
 
 # Execute without detailed output logging (logging is enabled by default)
 parallelr -T ./tasks -C "./process.sh @TASK@" -r --no-task-output-log
@@ -670,7 +672,7 @@ Run parallelr as a background daemon, detached from your terminal session.
 
 ```bash
 # Start as daemon
-parallelr -T ./tasks -C "bash @TASK@" -r -d
+parallelr -T ./tasks -C "bash @TASK@" -r -D
 
 # Check running daemons
 parallelr --list-workers
@@ -1128,7 +1130,7 @@ parallelr -T <dir> -C "<command> @TASK@" -r
 parallelr -T <dir> -C "<command> @TASK@" -r -m 10 -t 300
 
 # Daemon mode
-parallelr -T <dir> -C "<command> @TASK@" -r -d
+parallelr -T <dir> -C "<command> @TASK@" -r -D
 
 # List workers
 parallelr --list-workers
