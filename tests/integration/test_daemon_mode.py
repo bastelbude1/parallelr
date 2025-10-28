@@ -46,20 +46,20 @@ def isolated_daemon_env(tmp_path):
     """
     Provide environment for daemon tests.
 
-    NOTE: Daemon mode forks and the child process uses the actual HOME directory.
-    This fixture provides the actual paths that daemon will use, not isolated ones.
-    Cleanup is handled by conftest.py cleanup_daemon_processes fixture.
+    Daemon processes inherit the environment, including HOME. This fixture
+    isolates them to tmp_path to avoid side effects. Cleanup is automatic.
     """
-    # Daemon processes use actual HOME (forked processes don't inherit modified env)
-    actual_home = Path.home()
-    pid_file = actual_home / 'parallelr' / 'pids' / 'parallelr.pids'
-    log_dir = actual_home / 'parallelr' / 'logs'
+    # Use tmp_path as isolated HOME for this test
+    temp_home = tmp_path / 'home'
+    temp_home.mkdir(parents=True, exist_ok=True)
+    pid_file = temp_home / 'parallelr' / 'pids' / 'parallelr.pids'
+    log_dir = temp_home / 'parallelr' / 'logs'
 
     yield {
-        'home': actual_home,
+        'home': temp_home,
         'pid_file': pid_file,
         'log_dir': log_dir,
-        'env': os.environ.copy()  # Use actual environment
+        'env': {**os.environ, 'HOME': str(temp_home)}
     }
 
 

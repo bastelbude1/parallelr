@@ -223,7 +223,7 @@ class Configuration:
 
     def _get_user_config_path(self):
         """Get user config path with fallback to original script config."""
-        home_dir = Path.home()
+        home_dir = Path(os.path.expanduser('~'))
 
         # First try the symlink/current name config
         primary_config = home_dir / self.script_name / 'cfg' / f"{self.script_name}.yaml"
@@ -383,7 +383,7 @@ class Configuration:
 
     def get_working_directory(self, worker_id=None, process_id=None):
         """Get working directory - shared or isolated based on config."""
-        home_dir = Path.home()
+        home_dir = Path(os.path.expanduser('~'))
         base_workspace = home_dir / self.script_name / "workspace"
         
         if self.execution.workspace_isolation and worker_id is not None and process_id is not None:
@@ -400,14 +400,14 @@ class Configuration:
 
     def get_log_directory(self):
         """Get log directory in user's home: ~/<script_name>/logs"""
-        home_dir = Path.home()
+        home_dir = Path(os.path.expanduser('~'))
         log_dir = home_dir / self.script_name / "logs"
         log_dir.mkdir(parents=True, exist_ok=True)
         return log_dir
 
     def get_pidfile_path(self):
         """Get path for PID file."""
-        home_dir = Path.home()
+        home_dir = Path(os.path.expanduser('~'))
         pid_dir = home_dir / self.script_name / "pids"
         pid_dir.mkdir(parents=True, exist_ok=True)
         return pid_dir / f"{self.script_name}.pids"
