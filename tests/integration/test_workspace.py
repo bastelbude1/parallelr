@@ -8,6 +8,7 @@ import subprocess
 import sys
 import os
 import uuid
+import shutil
 from pathlib import Path
 import pytest
 \n# Import from conftest
@@ -17,6 +18,15 @@ from conftest import PARALLELR_BIN, PYTHON_FOR_PARALLELR
 
 PROJECT_ROOT = Path(__file__).parent.parent.parent
 PARALLELR_BIN = PROJECT_ROOT / 'bin' / 'parallelr.py'
+
+# Skip all tests if bash is not available (POSIX dependency)
+pytestmark = pytest.mark.skipif(shutil.which("bash") is None,
+                                reason="Requires bash (POSIX)")
+
+# Early abort if parallelr.py is missing
+if not PARALLELR_BIN.exists():
+    pytest.skip("bin/parallelr.py not found - integration tests skipped",
+                allow_module_level=True)
 
 
 @pytest.fixture
@@ -65,7 +75,7 @@ def test_workspace_directory_created(sample_task_dir, isolated_workspace):
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
         universal_newlines=True,
-        env={**os.environ, **isolated_workspace['env']},
+        env=isolated_workspace['env'],
         timeout=30
     )
 
@@ -85,7 +95,7 @@ def test_shared_workspace_mode_default(sample_task_dir, isolated_workspace):
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
         universal_newlines=True,
-        env={**os.environ, **isolated_workspace['env']},
+        env=isolated_workspace['env'],
         timeout=30
     )
 
@@ -116,7 +126,7 @@ ls -la
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
         universal_newlines=True,
-        env={**os.environ, **isolated_workspace['env']},
+        env=isolated_workspace['env'],
         timeout=30
     )
 
@@ -135,7 +145,7 @@ def test_workspace_persists_between_runs(temp_dir, isolated_workspace):
     # Use unique marker name to avoid race conditions in parallel test execution
     marker_name = f'persistent_marker_{uuid.uuid4().hex[:8]}.txt'
     marker_file = workspace_dir / marker_name
-    test_env = {**os.environ, **isolated_workspace['env']}
+    test_env = isolated_workspace['env']
 
     # First run - create marker
     task1 = temp_dir / 'create_marker.sh'
@@ -191,7 +201,7 @@ def test_workspace_directory_in_summary(sample_task_dir, isolated_workspace):
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
         universal_newlines=True,
-        env={**os.environ, **isolated_workspace['env']},
+        env=isolated_workspace['env'],
         timeout=30
     )
 
@@ -204,6 +214,7 @@ def test_workspace_directory_in_summary(sample_task_dir, isolated_workspace):
 @pytest.mark.integration
 def test_tasks_run_from_workspace(temp_dir, isolated_workspace):
     """Test that tasks execute with workspace as working directory."""
+    workspace_dir = isolated_workspace['workspace']
     task_file = temp_dir / 'pwd_test.sh'
     task_file.write_text('#!/bin/bash\npwd\n')
     task_file.chmod(0o755)
@@ -216,13 +227,13 @@ def test_tasks_run_from_workspace(temp_dir, isolated_workspace):
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
         universal_newlines=True,
-        env={**os.environ, **isolated_workspace['env']},
+        env=isolated_workspace['env'],
         timeout=30
     )
 
     assert result.returncode == 0
-    # Output should show workspace directory
-    assert 'parallelr/workspace' in result.stdout
+    # Output should show exact workspace directory from fixture
+    assert str(workspace_dir) in result.stdout
 
 
 @pytest.mark.integration
@@ -238,7 +249,7 @@ def test_workspace_logs_directory(sample_task_dir, isolated_workspace):
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
         universal_newlines=True,
-        env={**os.environ, **isolated_workspace['env']},
+        env=isolated_workspace['env'],
         timeout=30
     )
 
@@ -261,7 +272,7 @@ def test_workspace_summary_csv_created(sample_task_dir, isolated_workspace):
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
         universal_newlines=True,
-        env={**os.environ, **isolated_workspace['env']},
+        env=isolated_workspace['env'],
         timeout=30
     )
 
@@ -284,7 +295,7 @@ def test_workspace_task_output_log_created(sample_task_dir, isolated_workspace):
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
         universal_newlines=True,
-        env={**os.environ, **isolated_workspace['env']},
+        env=isolated_workspace['env'],
         timeout=30
     )
 
@@ -312,7 +323,7 @@ def test_workspace_no_task_output_log_flag(sample_task_dir, isolated_workspace):
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
         universal_newlines=True,
-        env={**os.environ, **isolated_workspace['env']},
+        env=isolated_workspace['env'],
         timeout=30
     )
 
