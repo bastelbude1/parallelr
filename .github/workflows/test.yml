@@ -73,11 +73,11 @@ jobs:
 
     - name: Run pylint
       run: |
-        pylint bin/parallelr.py --disable=C0103,C0114,C0115,C0116 || true
+        pylint bin/parallelr.py --disable=C0103,C0114,C0115,C0116
 
     - name: Run flake8
       run: |
-        flake8 bin/parallelr.py --max-line-length=120 --ignore=E501,W503 || true
+        flake8 bin/parallelr.py --max-line-length=120 --ignore=E501,W503
 
   test-legacy:
     name: Run Legacy Bash Tests (Python 3.9)
@@ -122,6 +122,11 @@ jobs:
 
         if [ "${{ needs.test.result }}" != "success" ]; then
           echo "❌ Tests failed"
+          exit 1
+        fi
+
+        if [ "${{ needs.lint.result }}" != "success" ]; then
+          echo "❌ Linting failed"
           exit 1
         fi
 
