@@ -5,19 +5,13 @@ Tests graceful shutdown, SIGTERM, SIGINT, and SIGHUP handling.
 """
 
 import subprocess
-import sys
-from pathlib import Path
-import pytest
-\n# Import from conftest
-import sys
-sys.path.insert(0, str(Path(__file__).parent.parent))
-from conftest import PARALLELR_BIN, PYTHON_FOR_PARALLELR
 import signal
 import time
 import os
+from pathlib import Path
+import pytest
 
-PROJECT_ROOT = Path(__file__).parent.parent.parent
-PARALLELR_BIN = PROJECT_ROOT / 'bin' / 'parallelr.py'
+from conftest import PARALLELR_BIN, PYTHON_FOR_PARALLELR
 
 
 def terminate_process_gracefully(proc, timeout=10):
