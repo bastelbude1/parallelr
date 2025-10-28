@@ -71,7 +71,7 @@ def test_daemon_mode_starts_in_background(sample_task_dir, isolated_daemon_env):
         [sys.executable, str(PARALLELR_BIN),
          '-T', str(sample_task_dir),
          '-C', 'bash @TASK@',
-         '-r', '-d'],
+         '-r', '-D'],
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
         universal_newlines=True,
@@ -103,7 +103,7 @@ def test_daemon_mode_pid_tracking(sample_task_dir, isolated_daemon_env):
         [sys.executable, str(PARALLELR_BIN),
          '-T', str(sample_task_dir),
          '-C', 'sleep 1',
-         '-r', '-d'],
+         '-r', '-D'],
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
         universal_newlines=True,
@@ -136,7 +136,7 @@ def test_list_workers_command(sample_task_dir, isolated_daemon_env):
         [sys.executable, str(PARALLELR_BIN),
          '-T', str(sample_task_dir),
          '-C', 'sleep 5',
-         '-r', '-d'],
+         '-r', '-D'],
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
         universal_newlines=True,
@@ -177,7 +177,7 @@ def test_kill_all_workers_requires_confirmation(sample_task_dir, isolated_daemon
         [sys.executable, str(PARALLELR_BIN),
          '-T', str(sample_task_dir),
          '-C', 'echo test',
-         '-r', '-d'],
+         '-r', '-D'],
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
         universal_newlines=True,
@@ -213,17 +213,17 @@ def test_kill_all_workers_requires_confirmation(sample_task_dir, isolated_daemon
 @pytest.mark.integration
 def test_kill_specific_worker_by_pid(temp_dir, isolated_daemon_env):
     """Test killing a specific worker by PID."""
-    # Create a fast task
-    task_file = temp_dir / 'fast_task.sh'
-    task_file.write_text('#!/bin/bash\necho "task"\n')
+    # Create a task that runs long enough to be killed
+    task_file = temp_dir / 'long_task.sh'
+    task_file.write_text('#!/bin/bash\nsleep 5\necho "task"\n')
     task_file.chmod(0o755)
 
-    # Start daemon - may finish quickly
+    # Start daemon with long-running task
     result = subprocess.run(
         [sys.executable, str(PARALLELR_BIN),
          '-T', str(task_file),
          '-C', 'bash @TASK@',
-         '-r', '-d'],
+         '-r', '-D'],
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
         universal_newlines=True,
@@ -244,7 +244,7 @@ def test_kill_specific_worker_by_pid(temp_dir, isolated_daemon_env):
 
     pid = non_empty_pids[0]
 
-    # Kill specific PID (may already be done)
+    # Kill specific PID while task is still running
     kill_result = subprocess.run(
         [sys.executable, str(PARALLELR_BIN), '-k', pid],
         stdout=subprocess.PIPE,
@@ -254,12 +254,9 @@ def test_kill_specific_worker_by_pid(temp_dir, isolated_daemon_env):
         timeout=10
     )
 
-    # Should succeed or process already gone
-    output_lower = kill_result.stdout.lower()
-    assert (kill_result.returncode == 0 or
-            'killed' in output_lower or
-            'not found' in output_lower or
-            'no such process' in output_lower)
+    # Should successfully kill the running process
+    assert kill_result.returncode == 0, \
+        f"Failed to kill process {pid}: {kill_result.stdout} {kill_result.stderr}"
 
     # Cleanup any remaining
     subprocess.run([sys.executable, str(PARALLELR_BIN), '-k'],
@@ -277,7 +274,7 @@ def test_daemon_mode_log_files_created(sample_task_dir, isolated_daemon_env):
         [sys.executable, str(PARALLELR_BIN),
          '-T', str(sample_task_dir),
          '-C', 'bash @TASK@',
-         '-r', '-d'],
+         '-r', '-D'],
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
         universal_newlines=True,
@@ -313,7 +310,7 @@ def test_daemon_mode_completes_tasks(temp_dir, isolated_daemon_env):
         [sys.executable, str(PARALLELR_BIN),
          '-T', str(task_file),
          '-C', 'bash @TASK@',
-         '-r', '-d'],
+         '-r', '-D'],
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
         universal_newlines=True,
@@ -340,7 +337,7 @@ def test_multiple_daemon_instances(sample_task_dir, isolated_daemon_env):
         [sys.executable, str(PARALLELR_BIN),
          '-T', str(sample_task_dir),
          '-C', 'sleep 5',
-         '-r', '-d'],
+         '-r', '-D'],
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
         universal_newlines=True,
@@ -359,7 +356,7 @@ def test_multiple_daemon_instances(sample_task_dir, isolated_daemon_env):
         [sys.executable, str(PARALLELR_BIN),
          '-T', str(sample_task_dir),
          '-C', 'sleep 5',
-         '-r', '-d'],
+         '-r', '-D'],
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
         universal_newlines=True,

@@ -409,8 +409,9 @@ class Configuration:
         """Get path for PID file."""
         home_dir = Path(os.path.expanduser('~'))
         pid_dir = home_dir / self.script_name / "pids"
+        pid_file = pid_dir / f"{self.script_name}.pids"
         pid_dir.mkdir(parents=True, exist_ok=True)
-        return pid_dir / f"{self.script_name}.pids"
+        return pid_file
 
     def register_process(self, process_id):
         """Register this process in the PID file."""
@@ -423,13 +424,12 @@ class Configuration:
                         pid = line.strip()
                         if pid.isdigit():
                             existing_pids.add(int(pid))
-            
+
             existing_pids.add(process_id)
-            
+
             with open(str(pidfile), 'w') as f:
                 for pid in sorted(existing_pids):
                     f.write(f"{pid}\n")
-                    
         except Exception as e:
             print(f"Warning: Could not register process: {e}")
 
@@ -1531,36 +1531,47 @@ Process Info:
 # Helper functions for daemon mode
 def daemonize():
     """Daemonize the current process using double-fork technique."""
+    # Flush output before forking to avoid duplicate writes
+    sys.stdout.flush()
+    sys.stderr.flush()
+
     try:
         pid = os.fork()
         if pid > 0:
+            # Parent exits immediately
             sys.exit(0)
     except OSError as e:
         print(f"Fork #1 failed: {e}", file=sys.stderr)
         sys.exit(1)
 
+    # First child: decouple from parent environment
     os.chdir('/')
     os.setsid()
     os.umask(0)
 
+    # Redirect file descriptors BEFORE second fork to avoid holding parent's pipes
+    # This allows subprocess.run() in parent to complete immediately
+    sys.stdout.flush()
+    sys.stderr.flush()
+
+    dev_null_fd = os.open(os.devnull, os.O_RDWR)
+    os.dup2(dev_null_fd, sys.stdin.fileno())
+    os.dup2(dev_null_fd, sys.stdout.fileno())
+    os.dup2(dev_null_fd, sys.stderr.fileno())
+    if dev_null_fd > 2:
+        os.close(dev_null_fd)
+
     try:
         pid = os.fork()
         if pid > 0:
+            # Intermediate process exits immediately
             sys.exit(0)
-    except OSError as e:
-        print(f"Fork #2 failed: {e}", file=sys.stderr)
+    except OSError:
+        # Can't print to stderr as it's redirected to /dev/null
         sys.exit(1)
 
-    sys.stdout.flush()
-    sys.stderr.flush()
-    
-    with open(os.devnull, 'r') as dev_null_r:
-        os.dup2(dev_null_r.fileno(), sys.stdin.fileno())
-    
-    with open(os.devnull, 'w') as dev_null_w:
-        os.dup2(dev_null_w.fileno(), sys.stdout.fileno())
-        os.dup2(dev_null_w.fileno(), sys.stderr.fileno())
-
+    # Grandchild (actual daemon) continues here
+    # File descriptors already redirected above
     return True
 
 def is_daemon_supported():
