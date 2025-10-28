@@ -8,6 +8,10 @@ import subprocess
 import sys
 from pathlib import Path
 import pytest
+\n# Import from conftest
+import sys
+sys.path.insert(0, str(Path(__file__).parent.parent))
+from conftest import PARALLELR_BIN, PYTHON_FOR_PARALLELR
 import signal
 import time
 import os
@@ -55,7 +59,7 @@ def test_sigint_graceful_shutdown(temp_dir, isolated_env):
 
     # Start process
     proc = subprocess.Popen(
-        [sys.executable, str(PARALLELR_BIN),
+        [PYTHON_FOR_PARALLELR, str(PARALLELR_BIN),
          '-T', str(task_file),
          '-C', 'bash @TASK@',
          '-r'],
@@ -94,7 +98,7 @@ def test_sigterm_graceful_shutdown(temp_dir, isolated_env):
 
     # Start process
     proc = subprocess.Popen(
-        [sys.executable, str(PARALLELR_BIN),
+        [PYTHON_FOR_PARALLELR, str(PARALLELR_BIN),
          '-T', str(task_file),
          '-C', 'bash @TASK@',
          '-r'],
@@ -134,7 +138,7 @@ def test_sighup_ignored_in_daemon(temp_dir, isolated_env):
 
     # Start daemon
     result = subprocess.run(
-        [sys.executable, str(PARALLELR_BIN),
+        [PYTHON_FOR_PARALLELR, str(PARALLELR_BIN),
          '-T', str(task_file),
          '-C', 'bash @TASK@',
          '-r', '-d'],
@@ -179,7 +183,7 @@ def test_sighup_ignored_in_daemon(temp_dir, isolated_env):
                     pass
 
     # Cleanup
-    subprocess.run([sys.executable, str(PARALLELR_BIN), '-k'],
+    subprocess.run([PYTHON_FOR_PARALLELR, str(PARALLELR_BIN), '-k'],
                    input='yes\n', stdout=subprocess.PIPE, stderr=subprocess.PIPE,
                    env=isolated_env['env'], universal_newlines=True, timeout=10)
 
@@ -194,7 +198,7 @@ def test_multiple_interrupts_force_exit(temp_dir, isolated_env):
 
     # Start process
     proc = subprocess.Popen(
-        [sys.executable, str(PARALLELR_BIN),
+        [PYTHON_FOR_PARALLELR, str(PARALLELR_BIN),
          '-T', str(task_file),
          '-C', 'bash @TASK@',
          '-r'],
@@ -236,7 +240,7 @@ def test_task_cancellation_on_interrupt(temp_dir, isolated_env):
 
     # Start process
     proc = subprocess.Popen(
-        [sys.executable, str(PARALLELR_BIN),
+        [PYTHON_FOR_PARALLELR, str(PARALLELR_BIN),
          '-T', str(task_dir),
          '-C', 'bash @TASK@',
          '-r', '-m', '2'],
@@ -275,7 +279,7 @@ def test_cleanup_on_forced_exit(temp_dir, isolated_env):
 
     # Start process
     proc = subprocess.Popen(
-        [sys.executable, str(PARALLELR_BIN),
+        [PYTHON_FOR_PARALLELR, str(PARALLELR_BIN),
          '-T', str(task_file),
          '-C', 'bash @TASK@',
          '-r'],
@@ -307,7 +311,7 @@ def test_signal_handler_registration(sample_task_dir, isolated_env):
     """Test that signal handlers are properly registered."""
     # This test verifies signal handling works at all
     proc = subprocess.Popen(
-        [sys.executable, str(PARALLELR_BIN),
+        [PYTHON_FOR_PARALLELR, str(PARALLELR_BIN),
          '-T', str(sample_task_dir),
          '-C', 'sleep 30',
          '-r'],

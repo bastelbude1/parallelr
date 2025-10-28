@@ -10,8 +10,12 @@ import sys
 from pathlib import Path
 import pytest
 
+# Import from conftest
+import sys
+sys.path.insert(0, str(Path(__file__).parent.parent))
+from conftest import PARALLELR_BIN, PYTHON_FOR_PARALLELR
+
 PROJECT_ROOT = Path(__file__).parent.parent.parent
-PARALLELR_BIN = PROJECT_ROOT / 'bin' / 'parallelr.py'
 
 
 @pytest.mark.security
@@ -29,7 +33,7 @@ def test_symlink_traversal_protection(temp_dir):
 
     # Run the tool with symlink as task path
     result = subprocess.run(
-        [sys.executable, str(PARALLELR_BIN),
+        [PYTHON_FOR_PARALLELR, str(PARALLELR_BIN),
          '-T', str(link_path),
          '-C', 'echo @TASK@'],
         stdout=subprocess.PIPE,
@@ -73,7 +77,7 @@ def test_absolute_path_validation(temp_dir):
 
     # Use absolute path
     result = subprocess.run(
-        [sys.executable, str(PARALLELR_BIN),
+        [PYTHON_FOR_PARALLELR, str(PARALLELR_BIN),
          '-T', str(task_file.absolute()),
          '-C', 'bash @TASK@',
          '-r'],
@@ -97,7 +101,7 @@ def test_relative_path_with_dots(temp_dir):
     # Use absolute path (relative paths require specific working directory)
     # Test verifies the tool handles path resolution safely
     result = subprocess.run(
-        [sys.executable, str(PARALLELR_BIN),
+        [PYTHON_FOR_PARALLELR, str(PARALLELR_BIN),
          '-T', str(task_file),
          '-C', 'bash @TASK@'],
         stdout=subprocess.PIPE,
@@ -124,7 +128,7 @@ def test_tilde_expansion_security():
     """Test that tilde expansion doesn't expose user data."""
     # Try to use tilde path
     result = subprocess.run(
-        [sys.executable, str(PARALLELR_BIN),
+        [PYTHON_FOR_PARALLELR, str(PARALLELR_BIN),
          '-T', '~/.bashrc',
          '-C', 'cat @TASK@'],
         stdout=subprocess.PIPE,
@@ -158,7 +162,7 @@ def test_workspace_path_boundaries(temp_dir):
     task_file.chmod(0o755)
 
     result = subprocess.run(
-        [sys.executable, str(PARALLELR_BIN),
+        [PYTHON_FOR_PARALLELR, str(PARALLELR_BIN),
          '-T', str(task_file),
          '-C', 'bash @TASK@',
          '-r'],
@@ -202,7 +206,7 @@ def test_task_file_size_limit(temp_dir):
     assert file_size > 1024 * 1024, f"Test file should be >1MB, got {file_size} bytes"
 
     result = subprocess.run(
-        [sys.executable, str(PARALLELR_BIN),
+        [PYTHON_FOR_PARALLELR, str(PARALLELR_BIN),
          '-T', str(large_task),
          '-C', 'bash @TASK@',
          '-r'],  # Enable execution to trigger file size validation
@@ -244,7 +248,7 @@ def test_task_file_size_limit(temp_dir):
 def test_special_file_access_prevention():
     """Test that special files like /dev/null are handled."""
     result = subprocess.run(
-        [sys.executable, str(PARALLELR_BIN),
+        [PYTHON_FOR_PARALLELR, str(PARALLELR_BIN),
          '-T', '/dev/null',
          '-C', 'cat @TASK@'],
         stdout=subprocess.PIPE,
@@ -285,7 +289,7 @@ def test_hidden_file_access(temp_dir):
     hidden_task.chmod(0o755)
 
     result = subprocess.run(
-        [sys.executable, str(PARALLELR_BIN),
+        [PYTHON_FOR_PARALLELR, str(PARALLELR_BIN),
          '-T', str(hidden_task),
          '-C', 'bash @TASK@',
          '-r'],
@@ -308,7 +312,7 @@ def test_argument_file_path_validation(temp_dir):
 
     # Try to use non-existent argument file
     result = subprocess.run(
-        [sys.executable, str(PARALLELR_BIN),
+        [PYTHON_FOR_PARALLELR, str(PARALLELR_BIN),
          '-T', str(task_file),
          '-A', '/non/existent/path/args.txt',
          '-C', 'bash @TASK@'],

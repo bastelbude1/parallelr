@@ -9,6 +9,10 @@ import sys
 import os
 from pathlib import Path
 import pytest
+\n# Import from conftest
+import sys
+sys.path.insert(0, str(Path(__file__).parent.parent))
+from conftest import PARALLELR_BIN, PYTHON_FOR_PARALLELR
 
 PROJECT_ROOT = Path(__file__).parent.parent.parent
 PARALLELR_BIN = PROJECT_ROOT / 'bin' / 'parallelr.py'
@@ -48,7 +52,7 @@ def test_file_mode_directory_execution(sample_task_dir, isolated_env):
     """Test executing tasks from a directory."""
     # Run parallelr in dry-run mode
     result = subprocess.run(
-        [sys.executable, str(PARALLELR_BIN),
+        [PYTHON_FOR_PARALLELR, str(PARALLELR_BIN),
          '-T', str(sample_task_dir),
          '-C', 'bash @TASK@'],
         stdout=subprocess.PIPE,
@@ -71,7 +75,7 @@ def test_file_mode_directory_execution(sample_task_dir, isolated_env):
 def test_file_mode_actual_execution(sample_task_dir, isolated_env):
     """Test actual task execution in file mode."""
     result = subprocess.run(
-        [sys.executable, str(PARALLELR_BIN),
+        [PYTHON_FOR_PARALLELR, str(PARALLELR_BIN),
          '-T', str(sample_task_dir),
          '-C', 'bash @TASK@',
          '-r', '-m', '2'],  # Run with 2 workers
@@ -94,7 +98,7 @@ def test_file_mode_specific_files(sample_task_dir, isolated_env):
     task2 = sample_task_dir / 'task2.sh'
 
     result = subprocess.run(
-        [sys.executable, str(PARALLELR_BIN),
+        [PYTHON_FOR_PARALLELR, str(PARALLELR_BIN),
          '-T', str(task1),
          '-T', str(task2),
          '-C', 'bash @TASK@',
@@ -152,7 +156,7 @@ def test_file_mode_file_extension_filter(temp_dir, isolated_env):
 
     # Filter for .sh files only
     result = subprocess.run(
-        [sys.executable, str(PARALLELR_BIN),
+        [PYTHON_FOR_PARALLELR, str(PARALLELR_BIN),
          '-T', str(task_dir),
          '--file-extension', 'sh',
          '-C', 'bash @TASK@'],
@@ -178,7 +182,7 @@ def test_file_mode_empty_directory(temp_dir, isolated_env):
     empty_dir.mkdir()
 
     result = subprocess.run(
-        [sys.executable, str(PARALLELR_BIN),
+        [PYTHON_FOR_PARALLELR, str(PARALLELR_BIN),
          '-T', str(empty_dir),
          '-C', 'bash @TASK@'],
         stdout=subprocess.PIPE,
@@ -198,7 +202,7 @@ def test_file_mode_nonexistent_path(temp_dir, isolated_env):
     nonexistent = temp_dir / 'does_not_exist'
 
     result = subprocess.run(
-        [sys.executable, str(PARALLELR_BIN),
+        [PYTHON_FOR_PARALLELR, str(PARALLELR_BIN),
          '-T', str(nonexistent),
          '-C', 'bash @TASK@'],
         stdout=subprocess.PIPE,
@@ -218,7 +222,7 @@ def test_file_mode_worker_count(sample_task_dir, isolated_env):
     """Test execution with different worker counts."""
     # Test with 1 worker
     result = subprocess.run(
-        [sys.executable, str(PARALLELR_BIN),
+        [PYTHON_FOR_PARALLELR, str(PARALLELR_BIN),
          '-T', str(sample_task_dir),
          '-C', 'bash @TASK@',
          '-r', '-m', '1'],
@@ -245,7 +249,7 @@ def test_file_mode_timeout(temp_dir, isolated_env):
     slow_task.chmod(0o755)
 
     result = subprocess.run(
-        [sys.executable, str(PARALLELR_BIN),
+        [PYTHON_FOR_PARALLELR, str(PARALLELR_BIN),
          '-T', str(task_dir),
          '-C', 'bash @TASK@',
          '-r', '-t', '2'],  # 2 second timeout
@@ -272,7 +276,7 @@ def test_file_mode_multiple_directories(temp_dir, isolated_env):
     (dir2 / 'task2.sh').write_text('#!/bin/bash\necho "Task 2"\n')
 
     result = subprocess.run(
-        [sys.executable, str(PARALLELR_BIN),
+        [PYTHON_FOR_PARALLELR, str(PARALLELR_BIN),
          '-T', str(dir1),
          '-T', str(dir2),
          '-C', 'bash @TASK@'],

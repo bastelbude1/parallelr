@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+#!/usr/bin/env python
 """
 Parallel Task Executor - Python 3.6.8 Compatible
 

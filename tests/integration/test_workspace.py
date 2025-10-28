@@ -10,6 +10,10 @@ import os
 import uuid
 from pathlib import Path
 import pytest
+\n# Import from conftest
+import sys
+sys.path.insert(0, str(Path(__file__).parent.parent))
+from conftest import PARALLELR_BIN, PYTHON_FOR_PARALLELR
 
 PROJECT_ROOT = Path(__file__).parent.parent.parent
 PARALLELR_BIN = PROJECT_ROOT / 'bin' / 'parallelr.py'
@@ -54,7 +58,7 @@ def test_workspace_directory_created(sample_task_dir, isolated_workspace):
 
     # Run task which should create the workspace
     result = subprocess.run(
-        [sys.executable, str(PARALLELR_BIN),
+        [PYTHON_FOR_PARALLELR, str(PARALLELR_BIN),
          '-T', str(sample_task_dir),
          '-C', 'bash @TASK@',
          '-r', '-m', '1'],
@@ -74,7 +78,7 @@ def test_workspace_directory_created(sample_task_dir, isolated_workspace):
 def test_shared_workspace_mode_default(sample_task_dir, isolated_workspace):
     """Test that shared workspace is the default mode."""
     result = subprocess.run(
-        [sys.executable, str(PARALLELR_BIN),
+        [PYTHON_FOR_PARALLELR, str(PARALLELR_BIN),
          '-T', str(sample_task_dir),
          '-C', 'bash @TASK@',
          '-r', '-m', '1'],
@@ -105,7 +109,7 @@ ls -la
     task_file.chmod(0o755)
 
     result = subprocess.run(
-        [sys.executable, str(PARALLELR_BIN),
+        [PYTHON_FOR_PARALLELR, str(PARALLELR_BIN),
          '-T', str(task_file),
          '-C', 'bash @TASK@',
          '-r'],
@@ -139,7 +143,7 @@ def test_workspace_persists_between_runs(temp_dir, isolated_workspace):
     task1.chmod(0o755)
 
     result1 = subprocess.run(
-        [sys.executable, str(PARALLELR_BIN),
+        [PYTHON_FOR_PARALLELR, str(PARALLELR_BIN),
          '-T', str(task1),
          '-C', 'bash @TASK@',
          '-r'],
@@ -159,7 +163,7 @@ def test_workspace_persists_between_runs(temp_dir, isolated_workspace):
     task2.chmod(0o755)
 
     result2 = subprocess.run(
-        [sys.executable, str(PARALLELR_BIN),
+        [PYTHON_FOR_PARALLELR, str(PARALLELR_BIN),
          '-T', str(task2),
          '-C', 'bash @TASK@',
          '-r'],
@@ -180,7 +184,7 @@ def test_workspace_persists_between_runs(temp_dir, isolated_workspace):
 def test_workspace_directory_in_summary(sample_task_dir, isolated_workspace):
     """Test that workspace directory is shown in summary."""
     result = subprocess.run(
-        [sys.executable, str(PARALLELR_BIN),
+        [PYTHON_FOR_PARALLELR, str(PARALLELR_BIN),
          '-T', str(sample_task_dir),
          '-C', 'bash @TASK@',
          '-r', '-m', '1'],
@@ -205,7 +209,7 @@ def test_tasks_run_from_workspace(temp_dir, isolated_workspace):
     task_file.chmod(0o755)
 
     result = subprocess.run(
-        [sys.executable, str(PARALLELR_BIN),
+        [PYTHON_FOR_PARALLELR, str(PARALLELR_BIN),
          '-T', str(task_file),
          '-C', 'bash @TASK@',
          '-r'],
@@ -227,7 +231,7 @@ def test_workspace_logs_directory(sample_task_dir, isolated_workspace):
     log_dir = isolated_workspace['logs']
 
     result = subprocess.run(
-        [sys.executable, str(PARALLELR_BIN),
+        [PYTHON_FOR_PARALLELR, str(PARALLELR_BIN),
          '-T', str(sample_task_dir),
          '-C', 'bash @TASK@',
          '-r', '-m', '1'],
@@ -250,7 +254,7 @@ def test_workspace_summary_csv_created(sample_task_dir, isolated_workspace):
     log_dir = isolated_workspace['logs']
 
     result = subprocess.run(
-        [sys.executable, str(PARALLELR_BIN),
+        [PYTHON_FOR_PARALLELR, str(PARALLELR_BIN),
          '-T', str(sample_task_dir),
          '-C', 'bash @TASK@',
          '-r', '-m', '1'],
@@ -273,7 +277,7 @@ def test_workspace_task_output_log_created(sample_task_dir, isolated_workspace):
     log_dir = isolated_workspace['logs']
 
     result = subprocess.run(
-        [sys.executable, str(PARALLELR_BIN),
+        [PYTHON_FOR_PARALLELR, str(PARALLELR_BIN),
          '-T', str(sample_task_dir),
          '-C', 'bash @TASK@',
          '-r', '-m', '1'],
@@ -300,7 +304,7 @@ def test_workspace_no_task_output_log_flag(sample_task_dir, isolated_workspace):
     count_before = len(output_files_before)
 
     result = subprocess.run(
-        [sys.executable, str(PARALLELR_BIN),
+        [PYTHON_FOR_PARALLELR, str(PARALLELR_BIN),
          '-T', str(sample_task_dir),
          '-C', 'bash @TASK@',
          '-r', '-m', '1',

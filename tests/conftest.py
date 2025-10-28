@@ -16,6 +16,58 @@ PROJECT_ROOT = Path(__file__).parent.parent
 PARALLELR_BIN = PROJECT_ROOT / 'bin' / 'parallelr.py'
 
 
+def get_python_for_parallelr():
+    """
+    Get the correct Python interpreter for running parallelr.
+
+    parallelr requires Python 3.6.8. This function detects the appropriate
+    interpreter:
+    - In CI (GitHub Actions): use python3.6 explicitly
+    - On user's server: use 'python' (which is 3.6.8) not 'python3' (which is 3.13+)
+    - Otherwise: fall back to current interpreter
+
+    Returns:
+        str: Path to Python interpreter for parallelr
+    """
+    # Check if we're in CI environment
+    if os.environ.get('CI') or os.environ.get('GITHUB_ACTIONS'):
+        # In CI, we explicitly install python3.6
+        return 'python3.6'
+
+    # Check if 'python' is Python 3.6.x (user's server setup)
+    try:
+        result = subprocess.run(
+            ['python', '--version'],
+            capture_output=True,
+            text=True,
+            timeout=5
+        )
+        if result.returncode == 0 and 'Python 3.6' in result.stdout:
+            return 'python'
+    except (FileNotFoundError, subprocess.TimeoutExpired):
+        pass
+
+    # Check if python3.6 is available
+    try:
+        result = subprocess.run(
+            ['python3.6', '--version'],
+            capture_output=True,
+            text=True,
+            timeout=5
+        )
+        if result.returncode == 0:
+            return 'python3.6'
+    except (FileNotFoundError, subprocess.TimeoutExpired):
+        pass
+
+    # Fall back to current interpreter
+    return sys.executable
+
+
+# Get the appropriate Python interpreter for parallelr
+PYTHON_FOR_PARALLELR = get_python_for_parallelr()
+
+
 @pytest.fixture
 def temp_dir():
     """Create a temporary directory for test files."""
@@ -140,7 +192,7 @@ def cleanup_daemon_processes():
     try:
         # Kill all daemon processes with automatic 'yes' confirmation
         subprocess.run(
-            [sys.executable, str(PARALLELR_BIN), '-k'],
+            [PYTHON_FOR_PARALLELR, str(PARALLELR_BIN), '-k'],
             input='yes\n',
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,

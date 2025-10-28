@@ -12,26 +12,46 @@ concurrency:
 
 jobs:
   simple-test:
-    name: Simple Test (Python 3.6.8)
+    name: Simple Test (Python 3.9 + Python 3.6.8)
     runs-on: ubuntu-latest
-    container:
-      image: python:3.6.8-slim
 
     steps:
     - name: Checkout code
-      uses: actions/checkout@v3
+      uses: actions/checkout@v4
 
-    - name: Check Python version
+    - name: Set up Python 3.9 for test environment
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.9'
+
+    - name: Install Python 3.6.8 for parallelr
       run: |
+        sudo add-apt-repository ppa:deadsnakes/ppa -y
+        sudo apt-get update
+        sudo apt-get install -y python3.6 python3.6-distutils
+        curl -sS https://bootstrap.pypa.io/pip/3.6/get-pip.py | sudo python3.6
+        sudo python3.6 -m pip install pip==21.3.1 setuptools==58.0.4 wheel==0.36.2
+
+    - name: Check Python versions
+      run: |
+        echo "Test environment Python:"
         python --version
         python -m pip --version
+        echo ""
+        echo "Parallelr Python:"
+        python3.6 --version
+        python3.6 -m pip --version
 
     - name: Install test dependencies
       run: |
-        python -m pip install pip==21.3.1 setuptools==58.0.4 wheel==0.36.2
+        python -m pip install --upgrade pip
         python -m pip install pytest pytest-cov
 
     - name: Run simple test
       run: |
-        python -c "print('Hello from Python 3.6.8')"
+        echo "Testing with Python 3.9:"
+        python -c "print('Hello from Python 3.9')"
+        echo ""
+        echo "Testing parallelr with Python 3.6.8:"
+        python3.6 -c "print('Hello from Python 3.6.8')"
         echo "Simple test passed!"

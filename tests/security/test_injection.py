@@ -9,6 +9,10 @@ import subprocess
 import sys
 from pathlib import Path
 import pytest
+\n# Import from conftest
+import sys
+sys.path.insert(0, str(Path(__file__).parent.parent))
+from conftest import PARALLELR_BIN, PYTHON_FOR_PARALLELR
 
 PROJECT_ROOT = Path(__file__).parent.parent.parent
 PARALLELR_BIN = PROJECT_ROOT / 'bin' / 'parallelr.py'
@@ -23,7 +27,7 @@ def test_shell_injection_in_task_path(temp_dir):
     malicious_path = str(temp_dir / f'task.sh; touch {sentinel}')
 
     result = subprocess.run(
-        [sys.executable, str(PARALLELR_BIN),
+        [PYTHON_FOR_PARALLELR, str(PARALLELR_BIN),
          '-T', malicious_path,
          '-C', 'bash @TASK@',
          '-r'],
@@ -57,7 +61,7 @@ def test_shell_injection_in_command_template(temp_dir):
     malicious_command = f'bash @TASK@; echo "INJECTED" > {sentinel}'
 
     result = subprocess.run(
-        [sys.executable, str(PARALLELR_BIN),
+        [PYTHON_FOR_PARALLELR, str(PARALLELR_BIN),
          '-T', str(task_file),
          '-C', malicious_command,
          '-r'],
@@ -117,7 +121,7 @@ def test_argument_injection_attempt(temp_dir):
     args_file.write_text(f'value; rm -rf {sentinel}\n')
 
     result = subprocess.run(
-        [sys.executable, str(PARALLELR_BIN),
+        [PYTHON_FOR_PARALLELR, str(PARALLELR_BIN),
          '-T', str(task_file),
          '-A', str(args_file),
          '-C', 'bash @TASK@ @ARG@',
@@ -158,7 +162,7 @@ def test_environment_variable_injection(temp_dir):
     args_file.write_text(f'value1,value2; touch {sentinel},value3\n')
 
     result = subprocess.run(
-        [sys.executable, str(PARALLELR_BIN),
+        [PYTHON_FOR_PARALLELR, str(PARALLELR_BIN),
          '-T', str(task_file),
          '-A', str(args_file),
          '-S', 'comma',
@@ -205,7 +209,7 @@ def test_backtick_injection_in_arguments(temp_dir):
     args_file.write_text(f'`touch {sentinel1}`\n$(touch {sentinel2})\n')
 
     result = subprocess.run(
-        [sys.executable, str(PARALLELR_BIN),
+        [PYTHON_FOR_PARALLELR, str(PARALLELR_BIN),
          '-T', str(task_file),
          '-A', str(args_file),
          '-C', 'bash @TASK@ @ARG@',
@@ -254,7 +258,7 @@ def test_path_with_special_characters(temp_dir):
     task_file.chmod(0o755)
 
     result = subprocess.run(
-        [sys.executable, str(PARALLELR_BIN),
+        [PYTHON_FOR_PARALLELR, str(PARALLELR_BIN),
          '-T', str(task_file),
          '-C', 'bash @TASK@',
          '-r'],
@@ -290,7 +294,7 @@ def test_null_byte_injection(temp_dir):
     args_file.write_text('value1\x00hidden\n')
 
     result = subprocess.run(
-        [sys.executable, str(PARALLELR_BIN),
+        [PYTHON_FOR_PARALLELR, str(PARALLELR_BIN),
          '-T', str(task_file),
          '-A', str(args_file),
          '-C', 'bash @TASK@ @ARG@'],
@@ -376,7 +380,7 @@ def test_unicode_injection_attempt(temp_dir):
     args_file.write_text('value\u202e\u202d\u200e\n')
 
     result = subprocess.run(
-        [sys.executable, str(PARALLELR_BIN),
+        [PYTHON_FOR_PARALLELR, str(PARALLELR_BIN),
          '-T', str(task_file),
          '-A', str(args_file),
          '-C', 'bash @TASK@ @ARG@',
@@ -414,7 +418,7 @@ def test_newline_injection_in_arguments(temp_dir):
     args_file.write_text('value\ninjected_line\n')
 
     result = subprocess.run(
-        [sys.executable, str(PARALLELR_BIN),
+        [PYTHON_FOR_PARALLELR, str(PARALLELR_BIN),
          '-T', str(task_file),
          '-A', str(args_file),
          '-C', 'bash @TASK@ @ARG@'],
@@ -450,7 +454,7 @@ def test_escaped_quotes_in_arguments(temp_dir):
     args_file.write_text('value\\"with\\"quotes\n')
 
     result = subprocess.run(
-        [sys.executable, str(PARALLELR_BIN),
+        [PYTHON_FOR_PARALLELR, str(PARALLELR_BIN),
          '-T', str(task_file),
          '-A', str(args_file),
          '-C', 'bash @TASK@ @ARG@',

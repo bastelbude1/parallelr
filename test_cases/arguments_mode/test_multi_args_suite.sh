@@ -1,6 +1,22 @@
 #!/bin/bash
 set -euo pipefail
 
+# Detect correct Python interpreter for parallelr (requires Python 3.6.8)
+if [ -n "$CI" ] || [ -n "$GITHUB_ACTIONS" ]; then
+    # In CI, use python3.6 explicitly
+    PYTHON_CMD="python3.6"
+elif python --version 2>&1 | grep -q "Python 3.6"; then
+    # On user's server, python = 3.6.8
+    PYTHON_CMD="python"
+elif command -v python3.6 >/dev/null 2>&1; then
+    # Fall back to python3.6 if available
+    PYTHON_CMD="python3.6"
+else
+    # Last resort: use python
+    PYTHON_CMD="python"
+fi
+
+
 # Multi-Argument Feature Test Suite
 # Tests the new delimiter-based multi-argument support
 
@@ -10,7 +26,7 @@ echo ""
 
 # Test 1: Space delimiter
 echo "1. Testing space delimiter..."
-OUTPUT=$(timeout 10 python ../../bin/parallelr.py \
+OUTPUT=$(timeout 10 $PYTHON_CMD  ../../bin/parallelr.py \
     -T test_multi_args.sh \
     -A multi_args_space.txt \
     -S space \
@@ -27,7 +43,7 @@ fi
 
 # Test 2: Tab delimiter
 echo "2. Testing tab delimiter..."
-OUTPUT=$(timeout 10 python ../../bin/parallelr.py \
+OUTPUT=$(timeout 10 $PYTHON_CMD  ../../bin/parallelr.py \
     -T test_multi_args.sh \
     -A multi_args_tab.txt \
     -S tab \
@@ -44,7 +60,7 @@ fi
 
 # Test 3: Comma delimiter with indexed placeholders
 echo "3. Testing comma delimiter with indexed placeholders..."
-OUTPUT=$(timeout 10 python ../../bin/parallelr.py \
+OUTPUT=$(timeout 10 $PYTHON_CMD  ../../bin/parallelr.py \
     -T test_multi_args.sh \
     -A multi_args_comma.txt \
     -S comma \
@@ -61,7 +77,7 @@ fi
 
 # Test 4: Semicolon delimiter
 echo "4. Testing semicolon delimiter..."
-OUTPUT=$(timeout 10 python ../../bin/parallelr.py \
+OUTPUT=$(timeout 10 $PYTHON_CMD  ../../bin/parallelr.py \
     -T test_multi_args.sh \
     -A multi_args_semicolon.txt \
     -S semicolon \
@@ -78,7 +94,7 @@ fi
 
 # Test 5: Pipe delimiter
 echo "5. Testing pipe delimiter..."
-OUTPUT=$(timeout 10 python ../../bin/parallelr.py \
+OUTPUT=$(timeout 10 $PYTHON_CMD  ../../bin/parallelr.py \
     -T test_multi_args.sh \
     -A multi_args_pipe.txt \
     -S pipe \
@@ -95,7 +111,7 @@ fi
 
 # Test 6: Colon delimiter
 echo "6. Testing colon delimiter..."
-OUTPUT=$(timeout 10 python ../../bin/parallelr.py \
+OUTPUT=$(timeout 10 $PYTHON_CMD  ../../bin/parallelr.py \
     -T test_multi_args.sh \
     -A multi_args_colon.txt \
     -S colon \
@@ -112,7 +128,7 @@ fi
 
 # Test 7: Fewer env vars than arguments (should log error but continue)
 echo "7. Testing fewer env vars than arguments (validation warning)..."
-OUTPUT=$(python ../../bin/parallelr.py \
+OUTPUT=$($PYTHON_CMD ../../bin/parallelr.py \
     -T template.sh \
     -A multi_args_comma.txt \
     -S comma \
@@ -128,7 +144,7 @@ fi
 
 # Test 8: More env vars than arguments (should fail)
 echo "8. Testing more env vars than arguments (validation error)..."
-OUTPUT=$(timeout 5 python ../../bin/parallelr.py \
+OUTPUT=$(timeout 10 $PYTHON_CMD  ../../bin/parallelr.py \
     -T template.sh \
     -A multi_args_comma.txt \
     -S comma \
@@ -145,7 +161,7 @@ fi
 
 # Test 9: Backward compatibility - single argument without delimiter
 echo "9. Testing backward compatibility (single argument)..."
-OUTPUT=$(timeout 10 python ../../bin/parallelr.py \
+OUTPUT=$(timeout 10 $PYTHON_CMD  ../../bin/parallelr.py \
     -T template.sh \
     -A hosts.txt \
     -E HOSTNAME \
@@ -161,7 +177,7 @@ fi
 
 # Test 10: Indexed placeholders without environment variables
 echo "10. Testing indexed placeholders without env vars..."
-OUTPUT=$(timeout 10 python ../../bin/parallelr.py \
+OUTPUT=$(timeout 10 $PYTHON_CMD  ../../bin/parallelr.py \
     -T template.sh \
     -A multi_args_comma.txt \
     -S comma \
@@ -177,7 +193,7 @@ fi
 
 # Test 11: Inconsistent argument counts (should fail)
 echo "11. Testing inconsistent argument count validation..."
-OUTPUT=$(timeout 5 python ../../bin/parallelr.py \
+OUTPUT=$(timeout 10 $PYTHON_CMD  ../../bin/parallelr.py \
     -T template.sh \
     -A inconsistent_args.txt \
     -S comma \
@@ -192,7 +208,7 @@ fi
 
 # Test 12: Separator without arguments file (should fail)
 echo "12. Testing -S without -A validation..."
-OUTPUT=$(timeout 5 python ../../bin/parallelr.py \
+OUTPUT=$(timeout 10 $PYTHON_CMD  ../../bin/parallelr.py \
     -T ../../test_cases/file_mode/task1.sh \
     -S comma \
     -C "bash @TASK@" 2>&1 || true)
@@ -206,7 +222,7 @@ fi
 
 # Test 13: Invalid placeholder index (should fail)
 echo "13. Testing invalid placeholder index validation..."
-OUTPUT=$(timeout 5 python ../../bin/parallelr.py \
+OUTPUT=$(timeout 10 $PYTHON_CMD  ../../bin/parallelr.py \
     -T template.sh \
     -A two_args.txt \
     -S comma \
@@ -221,7 +237,7 @@ fi
 
 # Test 14: Multiple invalid placeholders (should fail)
 echo "14. Testing multiple invalid placeholders..."
-OUTPUT=$(timeout 5 python ../../bin/parallelr.py \
+OUTPUT=$(timeout 10 $PYTHON_CMD  ../../bin/parallelr.py \
     -T template.sh \
     -A two_args.txt \
     -S comma \
@@ -236,7 +252,7 @@ fi
 
 # Test 15: Dry run mode with multi-arguments
 echo "15. Testing dry run mode display..."
-OUTPUT=$(timeout 10 python ../../bin/parallelr.py \
+OUTPUT=$(timeout 10 $PYTHON_CMD  ../../bin/parallelr.py \
     -T template.sh \
     -A multi_args_comma.txt \
     -S comma \
@@ -252,7 +268,7 @@ fi
 
 # Test 16: Unmatched placeholder detection (no arguments provided but placeholders used)
 echo "16. Testing unmatched placeholder detection..."
-OUTPUT=$(timeout 5 python ../../bin/parallelr.py \
+OUTPUT=$(timeout 10 $PYTHON_CMD  ../../bin/parallelr.py \
     -T template.sh \
     -C "bash @TASK@ @ARG@ @ARG_1@" \
     -r 2>&1 || true)
@@ -266,7 +282,7 @@ fi
 
 # Test 17: Empty environment variable validation
 echo "17. Testing empty environment variable detection..."
-OUTPUT=$(timeout 5 python ../../bin/parallelr.py \
+OUTPUT=$(timeout 10 $PYTHON_CMD  ../../bin/parallelr.py \
     -T template.sh \
     -A hosts.txt \
     -E 'VAR1, ,VAR3' \

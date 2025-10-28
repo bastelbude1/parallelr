@@ -9,6 +9,10 @@ import sys
 import time
 from pathlib import Path
 import pytest
+\n# Import from conftest
+import sys
+sys.path.insert(0, str(Path(__file__).parent.parent))
+from conftest import PARALLELR_BIN, PYTHON_FOR_PARALLELR
 import signal
 import os
 
@@ -68,7 +72,7 @@ def test_daemon_mode_starts_in_background(sample_task_dir, isolated_daemon_env):
     """Test that daemon mode starts process in background."""
     # Start daemon - daemon returns immediately
     result = subprocess.run(
-        [sys.executable, str(PARALLELR_BIN),
+        [PYTHON_FOR_PARALLELR, str(PARALLELR_BIN),
          '-T', str(sample_task_dir),
          '-C', 'bash @TASK@',
          '-r', '-D'],
@@ -90,7 +94,7 @@ def test_daemon_mode_starts_in_background(sample_task_dir, isolated_daemon_env):
         f"PID file not created at {pid_file} within 5 seconds"
 
     # Cleanup - kill any running instances
-    subprocess.run([sys.executable, str(PARALLELR_BIN), '-k'],
+    subprocess.run([PYTHON_FOR_PARALLELR, str(PARALLELR_BIN), '-k'],
                    input='yes\n', stdout=subprocess.PIPE, stderr=subprocess.PIPE,
                    env=isolated_daemon_env['env'], universal_newlines=True, timeout=10)
 
@@ -100,7 +104,7 @@ def test_daemon_mode_pid_tracking(sample_task_dir, isolated_daemon_env):
     """Test that daemon mode tracks PIDs correctly."""
     # Start daemon
     result = subprocess.run(
-        [sys.executable, str(PARALLELR_BIN),
+        [PYTHON_FOR_PARALLELR, str(PARALLELR_BIN),
          '-T', str(sample_task_dir),
          '-C', 'sleep 1',
          '-r', '-D'],
@@ -123,7 +127,7 @@ def test_daemon_mode_pid_tracking(sample_task_dir, isolated_daemon_env):
     assert len(pids) > 0
 
     # Cleanup
-    subprocess.run([sys.executable, str(PARALLELR_BIN), '-k'],
+    subprocess.run([PYTHON_FOR_PARALLELR, str(PARALLELR_BIN), '-k'],
                    input='yes\n', stdout=subprocess.PIPE, stderr=subprocess.PIPE,
                    env=isolated_daemon_env['env'], universal_newlines=True, timeout=10)
 
@@ -133,7 +137,7 @@ def test_list_workers_command(sample_task_dir, isolated_daemon_env):
     """Test --list-workers shows running processes."""
     # Start a daemon
     subprocess.run(
-        [sys.executable, str(PARALLELR_BIN),
+        [PYTHON_FOR_PARALLELR, str(PARALLELR_BIN),
          '-T', str(sample_task_dir),
          '-C', 'sleep 5',
          '-r', '-D'],
@@ -150,7 +154,7 @@ def test_list_workers_command(sample_task_dir, isolated_daemon_env):
 
     # List workers
     result = subprocess.run(
-        [sys.executable, str(PARALLELR_BIN), '--list-workers'],
+        [PYTHON_FOR_PARALLELR, str(PARALLELR_BIN), '--list-workers'],
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
         universal_newlines=True,
@@ -166,7 +170,7 @@ def test_list_workers_command(sample_task_dir, isolated_daemon_env):
         f"Expected running workers but got 'no running' message: {result.stdout}"
 
     # Cleanup
-    subprocess.run([sys.executable, str(PARALLELR_BIN), '-k'],
+    subprocess.run([PYTHON_FOR_PARALLELR, str(PARALLELR_BIN), '-k'],
                    input='yes\n', stdout=subprocess.PIPE, stderr=subprocess.PIPE,
                    env=isolated_daemon_env['env'], universal_newlines=True, timeout=10)
 
@@ -176,7 +180,7 @@ def test_kill_all_workers_requires_confirmation(sample_task_dir, isolated_daemon
     """Test that kill all requires user confirmation."""
     # Start a daemon with fast tasks
     subprocess.run(
-        [sys.executable, str(PARALLELR_BIN),
+        [PYTHON_FOR_PARALLELR, str(PARALLELR_BIN),
          '-T', str(sample_task_dir),
          '-C', 'echo test',
          '-r', '-D'],
@@ -193,7 +197,7 @@ def test_kill_all_workers_requires_confirmation(sample_task_dir, isolated_daemon
 
     # Try to kill without confirmation (send 'no')
     result = subprocess.run(
-        [sys.executable, str(PARALLELR_BIN), '-k'],
+        [PYTHON_FOR_PARALLELR, str(PARALLELR_BIN), '-k'],
         input='no\n',
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
@@ -207,7 +211,7 @@ def test_kill_all_workers_requires_confirmation(sample_task_dir, isolated_daemon
     assert 'confirm' in output_lower or 'sure' in output_lower or 'no running' in output_lower
 
     # Cleanup with confirmation
-    subprocess.run([sys.executable, str(PARALLELR_BIN), '-k'],
+    subprocess.run([PYTHON_FOR_PARALLELR, str(PARALLELR_BIN), '-k'],
                    input='yes\n', stdout=subprocess.PIPE, stderr=subprocess.PIPE,
                    env=isolated_daemon_env['env'], universal_newlines=True, timeout=10)
 
@@ -222,7 +226,7 @@ def test_kill_specific_worker_by_pid(temp_dir, isolated_daemon_env):
 
     # Start daemon with long-running task
     result = subprocess.run(
-        [sys.executable, str(PARALLELR_BIN),
+        [PYTHON_FOR_PARALLELR, str(PARALLELR_BIN),
          '-T', str(task_file),
          '-C', 'bash @TASK@',
          '-r', '-D'],
@@ -248,7 +252,7 @@ def test_kill_specific_worker_by_pid(temp_dir, isolated_daemon_env):
 
     # Kill specific PID while task is still running
     kill_result = subprocess.run(
-        [sys.executable, str(PARALLELR_BIN), '-k', pid],
+        [PYTHON_FOR_PARALLELR, str(PARALLELR_BIN), '-k', pid],
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
         universal_newlines=True,
@@ -261,7 +265,7 @@ def test_kill_specific_worker_by_pid(temp_dir, isolated_daemon_env):
         f"Failed to kill process {pid}: {kill_result.stdout} {kill_result.stderr}"
 
     # Cleanup any remaining
-    subprocess.run([sys.executable, str(PARALLELR_BIN), '-k'],
+    subprocess.run([PYTHON_FOR_PARALLELR, str(PARALLELR_BIN), '-k'],
                    input='yes\n', stdout=subprocess.PIPE, stderr=subprocess.PIPE,
                    env=isolated_daemon_env['env'], universal_newlines=True, timeout=10)
 
@@ -273,7 +277,7 @@ def test_daemon_mode_log_files_created(sample_task_dir, isolated_daemon_env):
 
     # Start daemon
     result = subprocess.run(
-        [sys.executable, str(PARALLELR_BIN),
+        [PYTHON_FOR_PARALLELR, str(PARALLELR_BIN),
          '-T', str(sample_task_dir),
          '-C', 'bash @TASK@',
          '-r', '-D'],
@@ -293,7 +297,7 @@ def test_daemon_mode_log_files_created(sample_task_dir, isolated_daemon_env):
         "No log files created"
 
     # Cleanup
-    subprocess.run([sys.executable, str(PARALLELR_BIN), '-k'],
+    subprocess.run([PYTHON_FOR_PARALLELR, str(PARALLELR_BIN), '-k'],
                    input='yes\n', stdout=subprocess.PIPE, stderr=subprocess.PIPE,
                    env=isolated_daemon_env['env'], universal_newlines=True, timeout=10)
 
@@ -309,7 +313,7 @@ def test_daemon_mode_completes_tasks(temp_dir, isolated_daemon_env):
 
     # Start daemon
     subprocess.run(
-        [sys.executable, str(PARALLELR_BIN),
+        [PYTHON_FOR_PARALLELR, str(PARALLELR_BIN),
          '-T', str(task_file),
          '-C', 'bash @TASK@',
          '-r', '-D'],
@@ -326,7 +330,7 @@ def test_daemon_mode_completes_tasks(temp_dir, isolated_daemon_env):
     assert 'completed' in marker_file.read_text()
 
     # Cleanup
-    subprocess.run([sys.executable, str(PARALLELR_BIN), '-k'],
+    subprocess.run([PYTHON_FOR_PARALLELR, str(PARALLELR_BIN), '-k'],
                    input='yes\n', stdout=subprocess.PIPE, stderr=subprocess.PIPE,
                    env=isolated_daemon_env['env'], universal_newlines=True, timeout=10)
 
@@ -336,7 +340,7 @@ def test_multiple_daemon_instances(sample_task_dir, isolated_daemon_env):
     """Test running multiple daemon instances simultaneously."""
     # Start first daemon
     result1 = subprocess.run(
-        [sys.executable, str(PARALLELR_BIN),
+        [PYTHON_FOR_PARALLELR, str(PARALLELR_BIN),
          '-T', str(sample_task_dir),
          '-C', 'sleep 5',
          '-r', '-D'],
@@ -358,7 +362,7 @@ def test_multiple_daemon_instances(sample_task_dir, isolated_daemon_env):
 
     # Start second daemon
     result2 = subprocess.run(
-        [sys.executable, str(PARALLELR_BIN),
+        [PYTHON_FOR_PARALLELR, str(PARALLELR_BIN),
          '-T', str(sample_task_dir),
          '-C', 'sleep 5',
          '-r', '-D'],
@@ -379,7 +383,7 @@ def test_multiple_daemon_instances(sample_task_dir, isolated_daemon_env):
 
     # List workers should show multiple
     list_result = subprocess.run(
-        [sys.executable, str(PARALLELR_BIN), '--list-workers'],
+        [PYTHON_FOR_PARALLELR, str(PARALLELR_BIN), '--list-workers'],
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
         universal_newlines=True,
@@ -391,6 +395,6 @@ def test_multiple_daemon_instances(sample_task_dir, isolated_daemon_env):
     assert list_result.returncode == 0
 
     # Cleanup all
-    subprocess.run([sys.executable, str(PARALLELR_BIN), '-k'],
+    subprocess.run([PYTHON_FOR_PARALLELR, str(PARALLELR_BIN), '-k'],
                    input='yes\n', stdout=subprocess.PIPE, stderr=subprocess.PIPE,
                    env=isolated_daemon_env['env'], universal_newlines=True, timeout=10)

@@ -9,6 +9,10 @@ import sys
 import os
 from pathlib import Path
 import pytest
+\n# Import from conftest
+import sys
+sys.path.insert(0, str(Path(__file__).parent.parent))
+from conftest import PARALLELR_BIN, PYTHON_FOR_PARALLELR
 
 PROJECT_ROOT = Path(__file__).parent.parent.parent
 PARALLELR_BIN = PROJECT_ROOT / 'bin' / 'parallelr.py'
@@ -47,7 +51,7 @@ def isolated_env(tmp_path):
 def test_arguments_mode_single_argument(sample_task_file, sample_arguments_file, isolated_env):
     """Test arguments mode with single argument per line."""
     result = subprocess.run(
-        [sys.executable, str(PARALLELR_BIN),
+        [PYTHON_FOR_PARALLELR, str(PARALLELR_BIN),
          '-T', str(sample_task_file),
          '-A', str(sample_arguments_file),
          '-E', 'HOSTNAME',
@@ -68,7 +72,7 @@ def test_arguments_mode_single_argument(sample_task_file, sample_arguments_file,
 def test_arguments_mode_multi_args_comma(sample_task_file, sample_multi_args_file, isolated_env):
     """Test multi-argument mode with comma delimiter."""
     result = subprocess.run(
-        [sys.executable, str(PARALLELR_BIN),
+        [PYTHON_FOR_PARALLELR, str(PARALLELR_BIN),
          '-T', str(sample_task_file),
          '-A', str(sample_multi_args_file),
          '-S', 'comma',
@@ -102,7 +106,7 @@ def test_arguments_mode_all_delimiters(temp_dir, sample_task_file, isolated_env,
     args_file.write_text(f'{line_content}\n')
 
     result = subprocess.run(
-        [sys.executable, str(PARALLELR_BIN),
+        [PYTHON_FOR_PARALLELR, str(PARALLELR_BIN),
          '-T', str(sample_task_file),
          '-A', str(args_file),
          '-S', delim_name,
@@ -125,7 +129,7 @@ def test_arguments_mode_indexed_placeholders(sample_task_file, temp_dir, isolate
     args_file.write_text('host1,8080,prod\n')
 
     result = subprocess.run(
-        [sys.executable, str(PARALLELR_BIN),
+        [PYTHON_FOR_PARALLELR, str(PARALLELR_BIN),
          '-T', str(sample_task_file),
          '-A', str(args_file),
          '-S', 'comma',
@@ -148,7 +152,7 @@ def test_arguments_mode_indexed_placeholders(sample_task_file, temp_dir, isolate
 def test_arguments_mode_env_var_mapping(sample_task_file, sample_multi_args_file, isolated_env):
     """Test environment variable mapping to arguments."""
     result = subprocess.run(
-        [sys.executable, str(PARALLELR_BIN),
+        [PYTHON_FOR_PARALLELR, str(PARALLELR_BIN),
          '-T', str(sample_task_file),
          '-A', str(sample_multi_args_file),
          '-S', 'comma',
@@ -175,7 +179,7 @@ def test_arguments_mode_inconsistent_args_validation(sample_task_file, temp_dir,
     args_file.write_text('val1,val2,val3\nval1,val2\nval1,val2,val3\n')
 
     result = subprocess.run(
-        [sys.executable, str(PARALLELR_BIN),
+        [PYTHON_FOR_PARALLELR, str(PARALLELR_BIN),
          '-T', str(sample_task_file),
          '-A', str(args_file),
          '-S', 'comma',
@@ -199,7 +203,7 @@ def test_arguments_mode_invalid_placeholder_validation(sample_task_file, temp_di
     args_file.write_text('val1,val2\n')
 
     result = subprocess.run(
-        [sys.executable, str(PARALLELR_BIN),
+        [PYTHON_FOR_PARALLELR, str(PARALLELR_BIN),
          '-T', str(sample_task_file),
          '-A', str(args_file),
          '-S', 'comma',
@@ -220,7 +224,7 @@ def test_arguments_mode_invalid_placeholder_validation(sample_task_file, temp_di
 def test_arguments_mode_separator_without_args_file(sample_task_file, isolated_env):
     """Test that separator requires arguments file."""
     result = subprocess.run(
-        [sys.executable, str(PARALLELR_BIN),
+        [PYTHON_FOR_PARALLELR, str(PARALLELR_BIN),
          '-T', str(sample_task_file),
          '-S', 'comma',
          '-C', 'bash @TASK@'],
@@ -240,7 +244,7 @@ def test_arguments_mode_separator_without_args_file(sample_task_file, isolated_e
 def test_arguments_mode_empty_env_var_validation(sample_task_file, sample_arguments_file, isolated_env):
     """Test validation of empty environment variable names."""
     result = subprocess.run(
-        [sys.executable, str(PARALLELR_BIN),
+        [PYTHON_FOR_PARALLELR, str(PARALLELR_BIN),
          '-T', str(sample_task_file),
          '-A', str(sample_arguments_file),
          '-E', 'VAR1, ,VAR3',  # Empty entry
@@ -261,7 +265,7 @@ def test_arguments_mode_empty_env_var_validation(sample_task_file, sample_argume
 def test_arguments_mode_more_env_vars_than_args(sample_task_file, sample_arguments_file, isolated_env):
     """Test error when more env vars than arguments."""
     result = subprocess.run(
-        [sys.executable, str(PARALLELR_BIN),
+        [PYTHON_FOR_PARALLELR, str(PARALLELR_BIN),
          '-T', str(sample_task_file),
          '-A', str(sample_arguments_file),
          '-E', 'VAR1,VAR2,VAR3,VAR4',  # 4 vars, but only 1 arg per line
@@ -282,7 +286,7 @@ def test_arguments_mode_more_env_vars_than_args(sample_task_file, sample_argumen
 def test_arguments_mode_fewer_env_vars_than_args(sample_task_file, sample_multi_args_file, isolated_env):
     """Test warning when fewer env vars than arguments."""
     result = subprocess.run(
-        [sys.executable, str(PARALLELR_BIN),
+        [PYTHON_FOR_PARALLELR, str(PARALLELR_BIN),
          '-T', str(sample_task_file),
          '-A', str(sample_multi_args_file),
          '-S', 'comma',
@@ -305,7 +309,7 @@ def test_arguments_mode_fewer_env_vars_than_args(sample_task_file, sample_multi_
 def test_arguments_mode_backward_compatibility(sample_task_file, sample_arguments_file, isolated_env):
     """Test backward compatibility with single arguments (no separator)."""
     result = subprocess.run(
-        [sys.executable, str(PARALLELR_BIN),
+        [PYTHON_FOR_PARALLELR, str(PARALLELR_BIN),
          '-T', str(sample_task_file),
          '-A', str(sample_arguments_file),
          '-C', 'bash @TASK@ --arg @ARG@',  # Use old @ARG@ placeholder
