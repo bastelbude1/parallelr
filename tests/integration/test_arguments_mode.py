@@ -6,10 +6,15 @@ Tests argument file processing with various delimiters and configurations.
 
 import subprocess
 import os
+import shutil
 from pathlib import Path
 import pytest
 
-# PARALLELR_BIN and PYTHON_FOR_PARALLELR are automatically available from conftest.py
+from conftest import PARALLELR_BIN, PYTHON_FOR_PARALLELR
+
+# Skip all tests if bash is not available (POSIX dependency)
+pytestmark = pytest.mark.skipif(shutil.which("bash") is None,
+                                reason="Requires bash (POSIX)")
 
 
 @pytest.fixture
