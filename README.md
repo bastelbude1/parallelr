@@ -1,6 +1,6 @@
 # parallelr - Parallel Task Executor
 
-[![Test Suite](https://github.com/bastelbude1/parallelr/actions/workflows/test.yml/badge.svg)](https://github.com/bastelbude1/parallelr/actions/workflows/test.yml)
+[![CI](https://github.com/bastelbude1/parallelr/actions/workflows/ci.yml/badge.svg)](https://github.com/bastelbude1/parallelr/actions/workflows/ci.yml)
 
 A robust, production-ready Python framework for executing tasks in parallel with comprehensive configuration, monitoring, and error handling capabilities.
 
