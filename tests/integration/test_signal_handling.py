@@ -154,7 +154,7 @@ def test_sighup_ignored_in_daemon(temp_dir, isolated_env):
         [PYTHON_FOR_PARALLELR, str(PARALLELR_BIN),
          '-T', str(task_file),
          '-C', 'bash @TASK@',
-         '-r', '-d'],
+         '-r', '-D'],
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
         universal_newlines=True,
