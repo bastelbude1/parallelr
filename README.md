@@ -10,7 +10,12 @@ A robust, production-ready Python framework for executing tasks in parallel with
 
 **parallelr** is a Python 3.6.8+ compatible parallel task execution framework designed for reliability, flexibility, and production use. It executes multiple tasks concurrently using a configurable worker pool, with built-in timeout handling, resource monitoring, comprehensive logging, and automatic error detection.
 
-**Testing Strategy**: This project uses a dual Python testing approach - local testing with Python 3.6.8 ensures backward compatibility, while CI testing with Python 3.9 verifies implementation correctness. Both environments use the same test suite for comprehensive coverage.
+**Testing Strategy**: This project uses a **dual Python testing approach** to ensure both backward compatibility and implementation correctness:
+
+- **Local Development & Production**: Python **3.6.8** - The production environment requires Python 3.6.8, and all local testing MUST use this version to verify compatibility
+- **GitHub CI/CD**: Python **3.9+** - CI pipeline uses Python 3.9 for modern tooling support (pytest, linters) while maintaining 3.6.8-compatible syntax
+
+**Why this approach?** The code must run on Python 3.6.8 in production, but testing tools (pytest, coverage, linters) work better on modern Python versions. Both environments execute the same test suite to guarantee the code works correctly on both versions.
 
 Perfect for batch processing, data pipelines, test suites, or any scenario where you need to execute multiple independent tasks efficiently.
 
@@ -1080,18 +1085,26 @@ parallelr -T ./tasks -C "bash @TASK@"
 
 The project includes a comprehensive test suite with 113 tests covering functionality, edge cases, and security.
 
-### Requirements
+### Dual Python Testing Strategy
 
-**Python 3.6.8+** - All tests are compatible with Python 3.6.8 to match production requirements.
+**CRITICAL**: This project uses different Python versions for local and CI testing:
 
-### Run Tests
+| Environment | Python Version | Purpose | Requirement |
+|------------|----------------|---------|-------------|
+| **Local Development** | **3.6.8 ONLY** | Verify production compatibility | **MANDATORY** - Must test with exact production version |
+| **GitHub CI/CD** | **3.9+** | Modern tooling (pytest, linters, coverage) | Uses 3.6.8-compatible syntax |
+
+**Why?** The production environment runs Python 3.6.8, so all code must be compatible. However, modern testing tools work better on Python 3.9+. The same test suite runs on both versions to ensure correctness.
+
+### Local Testing (Python 3.6.8)
 
 ```bash
-# Verify Python version (must be exactly Python 3.6.8 for local testing)
-python -V  # Must show Python 3.6.8
+# CRITICAL: Verify you have exactly Python 3.6.8
+python -V  # Must show: Python 3.6.8
+python --version  # If different, find python3.6 interpreter
 
-# Install test dependencies
-pip install -r tests/requirements-test.txt
+# Install test dependencies (Python 3.6.8 compatible versions)
+pip install -r tests/requirements-test-py36.txt
 
 # Run all tests
 pytest tests/ -v
@@ -1105,15 +1118,29 @@ pytest tests/security/ -v      # Security tests (20 tests)
 pytest tests/ --cov=bin/parallelr.py --cov-report=html
 ```
 
+### CI Testing (Python 3.9+)
+
+GitHub Actions automatically runs tests on **Python 3.9** with:
+- Full pytest suite
+- Code coverage reporting
+- Linting (pylint, flake8)
+- Legacy bash test suites
+
+**Both local (3.6.8) and CI (3.9) tests must pass before merging.**
+
 ### Test Categories
 
 - **Unit Tests (42)**: Placeholder replacement, input validation, exception handling
 - **Integration Tests (47)**: File mode, arguments mode, daemon mode, workspace management, signal handling
 - **Security Tests (20)**: Command injection prevention, path traversal validation
 
-### Continuous Integration
+### Python Compatibility Notes
 
-All tests run automatically on push via GitHub Actions across Python 3.6, 3.7, 3.8, 3.9, 3.10, 3.11, 3.12.
+**All code must work on Python 3.6.8:**
+- ✅ Use `stdout=subprocess.PIPE, stderr=subprocess.PIPE, universal_newlines=True`
+- ❌ Never use `capture_output=True` or `text=True` (Python 3.7+)
+- ✅ Use `typing.List[str]` for type hints
+- ❌ Never use `list[str]` (Python 3.9+)
 
 For detailed testing documentation, see [tests/README.md](tests/README.md).
 

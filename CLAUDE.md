@@ -10,10 +10,34 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **MANDATORY**: All code, including tests, MUST be compatible with Python 3.6.8.
 
+### Dual Python Testing Strategy
+
+This project uses **different Python versions for local vs CI testing**:
+
+| Environment | Python Version | Purpose | When to Use |
+|------------|----------------|---------|-------------|
+| **Local Development** | **3.6.8 ONLY** | Verify production compatibility | **ALWAYS** - Test with exact production version before committing |
+| **GitHub CI/CD** | **3.9+** | Modern tooling (pytest 8.x, linters, coverage) | **Automatic** - Runs on every push |
+
+**Why this dual approach?**
+
+1. **Production Requirement**: The target production environment uses Python 3.6.8 exclusively
+2. **Tool Compatibility**: Modern testing tools (pytest 8.x, coverage.py 7.x, pylint 3.x) require Python 3.9+
+3. **Safety**: Testing on both ensures code works on 3.6.8 while leveraging modern tooling
+4. **Same Test Suite**: Both environments run identical tests - only the interpreter version differs
+
+**CRITICAL RULES:**
+
+- ✅ **ALWAYS** test locally with Python 3.6.8 before pushing
+- ✅ **ALL** code must use Python 3.6.8-compatible syntax
+- ✅ **BOTH** local (3.6.8) and CI (3.9) tests must pass
+- ❌ **NEVER** use Python 3.7+ features, even if CI tests pass
+
 ### Python 3.6.8 Compatibility Rules
 
 **FORBIDDEN** (Python 3.7+):
 - ❌ `subprocess.run(capture_output=True)` - Use `stdout=subprocess.PIPE, stderr=subprocess.PIPE` instead
+- ❌ `subprocess.run(text=True)` - Use `universal_newlines=True` instead
 - ❌ `from __future__ import annotations` - Not available in 3.6
 - ❌ Dataclass `field(default_factory=...)` with mutable defaults - Limited support
 
@@ -29,29 +53,141 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **ALLOWED** (Python 3.6+):
 - ✅ f-strings (introduced in 3.6.0)
-- ✅ Type hints from `typing` module
+- ✅ Type hints from `typing` module (`List`, `Dict`, `Optional`, etc.)
 - ✅ `async`/`await`
 - ✅ Underscores in numeric literals (1_000_000)
 
-### Testing Compatibility
+### Testing Compatibility Examples
 
-All tests must run on Python 3.6.8. Use Python 3.6-compatible syntax:
+**subprocess.run - CRITICAL for tests:**
 
 ```python
-# ❌ WRONG (Python 3.7+)
+# ❌ WRONG (Python 3.7+) - Tests will FAIL on Python 3.6.8
 result = subprocess.run(['cmd'], capture_output=True, text=True)
 
-# ✅ CORRECT (Python 3.6.8)
-result = subprocess.run(['cmd'], stdout=subprocess.PIPE, stderr=subprocess.PIPE, universal_newlines=True)
+# ✅ CORRECT (Python 3.6.8+) - Works everywhere
+result = subprocess.run(
+    ['cmd'],
+    stdout=subprocess.PIPE,
+    stderr=subprocess.PIPE,
+    universal_newlines=True
+)
 ```
 
-### Verification
+**Type hints:**
 
-Before committing, always verify Python 3.6.8 compatibility:
+```python
+# ❌ WRONG (Python 3.9+)
+def process_items(items: list[str]) -> dict[str, int]:
+    pass
+
+# ✅ CORRECT (Python 3.6+)
+from typing import List, Dict
+
+def process_items(items: List[str]) -> Dict[str, int]:
+    pass
+```
+
+**Dictionary merging:**
+
+```python
+# ❌ WRONG (Python 3.9+)
+merged = dict1 | dict2
+
+# ✅ CORRECT (Python 3.6+)
+merged = {**dict1, **dict2}
+```
+
+### Local Testing Workflow (Python 3.6.8)
+
+**Before every commit:**
+
 ```bash
-python -V  # Must show Python 3.6.8
-python -m py_compile your_file.py
+# 1. VERIFY Python version
+python -V  # Must show: Python 3.6.8
+# If not 3.6.8, find it: which python3.6
+
+# 2. Install Python 3.6.8 compatible dependencies
+pip install -r tests/requirements-test-py36.txt
+
+# 3. Run all tests
 pytest tests/ -v
+
+# 4. Verify syntax compatibility
+python -m py_compile bin/parallelr.py
+python -m py_compile tests/**/*.py
+
+# 5. Run specific test suites
+pytest tests/unit/ -v           # Unit tests
+pytest tests/integration/ -v    # Integration tests
+pytest tests/security/ -v       # Security tests
+
+# 6. Test with coverage
+pytest tests/ --cov=bin/parallelr.py --cov-report=html
+```
+
+### CI Testing (GitHub Actions with Python 3.9)
+
+**Automatic on every push:**
+
+```yaml
+# .github/workflows/test.yml uses Python 3.9
+- uses: actions/setup-python@v5
+  with:
+    python-version: '3.9'
+```
+
+**CI runs:**
+- Full pytest suite (same tests as local)
+- Code coverage (codecov upload)
+- Linting (pylint, flake8)
+- Legacy bash test suites
+
+**CI uses modern tool versions:**
+- pytest 8.x (requires Python 3.9+)
+- coverage.py 7.x (requires Python 3.9+)
+- pylint 3.x (requires Python 3.9+)
+
+**IMPORTANT**: Even though CI uses Python 3.9, all code must still be 3.6.8-compatible!
+
+### Verification Checklist
+
+Before pushing any code:
+
+- [ ] Tested locally with Python **3.6.8** (not 3.7, 3.8, 3.9, etc.)
+- [ ] No `capture_output=True` or `text=True` in subprocess calls
+- [ ] All type hints use `typing` module imports (`List`, `Dict`, not `list`, `dict`)
+- [ ] No walrus operators (`:=`)
+- [ ] No dictionary union operators (`|`)
+- [ ] All tests pass with `pytest tests/ -v`
+- [ ] Code compiles with `python -m py_compile`
+
+### Common Pitfalls
+
+**Pitfall 1**: Testing with wrong Python version
+```bash
+# ❌ WRONG - Using system Python (might be 3.9+)
+python -V  # Shows Python 3.9.2
+pytest tests/ -v  # Tests pass
+
+# ✅ CORRECT - Verify 3.6.8 first
+python3.6 -V  # Shows Python 3.6.8
+python3.6 -m pytest tests/ -v  # Tests must pass
+```
+
+**Pitfall 2**: Using Python 3.7+ features because CI passes
+```python
+# CI with Python 3.9 will pass this, but production will FAIL
+result = subprocess.run(['cmd'], capture_output=True)  # ❌ Python 3.7+
+
+# Must use Python 3.6 compatible syntax
+result = subprocess.run(['cmd'], stdout=subprocess.PIPE, stderr=subprocess.PIPE)  # ✅
+```
+
+**Pitfall 3**: Assuming newer pytest syntax works on 3.6.8
+```python
+# Some pytest features require newer Python
+# Always test with Python 3.6.8 locally to catch these
 ```
 
 ## Core Architecture
