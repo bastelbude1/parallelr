@@ -39,12 +39,11 @@ def get_python_for_parallelr():
         result = subprocess.run(
             ['python', '--version'],
             stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            universal_newlines=True,
+            stderr=subprocess.STDOUT,
             timeout=5
         )
-        # Check both stdout and stderr as --version output location varies
-        output = result.stdout + result.stderr
+        # Decode output (bytes) to string and check for Python 3.6
+        output = result.stdout.decode('utf-8', errors='replace') if isinstance(result.stdout, bytes) else result.stdout
         if result.returncode == 0 and 'Python 3.6' in output:
             return 'python'
     except (FileNotFoundError, subprocess.TimeoutExpired):
@@ -55,10 +54,11 @@ def get_python_for_parallelr():
         result = subprocess.run(
             ['python3.6', '--version'],
             stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            universal_newlines=True,
+            stderr=subprocess.STDOUT,
             timeout=5
         )
+        # Decode output (bytes) to string for version check
+        output = result.stdout.decode('utf-8', errors='replace') if isinstance(result.stdout, bytes) else result.stdout
         if result.returncode == 0:
             return 'python3.6'
     except (FileNotFoundError, subprocess.TimeoutExpired):
