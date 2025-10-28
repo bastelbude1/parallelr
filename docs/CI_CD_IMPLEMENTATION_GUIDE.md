@@ -1078,14 +1078,29 @@ uses: actions/checkout@v4
 **Never**:
 ```yaml
 # ❌ Don't hardcode secrets
-run: curl -u user:password123 api.example.com
+run: curl -u <USERNAME>:<PASSWORD> api.example.com
 ```
 
-**Always**:
+**Always use environment variables or secret managers**:
+
 ```yaml
-# ✅ Use GitHub Secrets
-run: curl -u user:${{ secrets.API_PASSWORD }} api.example.com
+# ✅ Option 1: Use GitHub Secrets
+run: curl -u ${{ secrets.API_USER }}:${{ secrets.API_PASSWORD }} api.example.com
+
+# ✅ Option 2: Use environment variables (set in CI/CD settings)
+run: curl -u "${API_USER}:${API_PASSWORD}" api.example.com
+
+# ✅ Option 3: Use secret manager (e.g., AWS Secrets Manager, Vault)
+run: |
+  API_TOKEN=$(aws secretsmanager get-secret-value --secret-id my-api-token --query SecretString --output text)
+  curl -H "Authorization: Bearer ${API_TOKEN}" api.example.com
 ```
+
+**How to set GitHub Secrets**:
+1. Navigate to repository Settings → Secrets and variables → Actions
+2. Click "New repository secret"
+3. Add `API_USER` and `API_PASSWORD`
+4. Reference them in workflows as `${{ secrets.SECRET_NAME }}`
 
 ### 5. Descriptive Job and Step Names
 
