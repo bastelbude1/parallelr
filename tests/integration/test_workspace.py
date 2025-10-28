@@ -7,6 +7,7 @@ Tests shared and isolated workspace modes.
 import subprocess
 import sys
 import os
+import uuid
 from pathlib import Path
 import pytest
 
@@ -126,8 +127,6 @@ ls -la
 @pytest.mark.integration
 def test_workspace_persists_between_runs(temp_dir, isolated_workspace):
     """Test that workspace persists between different runs."""
-    import uuid
-
     workspace_dir = isolated_workspace['workspace']
     # Use unique marker name to avoid race conditions in parallel test execution
     marker_name = f'persistent_marker_{uuid.uuid4().hex[:8]}.txt'
