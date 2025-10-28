@@ -1087,8 +1087,8 @@ The project includes a comprehensive test suite with 113 tests covering function
 ### Run Tests
 
 ```bash
-# Verify Python version
-python -V  # Should show Python 3.6.8 or higher
+# Verify Python version (must be exactly Python 3.6.8 for local testing)
+python -V  # Must show Python 3.6.8
 
 # Install test dependencies
 pip install -r tests/requirements-test.txt
