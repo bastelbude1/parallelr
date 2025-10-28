@@ -14,7 +14,7 @@ concurrency:
 jobs:
   test:
     name: Run Tests (Python 3.9 test suite, Python 3.6.8 for parallelr)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
 
     steps:
     - name: Checkout code
@@ -70,7 +70,7 @@ jobs:
 
   lint:
     name: Lint Code (Python 3.9)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
 
     steps:
     - name: Checkout code
@@ -96,7 +96,7 @@ jobs:
 
   test-legacy:
     name: Run Legacy Bash Tests (Python 3.6.8 for parallelr)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
 
     steps:
     - name: Checkout code
