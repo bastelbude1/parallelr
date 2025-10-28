@@ -1,5 +1,7 @@
 # parallelr - Parallel Task Executor
 
+[![Test Suite](https://github.com/bastelbude1/parallelr/actions/workflows/test.yml/badge.svg)](https://github.com/bastelbude1/parallelr/actions/workflows/test.yml)
+
 A robust, production-ready Python framework for executing tasks in parallel with comprehensive configuration, monitoring, and error handling capabilities.
 
 [[_TOC_]]
@@ -7,6 +9,8 @@ A robust, production-ready Python framework for executing tasks in parallel with
 ## Overview
 
 **parallelr** is a Python 3.6.8+ compatible parallel task execution framework designed for reliability, flexibility, and production use. It executes multiple tasks concurrently using a configurable worker pool, with built-in timeout handling, resource monitoring, comprehensive logging, and automatic error detection.
+
+**Testing Strategy**: This project uses a dual Python testing approach - local testing with Python 3.6.8 ensures backward compatibility, while CI testing with Python 3.9 verifies implementation correctness. Both environments use the same test suite for comprehensive coverage.
 
 Perfect for batch processing, data pipelines, test suites, or any scenario where you need to execute multiple independent tasks efficiently.
 
