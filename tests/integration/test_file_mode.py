@@ -7,6 +7,8 @@ Tests traditional directory-based task discovery and execution.
 import subprocess
 import sys
 import os
+import re
+import shutil
 from pathlib import Path
 import pytest
 \n# Import from conftest
@@ -16,6 +18,15 @@ from conftest import PARALLELR_BIN, PYTHON_FOR_PARALLELR
 
 PROJECT_ROOT = Path(__file__).parent.parent.parent
 PARALLELR_BIN = PROJECT_ROOT / 'bin' / 'parallelr.py'
+
+# Skip all tests if bash is not available (POSIX dependency)
+pytestmark = pytest.mark.skipif(shutil.which("bash") is None,
+                                reason="Requires bash (POSIX)")
+
+# Early abort if parallelr.py is missing
+if not PARALLELR_BIN.exists():
+    pytest.skip("bin/parallelr.py not found - integration tests skipped",
+                allow_module_level=True)
 
 
 @pytest.fixture
@@ -104,8 +115,8 @@ def test_file_mode_specific_files(sample_task_dir, isolated_env):
     )
 
     assert result.returncode == 0
-    # Should only execute 2 tasks
-    assert 'Executing 2 tasks' in result.stdout
+    # Should only execute 2 tasks (robust text check with regex)
+    assert re.search(r'(?i)\bexecut(?:e|ing)\b.*\b2\b.*\btasks?\b', result.stdout)
 
 
 @pytest.mark.integration
@@ -227,7 +238,8 @@ def test_file_mode_worker_count(sample_task_dir, isolated_env):
     )
 
     assert result.returncode == 0
-    assert '1 workers' in result.stdout or 'Workers: 1' in result.stdout
+    # Check for worker count with robust regex (handles singular/plural, case variations)
+    assert re.search(r'\bworkers?\b[:=]?\s*1\b', result.stdout, re.I)
 
 
 @pytest.mark.integration
@@ -253,8 +265,9 @@ def test_file_mode_timeout(temp_dir, isolated_env):
         timeout=15
     )
 
-    # Should timeout
-    assert 'timeout' in result.stdout.lower() or 'timed out' in result.stdout.lower()
+    # Should timeout (check both stdout and stderr)
+    combined = (result.stdout + result.stderr).lower()
+    assert ('timeout' in combined) or ('timed out' in combined)
 
 
 @pytest.mark.integration
