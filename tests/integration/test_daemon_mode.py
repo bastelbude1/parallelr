@@ -373,7 +373,10 @@ def test_multiple_daemon_instances(sample_task_dir, isolated_daemon_env):
     assert poll_until(
         lambda: len([p for p in pid_file.read_text().strip().split('\n') if p.strip()]) >= initial_count + 1,
         timeout=10
-    ), f"Second daemon not registered (baseline: {initial_count}, current: {len([p for p in pid_file.read_text().strip().split('\n') if p.strip()])})"
+    ), (
+        f"Second daemon not registered (baseline: {initial_count}, "
+        f"current: {len([p for p in pid_file.read_text().strip().split(chr(10)) if p.strip()])})"
+    )
 
     # List workers should show multiple
     list_result = subprocess.run(
