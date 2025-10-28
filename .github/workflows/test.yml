@@ -14,7 +14,7 @@ concurrency:
 jobs:
   test:
     name: Run Tests (Python 3.6.8)
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-22.04
 
     steps:
     - name: Checkout code
@@ -55,7 +55,7 @@ jobs:
 
   lint:
     name: Lint Code (Python 3.6.8)
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-22.04
 
     steps:
     - name: Checkout code
@@ -81,7 +81,7 @@ jobs:
 
   test-legacy:
     name: Run Legacy Bash Tests (Python 3.6.8)
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-22.04
 
     steps:
     - name: Checkout code
@@ -109,7 +109,7 @@ jobs:
 
   summary:
     name: Test Summary
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-22.04
     needs: [test, lint, test-legacy]
     if: always()
 
