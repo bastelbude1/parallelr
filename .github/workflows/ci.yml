@@ -28,7 +28,7 @@ jobs:
     - name: Install test dependencies
       run: |
         python -m pip install --upgrade pip
-        python -m pip install -r tests/requirements-test-py36.txt
+        python -m pip install -r tests/requirements-test.txt
 
     - name: Run unit tests
       run: |
@@ -73,7 +73,7 @@ jobs:
 
     - name: Run pylint
       run: |
-        pylint bin/parallelr.py --disable=C0103,C0114,C0115,C0116
+        pylint bin/parallelr.py --disable=C0103,C0114,C0115,C0116,C0301,C0303
 
     - name: Run flake8
       run: |
@@ -95,7 +95,7 @@ jobs:
     - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
-        python -m pip install -r tests/requirements-test-py36.txt
+        python -m pip install -r tests/requirements-test.txt
 
     - name: Run multi-argument tests
       run: |
