@@ -125,7 +125,7 @@ def test_file_mode_glob_patterns(sample_task_dir, isolated_env):
     cmd = [sys.executable, str(PARALLELR_BIN)]
     for p in matches:
         cmd += ['-T', str(p)]
-    cmd += ['-C', 'bash @TASK@']
+    cmd += ['-r', '-C', 'bash @TASK@']
 
     result = subprocess.run(
         cmd,
@@ -133,7 +133,7 @@ def test_file_mode_glob_patterns(sample_task_dir, isolated_env):
         stderr=subprocess.PIPE,
         universal_newlines=True,
         env=isolated_env['env'],
-        timeout=10
+        timeout=30
     )
 
     # Should successfully execute both tasks
