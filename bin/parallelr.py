@@ -922,7 +922,29 @@ class SecureTaskExecutor:
 
 class ParallelTaskManager:
     """Main parallel task execution manager."""
-    
+
+    # Error message templates for consistent error handling
+    _TEMPLATE_DIR_ERROR = (
+        "Arguments mode requires a template FILE, not a directory: {path}. "
+        "Omit -T to execute commands directly without a template."
+    )
+    _TEMPLATE_NOT_FOUND_ERROR = (
+        "Template file not found: {filename}\n"
+        "Searched in current directory and standard TASKER locations:\n"
+        "  - ~/tasker/test_cases/\n"
+        "  - ~/TASKER/test_cases/\n"
+        "  - ~/tasker/test_cases/functional/\n"
+        "  - ~/TASKER/test_cases/functional/"
+    )
+    _ARGS_FILE_NOT_FOUND_ERROR = (
+        "Arguments file not found: {filename}\n"
+        "Searched in current directory and standard TASKER locations:\n"
+        "  - ~/tasker/test_cases/\n"
+        "  - ~/TASKER/test_cases/\n"
+        "  - ~/tasker/test_cases/functional/\n"
+        "  - ~/TASKER/test_cases/functional/"
+    )
+
     def __init__(self, max_workers, timeout, task_start_delay, tasks_paths, command_template,
                  script_path, dry_run=False, enable_stop_limits=False, log_task_output=True,
                  file_extension=None, arguments_file=None, env_var=None, separator=None, debug=False):
@@ -1149,20 +1171,14 @@ class ParallelTaskManager:
                 initial_path = Path(self.tasks_paths[0])
                 if initial_path.is_dir():
                     raise ParallelTaskExecutorError(
-                        f"Arguments mode requires a template FILE, not a directory: {initial_path}. "
-                        "Omit -T to execute commands directly without a template."
+                        self._TEMPLATE_DIR_ERROR.format(path=initial_path)
                     )
 
                 # Resolve template file path with fallback search
                 template_file = self._resolve_template_path(self.tasks_paths[0])
                 if not template_file:
                     raise ParallelTaskExecutorError(
-                        f"Template file not found: {self.tasks_paths[0]}\n"
-                        f"Searched in current directory and standard TASKER locations:\n"
-                        f"  - ~/tasker/test_cases/\n"
-                        f"  - ~/TASKER/test_cases/\n"
-                        f"  - ~/tasker/test_cases/functional/\n"
-                        f"  - ~/TASKER/test_cases/functional/"
+                        self._TEMPLATE_NOT_FOUND_ERROR.format(filename=self.tasks_paths[0])
                     )
             else:
                 template_file = None  # No template - direct command execution
@@ -1183,12 +1199,7 @@ class ParallelTaskManager:
             args_file = self._resolve_template_path(self.arguments_file)
             if not args_file:
                 raise ParallelTaskExecutorError(
-                    f"Arguments file not found: {self.arguments_file}\n"
-                    f"Searched in current directory and standard TASKER locations:\n"
-                    f"  - ~/tasker/test_cases/\n"
-                    f"  - ~/TASKER/test_cases/\n"
-                    f"  - ~/tasker/test_cases/functional/\n"
-                    f"  - ~/TASKER/test_cases/functional/"
+                    self._ARGS_FILE_NOT_FOUND_ERROR.format(filename=self.arguments_file)
                 )
 
             # Delimiter mapping for multi-argument support
