@@ -1059,6 +1059,39 @@ class ParallelTaskManager:
                     f"Available placeholders: @ARG@ or @ARG_1@ through @ARG_{num_args}@"
                 )
 
+    def _resolve_template_path(self, template_path_str):
+        """
+        Resolve template file path with fallback search in standard TASKER locations.
+
+        Args:
+            template_path_str: Template file path as string
+
+        Returns:
+            Path object if file is found, None otherwise
+        """
+        template_path = Path(template_path_str)
+
+        # First check if file exists as specified (current dir or absolute path)
+        if template_path.is_file():
+            return template_path
+
+        # If not found, search in standard TASKER test_cases locations
+        home = Path.home()
+        search_paths = [
+            home / 'tasker' / 'test_cases' / template_path_str,
+            home / 'TASKER' / 'test_cases' / template_path_str,
+            home / 'tasker' / 'test_cases' / 'functional' / template_path_str,
+            home / 'TASKER' / 'test_cases' / 'functional' / template_path_str,
+        ]
+
+        for search_path in search_paths:
+            if search_path.is_file():
+                self.logger.debug(f"Template file '{template_path_str}' resolved to: {search_path}")
+                return search_path
+
+        # File not found in any location
+        return None
+
     def _discover_tasks(self):
         """Discover task files from directories and/or explicit file paths, or create tasks from arguments."""
         task_entries = []
@@ -1072,14 +1105,26 @@ class ParallelTaskManager:
                     raise ParallelTaskExecutorError(
                         "Arguments mode with -T requires exactly one template file (not multiple paths or directories)"
                     )
-                template_file = Path(self.tasks_paths[0])
-                if template_file.is_dir():
+
+                # First check if it's a directory (before attempting to resolve as file)
+                initial_path = Path(self.tasks_paths[0])
+                if initial_path.is_dir():
                     raise ParallelTaskExecutorError(
-                        f"Arguments mode requires a template FILE, not a directory: {template_file}. "
+                        f"Arguments mode requires a template FILE, not a directory: {initial_path}. "
                         "Omit -T to execute commands directly without a template."
                     )
-                if not template_file.is_file():
-                    raise ParallelTaskExecutorError(f"Template file not found: {template_file}")
+
+                # Resolve template file path with fallback search
+                template_file = self._resolve_template_path(self.tasks_paths[0])
+                if not template_file:
+                    raise ParallelTaskExecutorError(
+                        f"Template file not found: {self.tasks_paths[0]}\n"
+                        f"Searched in current directory and standard TASKER locations:\n"
+                        f"  - ~/tasker/test_cases/\n"
+                        f"  - ~/TASKER/test_cases/\n"
+                        f"  - ~/tasker/test_cases/functional/\n"
+                        f"  - ~/TASKER/test_cases/functional/"
+                    )
             else:
                 template_file = None  # No template - direct command execution
 
@@ -1095,9 +1140,17 @@ class ParallelTaskManager:
                         "and no environment variable specified (-E). Arguments may not be used."
                     )
 
-            args_file = Path(self.arguments_file)
-            if not args_file.is_file():
-                raise ParallelTaskExecutorError(f"Arguments file not found: {args_file}")
+            # Resolve arguments file path with fallback search
+            args_file = self._resolve_template_path(self.arguments_file)
+            if not args_file:
+                raise ParallelTaskExecutorError(
+                    f"Arguments file not found: {self.arguments_file}\n"
+                    f"Searched in current directory and standard TASKER locations:\n"
+                    f"  - ~/tasker/test_cases/\n"
+                    f"  - ~/TASKER/test_cases/\n"
+                    f"  - ~/tasker/test_cases/functional/\n"
+                    f"  - ~/TASKER/test_cases/functional/"
+                )
 
             # Delimiter mapping for multi-argument support
             # Using regex patterns for proper splitting:
