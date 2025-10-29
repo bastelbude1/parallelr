@@ -114,21 +114,25 @@ def verify_csv_row(row: Dict[str, Any], expected: Dict[str, Any],
     Args:
         row: CSV row dictionary
         expected: Dictionary of expected field values
-        strict: If True, all expected fields must match exactly.
+        strict: If True, row must contain exactly the fields in expected (no extra fields).
                 If False, only checks that expected fields match (allows extra fields)
 
     Returns:
         True if row matches expected values
 
     Raises:
-        AssertionError: If any expected field doesn't match
+        AssertionError: If any expected field doesn't match or if strict=True and
+                       row contains fields not in expected
 
     Example:
         >>> row = {'status': 'SUCCESS', 'exit_code': 0, 'worker_id': 1}
         >>> expected = {'status': 'SUCCESS', 'exit_code': 0}
-        >>> verify_csv_row(row, expected)
+        >>> verify_csv_row(row, expected)  # Passes (non-strict allows extra 'worker_id')
         True
+        >>> verify_csv_row(row, expected, strict=True)  # Fails (extra field 'worker_id')
+        AssertionError: Unexpected fields in CSV row: worker_id
     """
+    # Validate expected fields are present and match
     for key, expected_value in expected.items():
         if key not in row:
             raise AssertionError(f"Expected field '{key}' not found in CSV row")
@@ -138,6 +142,14 @@ def verify_csv_row(row: Dict[str, Any], expected: Dict[str, Any],
             raise AssertionError(
                 f"Field '{key}' mismatch: expected {expected_value!r}, "
                 f"got {actual_value!r}"
+            )
+
+    # If strict mode, check for unexpected fields
+    if strict:
+        unexpected_keys = set(row.keys()) - set(expected.keys())
+        if unexpected_keys:
+            raise AssertionError(
+                f"Unexpected fields in CSV row: {', '.join(sorted(unexpected_keys))}"
             )
 
     return True
