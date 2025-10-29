@@ -131,7 +131,7 @@ parallelr --check-dependencies
 
 | Argument | Description |
 |----------|-------------|
-| `-r, --run` | Execute tasks (without this flag, runs in dry-run mode) |
+| `-r, --run` | Execute tasks (without this flag, runs in dry-run mode). **Dry-run mode** shows full command with environment variables (e.g., `HOSTNAME=value cmd`). **Execution mode** sets environment variables internally and passes them to subprocesses. |
 | `-m, --max N` | Maximum parallel workers (default: 20, max: 100, overrides config) |
 | `-t, --timeout N` | Task timeout in seconds (default: 600, max: 3600, overrides config) |
 | `-s, --sleep N` | Delay between starting new tasks (0-60 seconds, default: 0). Use to throttle resource consumption |
@@ -169,9 +169,11 @@ parallelr --check-dependencies
 
 ```bash
 # Dry-run to preview commands (safe, no execution)
+# NOTE: Dry-run mode displays full commands including environment variable assignments
 parallelr -T ./tasks -C "python3 @TASK@"
 
 # Execute Python scripts with 5 workers
+# NOTE: In execution mode, environment variables are set internally (not printed to stdout)
 parallelr -T ./tasks -C "python3 @TASK@" -r -m 5
 
 # Execute only .txt files from a directory
