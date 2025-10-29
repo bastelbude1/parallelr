@@ -390,13 +390,23 @@ def test_arguments_mode_no_template_env_var(sample_multi_args_file, isolated_env
 
     # Extract output log file path from stdout
     import re
+    import os
+    import time
     output_match = re.search(r'- Output: (.+\.txt)', result.stdout)
     assert output_match, "Could not find output log file path in stdout"
     output_file = output_match.group(1)
 
+    # Wait for output log file to be written (with timeout to avoid hanging)
+    max_wait = 2.0  # seconds
+    wait_interval = 0.1  # seconds
+    elapsed = 0.0
+    while not os.path.exists(output_file) and elapsed < max_wait:
+        time.sleep(wait_interval)
+        elapsed += wait_interval
+
+    assert os.path.exists(output_file), f"Output log file was not created: {output_file}"
+
     # Read the output log file to verify environment variables were expanded
-    import time
-    time.sleep(0.1)  # Brief delay to ensure file is written
     with open(output_file, 'r') as f:
         output_content = f.read()
 
