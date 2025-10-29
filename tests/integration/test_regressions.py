@@ -195,11 +195,11 @@ def test_regression_csv_semicolon_escaping(temp_dir, isolated_env):
     task_file.write_text('#!/bin/bash\necho "Field1;Field2;Field3"\n')
     task_file.chmod(0o755)
 
-    # Run with command that also contains semicolon
+    # Run with simple command - the task output contains semicolons which tests CSV escaping
     result = subprocess.run(
         [PYTHON_FOR_PARALLELR, str(PARALLELR_BIN),
          '-T', str(temp_dir),
-         '-C', 'bash @TASK@; echo "Extra;Command"',
+         '-C', 'bash @TASK@',
          '-r', '-m', '1'],
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,

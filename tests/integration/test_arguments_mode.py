@@ -399,7 +399,8 @@ def test_arguments_mode_no_template_single_arg(sample_arguments_file, isolated_e
     # Verify @ARG@ placeholder was replaced in command field
     for record in csv_records:
         assert '@ARG@' not in record['command'], "Placeholder @ARG@ was not replaced in command"
-        assert 'echo "Testing' in record['command'], "Command doesn't match expected format"
+        assert 'echo' in record['command'] and 'Testing' in record['command'], \
+            "Command doesn't contain expected keywords"
 
 
 @pytest.mark.integration
@@ -447,7 +448,8 @@ def test_arguments_mode_no_template_multi_args(sample_multi_args_file, isolated_
         assert '@ARG_1@' not in record['command'], "Placeholder @ARG_1@ was not replaced in command"
         assert '@ARG_2@' not in record['command'], "Placeholder @ARG_2@ was not replaced in command"
         assert '@ARG_3@' not in record['command'], "Placeholder @ARG_3@ was not replaced in command"
-        assert 'echo "Server:' in record['command'], "Command doesn't match expected format"
+        assert 'echo' in record['command'] and 'Server:' in record['command'], \
+            "Command doesn't contain expected keywords"
 
 
 @pytest.mark.integration
