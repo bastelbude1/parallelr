@@ -326,5 +326,179 @@ def test_argument_file_path_validation(temp_dir):
     assert result.returncode != 0
 
 
+@pytest.mark.security
+def test_template_path_traversal_prevention():
+    """Test that template path traversal attacks are rejected."""
+    # Try various path traversal patterns
+    traversal_patterns = [
+        '../../../etc/passwd',
+        '../../../../../../etc/shadow',
+        'foo/../../../etc/passwd',
+        './../../etc/hosts',
+        'bar/../../baz/../../../etc/passwd',
+    ]
+
+    for pattern in traversal_patterns:
+        result = subprocess.run(
+            [PYTHON_FOR_PARALLELR, str(PARALLELR_BIN),
+             '-T', pattern,
+             '-A', '/dev/null',  # Dummy args file to trigger arguments mode
+             '-C', 'cat @TASK@'],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            universal_newlines=True,
+            timeout=10
+        )
+
+        # Should reject path traversal attempts
+        assert result.returncode != 0, (
+            f"Path traversal should be rejected: {pattern}\n"
+            f"stdout: {result.stdout}\n"
+            f"stderr: {result.stderr}"
+        )
+
+        # Should have warning about rejection in stderr
+        output = result.stdout + result.stderr
+        assert 'Rejected' in output or 'not found' in output, (
+            f"Expected rejection message for pattern: {pattern}\n"
+            f"output: {output}"
+        )
+
+
+@pytest.mark.security
+def test_arguments_file_path_traversal_prevention():
+    """Test that arguments file path traversal attacks are rejected."""
+    # Try various path traversal patterns in arguments file
+    traversal_patterns = [
+        '../../../etc/passwd',
+        '../../../../../../etc/shadow',
+        'foo/../../../etc/hosts',
+    ]
+
+    for pattern in traversal_patterns:
+        result = subprocess.run(
+            [PYTHON_FOR_PARALLELR, str(PARALLELR_BIN),
+             '-T', '/dev/null',  # Dummy template
+             '-A', pattern,
+             '-C', 'echo test'],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            universal_newlines=True,
+            timeout=10
+        )
+
+        # Should reject path traversal attempts
+        assert result.returncode != 0, (
+            f"Arguments file path traversal should be rejected: {pattern}\n"
+            f"stdout: {result.stdout}\n"
+            f"stderr: {result.stderr}"
+        )
+
+        # Should have warning or error message
+        output = result.stdout + result.stderr
+        assert 'Rejected' in output or 'not found' in output, (
+            f"Expected rejection message for pattern: {pattern}\n"
+            f"output: {output}"
+        )
+
+
+@pytest.mark.security
+def test_template_fallback_path_containment(temp_dir):
+    """Test that fallback path resolution enforces directory containment."""
+    # Create a task file in temp directory
+    task_file = temp_dir / 'test_task.sh'
+    task_file.write_text('#!/bin/bash\necho "test"\n')
+    task_file.chmod(0o755)
+
+    # Create args file
+    args_file = temp_dir / 'args.txt'
+    args_file.write_text('arg1\narg2\n')
+
+    # Try to use just the filename (should try fallback locations)
+    # But since it's not in standard TASKER locations, should fail
+    result = subprocess.run(
+        [PYTHON_FOR_PARALLELR, str(PARALLELR_BIN),
+         '-T', 'nonexistent_template.sh',
+         '-A', str(args_file),
+         '-C', 'bash @TASK@'],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        universal_newlines=True,
+        timeout=10
+    )
+
+    # Should fail because file doesn't exist in current dir or fallback locations
+    assert result.returncode != 0
+
+    # Error message should mention searched locations
+    output = result.stdout + result.stderr
+    assert 'not found' in output.lower() or 'searched' in output.lower(), (
+        f"Expected helpful error message about search locations\n"
+        f"output: {output}"
+    )
+
+
+@pytest.mark.security
+def test_absolute_path_not_affected_by_fallback():
+    """Test that absolute paths bypass fallback search for security."""
+    # Use absolute path that doesn't exist
+    result = subprocess.run(
+        [PYTHON_FOR_PARALLELR, str(PARALLELR_BIN),
+         '-T', '/nonexistent/absolute/path.sh',
+         '-A', '/nonexistent/args.txt',
+         '-C', 'echo test'],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        universal_newlines=True,
+        timeout=10
+    )
+
+    # Should fail immediately without fallback search
+    assert result.returncode != 0
+
+    output = result.stdout + result.stderr
+    # Should NOT mention fallback search locations for absolute paths
+    assert 'tasker/test_cases' not in output.lower(), (
+        f"Absolute paths should not use fallback search\n"
+        f"output: {output}"
+    )
+
+
+@pytest.mark.security
+def test_symlink_escape_prevention(temp_dir):
+    """Test that symlinks cannot escape base directory during fallback."""
+    import os
+
+    # Create a symlink that points outside temp_dir
+    link_name = 'escape_link'
+    link_path = temp_dir / link_name
+
+    try:
+        # Create symlink pointing to parent directory
+        os.symlink('..', str(link_path))
+    except OSError as e:
+        pytest.skip(f"Cannot create symlink for test: {e}")
+
+    # Try to use the symlink via path traversal
+    result = subprocess.run(
+        [PYTHON_FOR_PARALLELR, str(PARALLELR_BIN),
+         '-T', f'{link_name}/etc/passwd',
+         '-A', '/dev/null',
+         '-C', 'cat @TASK@'],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        universal_newlines=True,
+        timeout=10,
+        cwd=str(temp_dir)
+    )
+
+    # Should reject (either catches symlink or catches path traversal)
+    assert result.returncode != 0, (
+        f"Symlink escape attempt should be rejected\n"
+        f"stdout: {result.stdout}\n"
+        f"stderr: {result.stderr}"
+    )
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

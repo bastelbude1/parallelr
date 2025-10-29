@@ -1177,9 +1177,15 @@ class ParallelTaskManager:
                 # Resolve template file path with fallback search
                 template_file = self._resolve_template_path(self.tasks_paths[0])
                 if not template_file:
-                    raise ParallelTaskExecutorError(
-                        self._TEMPLATE_NOT_FOUND_ERROR.format(filename=self.tasks_paths[0])
-                    )
+                    # Use appropriate error message based on path type
+                    if Path(self.tasks_paths[0]).is_absolute():
+                        raise ParallelTaskExecutorError(
+                            f"Template file not found: {self.tasks_paths[0]}"
+                        )
+                    else:
+                        raise ParallelTaskExecutorError(
+                            self._TEMPLATE_NOT_FOUND_ERROR.format(filename=self.tasks_paths[0])
+                        )
             else:
                 template_file = None  # No template - direct command execution
 
@@ -1198,9 +1204,15 @@ class ParallelTaskManager:
             # Resolve arguments file path with fallback search
             args_file = self._resolve_template_path(self.arguments_file)
             if not args_file:
-                raise ParallelTaskExecutorError(
-                    self._ARGS_FILE_NOT_FOUND_ERROR.format(filename=self.arguments_file)
-                )
+                # Use appropriate error message based on path type
+                if Path(self.arguments_file).is_absolute():
+                    raise ParallelTaskExecutorError(
+                        f"Arguments file not found: {self.arguments_file}"
+                    )
+                else:
+                    raise ParallelTaskExecutorError(
+                        self._ARGS_FILE_NOT_FOUND_ERROR.format(filename=self.arguments_file)
+                    )
 
             # Delimiter mapping for multi-argument support
             # Using regex patterns for proper splitting:
