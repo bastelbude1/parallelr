@@ -328,8 +328,9 @@ def test_argument_file_path_validation(temp_dir):
 
 @pytest.mark.security
 def test_template_path_traversal_prevention():
-    """Test that template path traversal attacks are rejected."""
-    # Try various path traversal patterns
+    """Test that template path traversal attacks that escape are rejected."""
+    # Try various path traversal patterns that try to escape cwd
+    # These should be rejected because they resolve outside the working directory
     traversal_patterns = [
         '../../../etc/passwd',
         '../../../../../../etc/shadow',
@@ -350,25 +351,70 @@ def test_template_path_traversal_prevention():
             timeout=10
         )
 
-        # Should reject path traversal attempts
+        # Should reject path traversal attempts that escape cwd
         assert result.returncode != 0, (
-            f"Path traversal should be rejected: {pattern}\n"
+            f"Path traversal that escapes should be rejected: {pattern}\n"
             f"stdout: {result.stdout}\n"
             f"stderr: {result.stderr}"
         )
 
-        # Should have warning about rejection in stderr
+        # Should have warning or error message
         output = result.stdout + result.stderr
-        assert 'Rejected' in output or 'not found' in output, (
+        assert 'Rejected' in output or 'not found' in output or 'outside' in output, (
             f"Expected rejection message for pattern: {pattern}\n"
             f"output: {output}"
         )
 
 
 @pytest.mark.security
+def test_legitimate_relative_paths_with_dotdot(temp_dir):
+    """Test that legitimate relative paths with .. are allowed when safe."""
+    # Create subdirectory structure
+    subdir = temp_dir / 'subdir'
+    subdir.mkdir()
+
+    # Create task file in temp_dir root
+    task_file = temp_dir / 'task.sh'
+    task_file.write_text('#!/bin/bash\necho "test"\n')
+    task_file.chmod(0o755)
+
+    # Create args file
+    args_file = temp_dir / 'args.txt'
+    args_file.write_text('arg1\n')
+
+    # Use relative path with .. that resolves safely within temp_dir
+    # subdir/../task.sh resolves to temp_dir/task.sh
+    result = subprocess.run(
+        [PYTHON_FOR_PARALLELR, str(PARALLELR_BIN),
+         '-T', 'subdir/../task.sh',
+         '-A', str(args_file),
+         '-C', 'bash @TASK@',
+         '-r'],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        universal_newlines=True,
+        timeout=30,
+        cwd=str(temp_dir)  # Run from temp_dir so relative path works
+    )
+
+    # Should succeed - legitimate relative path within cwd
+    assert result.returncode == 0, (
+        f"Legitimate relative path with .. should be allowed\n"
+        f"stdout: {result.stdout}\n"
+        f"stderr: {result.stderr}"
+    )
+
+    # Should not have rejection warnings
+    assert 'Rejected' not in result.stderr, (
+        f"Should not reject legitimate relative path\n"
+        f"stderr: {result.stderr}"
+    )
+
+
+@pytest.mark.security
 def test_arguments_file_path_traversal_prevention():
-    """Test that arguments file path traversal attacks are rejected."""
-    # Try various path traversal patterns in arguments file
+    """Test that arguments file path traversal attacks that escape are rejected."""
+    # Try various path traversal patterns that try to escape cwd
     traversal_patterns = [
         '../../../etc/passwd',
         '../../../../../../etc/shadow',
@@ -387,16 +433,16 @@ def test_arguments_file_path_traversal_prevention():
             timeout=10
         )
 
-        # Should reject path traversal attempts
+        # Should reject path traversal attempts that escape cwd
         assert result.returncode != 0, (
-            f"Arguments file path traversal should be rejected: {pattern}\n"
+            f"Arguments file path traversal that escapes should be rejected: {pattern}\n"
             f"stdout: {result.stdout}\n"
             f"stderr: {result.stderr}"
         )
 
         # Should have warning or error message
         output = result.stdout + result.stderr
-        assert 'Rejected' in output or 'not found' in output, (
+        assert 'Rejected' in output or 'not found' in output or 'outside' in output, (
             f"Expected rejection message for pattern: {pattern}\n"
             f"output: {output}"
         )

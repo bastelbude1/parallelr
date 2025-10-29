@@ -1086,8 +1086,9 @@ class ParallelTaskManager:
         Resolve template file path with fallback search in standard TASKER locations.
 
         Security: Prevents path traversal attacks by:
-        - Rejecting paths with parent directory components (..)
-        - Verifying resolved paths are within intended base directories
+        - Resolving paths to absolute form and verifying containment
+        - Checking that resolved paths stay within intended base directories
+        - Allowing legitimate relative paths with '..' that resolve safely
 
         Args:
             template_path_str: Template file path as string
@@ -1097,21 +1098,39 @@ class ParallelTaskManager:
         """
         template_path = Path(template_path_str)
 
-        # Security: Reject absolute paths - handle them directly without fallback
+        # Security: Handle absolute paths - no fallback search
         if template_path.is_absolute():
             if template_path.is_file():
                 return template_path
             return None
 
-        # Security: Reject paths with parent directory traversal
-        # Prevents attacks like "../../../etc/passwd"
-        if '..' in template_path.parts:
-            self.logger.warning(f"Rejected template path with parent traversal: {template_path_str}")
-            return None
+        # First check if file exists in current directory (or relative to cwd)
+        # Security: Resolve and verify it's safe before returning
+        if template_path.exists():
+            try:
+                # Resolve to absolute path to check actual location
+                resolved = template_path.resolve()
 
-        # First check if file exists as specified (current dir or relative path)
-        if template_path.is_file():
-            return template_path
+                # Verify the resolved path is a regular file
+                if resolved.is_file():
+                    # Security: Check if resolved path is within current working directory
+                    # This prevents "../../../etc/passwd" from succeeding
+                    cwd_resolved = Path.cwd().resolve()
+                    try:
+                        resolved.relative_to(cwd_resolved)
+                        # Path is within cwd, safe to use
+                        return resolved
+                    except ValueError:
+                        # Path resolved outside cwd - check if it's trying to escape
+                        self.logger.warning(
+                            f"Rejected template path that resolves outside working directory: "
+                            f"{template_path_str} -> {resolved}"
+                        )
+                        return None
+            except (OSError, RuntimeError) as e:
+                # resolve() can fail on broken symlinks or permission issues
+                self.logger.debug(f"Failed to resolve path {template_path_str}: {e}")
+                return None
 
         # If not found, search in standard TASKER test_cases locations
         home = Path.home()
