@@ -619,11 +619,20 @@ class SecureTaskExecutor:
 
         # Expand environment variables from extra_env (only variables set via -E flag)
         # This allows commands like "echo $HOSTNAME" to work without shell=True
+        # Uses regex to avoid overlapping name corruption (e.g., $HOST then $HOSTNAME)
         if self.extra_env:
-            for key, value in self.extra_env.items():
-                # Handle both $VAR and ${VAR} syntax
-                command_str = command_str.replace(f'${key}', str(value))
-                command_str = command_str.replace(f'${{{key}}}', str(value))
+            def replace_var(match):
+                """Replace callback for regex substitution."""
+                # Extract variable name from ${VAR} or $VAR
+                # Group 1: ${VAR} syntax, Group 2: $VAR syntax
+                var_name = match.group(1) if match.group(1) else match.group(2)
+                # Return value if found in extra_env, otherwise keep original match unchanged
+                return str(self.extra_env.get(var_name, match.group(0)))
+
+            # Match both ${VAR} and $VAR in a single pass (POSIX variable name rules)
+            # This prevents overlap issues: matches complete variable names atomically
+            command_str = re.sub(r'\$\{([A-Za-z_][A-Za-z0-9_]*)\}|\$([A-Za-z_][A-Za-z0-9_]*)',
+                                replace_var, command_str)
 
         # Validate that no argument placeholders remain unmatched
         unmatched_placeholders = re.findall(r'@ARG(?:_\d+)?@', command_str)

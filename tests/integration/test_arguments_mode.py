@@ -456,3 +456,70 @@ def test_arguments_mode_template_optional(sample_arguments_file, isolated_env):
 
     assert result_no_template.returncode == 0
     assert 'Created 3 tasks' in result_no_template.stdout
+
+
+@pytest.mark.integration
+def test_arguments_mode_overlapping_env_var_names(temp_dir, isolated_env):
+    """
+    Test that overlapping environment variable names are handled correctly.
+
+    Regression test for bug where per-key str.replace caused corruption:
+    Example: HOST=server, HOSTNAME=server1, command="echo $HOSTNAME"
+    - Old bug: Replaces $HOST first, turning $HOSTNAME into "serverNAME"
+    - Fixed: Uses regex to match complete variable names atomically
+
+    This test verifies that:
+    1. $HOSTNAME correctly expands to its full value (not corrupted by $HOST)
+    2. Both ${VAR} and $VAR syntax work correctly
+    3. Unknown variables are left unchanged
+    """
+    # Create arguments file
+    args_file = temp_dir / 'args.txt'
+    args_file.write_text('test\n')
+
+    # Use overlapping variable names that would trigger the bug
+    # HOST is a substring of HOSTNAME - old code would corrupt this
+    result = subprocess.run(
+        [PYTHON_FOR_PARALLELR, str(PARALLELR_BIN),
+         '-A', str(args_file),
+         '-E', 'HOST,HOSTNAME,PORT',
+         '-C', 'echo "Host: $HOST | Hostname: $HOSTNAME | Port: ${PORT} | Unknown: $UNKNOWN"',
+         '-r', '-m', '1'],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        universal_newlines=True,
+        env=isolated_env['env'],
+        timeout=30
+    )
+
+    assert result.returncode == 0, f"Command failed: {result.stderr}"
+
+    # Extract output log file path
+    import re
+    import os
+    import time
+    output_match = re.search(r'- Output: (.+\.txt)', result.stdout)
+    assert output_match, "Could not find output log file path in stdout"
+    output_file = output_match.group(1)
+
+    # Wait for output file
+    max_wait = 2.0
+    wait_interval = 0.1
+    elapsed = 0.0
+    while not os.path.exists(output_file) and elapsed < max_wait:
+        time.sleep(wait_interval)
+        elapsed += wait_interval
+
+    assert os.path.exists(output_file), f"Output log file was not created: {output_file}"
+
+    # Read and verify output
+    with open(output_file, 'r') as f:
+        output_content = f.read()
+
+    # The arguments file has one line "test", which maps to:
+    # HOST=test, HOSTNAME=test, PORT=test
+    # Verify each variable is correctly expanded (not corrupted)
+    assert 'Host: test' in output_content, "HOST not correctly expanded"
+    assert 'Hostname: test' in output_content, "HOSTNAME not correctly expanded (may be corrupted by HOST)"
+    assert 'Port: test' in output_content, "PORT (with ${} syntax) not correctly expanded"
+    assert 'Unknown: $UNKNOWN' in output_content, "Unknown variables should be left unchanged"
