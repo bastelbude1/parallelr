@@ -617,6 +617,14 @@ class SecureTaskExecutor:
         if self.task_arguments is not None:
             command_str = replace_argument_placeholders(command_str, self.task_arguments)
 
+        # Expand environment variables from extra_env (only variables set via -E flag)
+        # This allows commands like "echo $HOSTNAME" to work without shell=True
+        if self.extra_env:
+            for key, value in self.extra_env.items():
+                # Handle both $VAR and ${VAR} syntax
+                command_str = command_str.replace(f'${key}', str(value))
+                command_str = command_str.replace(f'${{{key}}}', str(value))
+
         # Validate that no argument placeholders remain unmatched
         unmatched_placeholders = re.findall(r'@ARG(?:_\d+)?@', command_str)
         if unmatched_placeholders:

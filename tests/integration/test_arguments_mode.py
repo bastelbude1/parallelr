@@ -387,7 +387,12 @@ def test_arguments_mode_no_template_env_var(sample_multi_args_file, isolated_env
     assert result.returncode == 0
     # Should create and execute 3 tasks with environment variables
     assert 'Created 3 tasks' in result.stdout
-    assert 'completed successfully' in result.stdout.lower() or 'success' in result.stdout.lower()
+
+    # Verify environment variables were actually injected by checking the echo output
+    # Each task should output the environment variables from its CSV line
+    assert 'Host: server1, Port: 8080, Env: prod' in result.stdout
+    assert 'Host: server2, Port: 8081, Env: dev' in result.stdout
+    assert 'Host: server3, Port: 8082, Env: staging' in result.stdout
 
 
 @pytest.mark.integration
