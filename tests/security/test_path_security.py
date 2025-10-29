@@ -327,8 +327,12 @@ def test_argument_file_path_validation(temp_dir):
 
 
 @pytest.mark.security
-def test_template_path_traversal_prevention():
+def test_template_path_traversal_prevention(temp_dir):
     """Test that template path traversal attacks that escape are rejected."""
+    # Create a valid arguments file so we properly test template validation
+    args_file = temp_dir / 'args.txt'
+    args_file.write_text('arg1\n')
+
     # Try various path traversal patterns that try to escape cwd
     # These should be rejected because they resolve outside the working directory
     traversal_patterns = [
@@ -343,7 +347,7 @@ def test_template_path_traversal_prevention():
         result = subprocess.run(
             [PYTHON_FOR_PARALLELR, str(PARALLELR_BIN),
              '-T', pattern,
-             '-A', '/dev/null',  # Dummy args file to trigger arguments mode
+             '-A', str(args_file.absolute()),  # Use real args file
              '-C', 'cat @TASK@'],
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
@@ -358,7 +362,7 @@ def test_template_path_traversal_prevention():
             f"stderr: {result.stderr}"
         )
 
-        # Should have warning or error message
+        # Should have warning or error message about the template
         output = result.stdout + result.stderr
         assert 'Rejected' in output or 'not found' in output or 'outside' in output, (
             f"Expected rejection message for pattern: {pattern}\n"
@@ -412,8 +416,13 @@ def test_legitimate_relative_paths_with_dotdot(temp_dir):
 
 
 @pytest.mark.security
-def test_arguments_file_path_traversal_prevention():
+def test_arguments_file_path_traversal_prevention(temp_dir):
     """Test that arguments file path traversal attacks that escape are rejected."""
+    # Create a valid template file so we actually reach arguments file validation
+    template_file = temp_dir / 'template.sh'
+    template_file.write_text('#!/bin/bash\necho "test"\n')
+    template_file.chmod(0o755)
+
     # Try various path traversal patterns that try to escape cwd
     traversal_patterns = [
         '../../../etc/passwd',
@@ -424,9 +433,9 @@ def test_arguments_file_path_traversal_prevention():
     for pattern in traversal_patterns:
         result = subprocess.run(
             [PYTHON_FOR_PARALLELR, str(PARALLELR_BIN),
-             '-T', '/dev/null',  # Dummy template
+             '-T', str(template_file.absolute()),  # Use real template file
              '-A', pattern,
-             '-C', 'echo test'],
+             '-C', 'bash @TASK@'],
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             universal_newlines=True,
@@ -440,7 +449,7 @@ def test_arguments_file_path_traversal_prevention():
             f"stderr: {result.stderr}"
         )
 
-        # Should have warning or error message
+        # Should have warning or error message about the arguments file
         output = result.stdout + result.stderr
         assert 'Rejected' in output or 'not found' in output or 'outside' in output, (
             f"Expected rejection message for pattern: {pattern}\n"
