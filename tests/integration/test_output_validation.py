@@ -341,9 +341,9 @@ def test_performance_metrics_reasonable_values(sample_task_dir, isolated_env):
         memory = record['memory_mb']
         cpu = record['cpu_percent']
 
-        # Duration should be positive
-        assert duration > 0, \
-            f"Record {i}: duration_seconds should be > 0, got {duration}"
+        # Duration should be non-negative (can be 0 for very fast tasks)
+        assert duration >= 0, \
+            f"Record {i}: duration_seconds should be >= 0, got {duration}"
 
         # Memory should be non-negative
         assert memory >= 0, \
