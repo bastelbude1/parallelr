@@ -1069,9 +1069,11 @@ class ParallelTaskManager:
             # Validate command template placeholders based on mode
             if not template_file:
                 # No template mode - warn if no placeholders for arguments
-                if '@ARG@' not in self.command_template and not self.env_var:
+                # Check for both @ARG@ and indexed placeholders like @ARG_1@, @ARG_2@, etc.
+                has_arg_placeholder = '@ARG@' in self.command_template or '@ARG_' in self.command_template
+                if not has_arg_placeholder and not self.env_var:
                     self.logger.warning(
-                        "Arguments mode without template: command does not contain @ARG@ placeholder "
+                        "Arguments mode without template: command does not contain @ARG@ or @ARG_N@ placeholder "
                         "and no environment variable specified (-E). Arguments may not be used."
                     )
 
