@@ -555,5 +555,144 @@ def test_symlink_escape_prevention(temp_dir):
     )
 
 
+@pytest.mark.security
+def test_no_search_flag_behavior(temp_dir):
+    """Test that --no-search disables fallback search."""
+    # Create template file in home TASKER directory structure
+    home = Path.home()
+    tasker_testcases = home / 'tasker' / 'test_cases'
+    tasker_testcases.mkdir(parents=True, exist_ok=True)
+
+    template_file = tasker_testcases / 'test_no_search.sh'
+    template_file.write_text('#!/bin/bash\necho "test"\n')
+
+    # Create args file in temp directory
+    args_file = temp_dir / 'args.txt'
+    args_file.write_text('test_arg\n')
+
+    try:
+        # Run ptasker with --no-search from temp_dir
+        # Template exists only in fallback location, should fail with --no-search
+        result = subprocess.run(
+            [PYTHON_FOR_PARALLELR, str(PARALLELR_BIN),
+             '-T', 'test_no_search.sh',
+             '-A', str(args_file),
+             '-C', 'cat @TASK@',
+             '--no-search'],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            universal_newlines=True,
+            timeout=10,
+            cwd=str(temp_dir)
+        )
+
+        # Should fail because fallback is disabled
+        assert result.returncode != 0, (
+            f"With --no-search, should fail when file not in current dir\n"
+            f"stdout: {result.stdout}\n"
+            f"stderr: {result.stderr}"
+        )
+        assert 'not found' in result.stderr.lower() or 'not found' in result.stdout.lower(), (
+            f"Error message should indicate file not found\n"
+            f"stderr: {result.stderr}"
+        )
+    finally:
+        # Cleanup
+        if template_file.exists():
+            template_file.unlink()
+
+
+@pytest.mark.security
+def test_fallback_with_yes_flag(temp_dir):
+    """Test that --yes flag auto-confirms fallback usage."""
+    # Create template file in home TASKER directory structure
+    home = Path.home()
+    tasker_testcases = home / 'tasker' / 'test_cases'
+    tasker_testcases.mkdir(parents=True, exist_ok=True)
+
+    template_file = tasker_testcases / 'test_yes_flag.sh'
+    template_file.write_text('#!/bin/bash\necho "test"\n')
+
+    # Create args file in temp directory
+    args_file = temp_dir / 'args.txt'
+    args_file.write_text('test_arg\n')
+
+    try:
+        # Run ptasker with --yes from temp_dir
+        # Template exists only in fallback location, should succeed without prompting
+        result = subprocess.run(
+            [PYTHON_FOR_PARALLELR, str(PARALLELR_BIN),
+             '-T', 'test_yes_flag.sh',
+             '-A', str(args_file),
+             '-C', 'cat @TASK@',
+             '--yes'],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            universal_newlines=True,
+            timeout=10,
+            cwd=str(temp_dir)
+        )
+
+        # Should succeed with --yes (no prompt)
+        assert result.returncode == 0, (
+            f"With --yes, should succeed when fallback file found\n"
+            f"stdout: {result.stdout}\n"
+            f"stderr: {result.stderr}"
+        )
+    finally:
+        # Cleanup
+        if template_file.exists():
+            template_file.unlink()
+
+
+@pytest.mark.security
+def test_fallback_info_logging(temp_dir):
+    """Test that INFO messages appear when fallback is used."""
+    # Create template file in home TASKER directory structure
+    home = Path.home()
+    tasker_testcases = home / 'tasker' / 'test_cases'
+    tasker_testcases.mkdir(parents=True, exist_ok=True)
+
+    template_file = tasker_testcases / 'test_info_log.sh'
+    template_file.write_text('#!/bin/bash\necho "test"\n')
+
+    # Create args file in temp directory
+    args_file = temp_dir / 'args.txt'
+    args_file.write_text('test_arg\n')
+
+    try:
+        # Run ptasker with --yes from temp_dir
+        # Should see INFO messages about fallback location
+        result = subprocess.run(
+            [PYTHON_FOR_PARALLELR, str(PARALLELR_BIN),
+             '-T', 'test_info_log.sh',
+             '-A', str(args_file),
+             '-C', 'cat @TASK@',
+             '--yes'],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            universal_newlines=True,
+            timeout=10,
+            cwd=str(temp_dir)
+        )
+
+        # Check for INFO messages about fallback
+        combined_output = result.stdout + result.stderr
+        assert 'fallback' in combined_output.lower(), (
+            f"INFO message should mention fallback search\n"
+            f"stdout: {result.stdout}\n"
+            f"stderr: {result.stderr}"
+        )
+        assert 'tasker' in combined_output.lower(), (
+            f"INFO message should mention fallback location\n"
+            f"stdout: {result.stdout}\n"
+            f"stderr: {result.stderr}"
+        )
+    finally:
+        # Cleanup
+        if template_file.exists():
+            template_file.unlink()
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
