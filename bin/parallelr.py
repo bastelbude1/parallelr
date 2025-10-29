@@ -1484,7 +1484,7 @@ class ParallelTaskManager:
                             for future in as_completed(self.futures.keys(), timeout=self.wait_time):
                                 self._handle_completed_task(future)
                                 break
-                        except concurrent.futures.TimeoutError:
+                        except TimeoutError:
                             time.sleep(self.wait_time)
                 
                 if self.shutdown_requested:
