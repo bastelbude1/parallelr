@@ -14,6 +14,15 @@ import sys
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 from conftest import PARALLELR_BIN, PYTHON_FOR_PARALLELR
+from tests.integration.test_helpers import (
+    extract_log_path_from_stdout,
+    parse_csv_summary,
+    verify_csv_completeness,
+    verify_all_tasks_succeeded,
+    verify_worker_assignments,
+    verify_durations_reasonable,
+    verify_summary_counts
+)
 
 # Skip all tests if bash is not available (POSIX dependency)
 pytestmark = pytest.mark.skipif(shutil.which("bash") is None,
@@ -66,7 +75,7 @@ def test_arguments_mode_single_argument(sample_task_file, sample_arguments_file,
 
 @pytest.mark.integration
 def test_arguments_mode_multi_args_comma(sample_task_file, sample_multi_args_file, isolated_env):
-    """Test multi-argument mode with comma delimiter."""
+    """Test multi-argument mode with comma delimiter and full validation."""
     result = subprocess.run(
         [PYTHON_FOR_PARALLELR, str(PARALLELR_BIN),
          '-T', str(sample_task_file),
@@ -82,9 +91,35 @@ def test_arguments_mode_multi_args_comma(sample_task_file, sample_multi_args_fil
         timeout=30
     )
 
-    assert result.returncode == 0
-    # Should create and execute 3 tasks
-    assert 'Created 3 tasks' in result.stdout
+    # Basic success check
+    assert result.returncode == 0, f"Command failed: {result.stderr}"
+
+    # Verify summary counts in stdout
+    verify_summary_counts(result.stdout, total=3, completed=3, failed=0)
+
+    # Extract and parse CSV summary
+    csv_path = extract_log_path_from_stdout(result.stdout, 'summary')
+    assert csv_path, "Could not find CSV summary path in stdout"
+
+    csv_records = parse_csv_summary(csv_path)
+
+    # Verify CSV has exact 3 records with all required fields
+    verify_csv_completeness(csv_records, expected_count=3)
+
+    # Verify all tasks succeeded (STATUS=SUCCESS, exit_code=0)
+    verify_all_tasks_succeeded(csv_records)
+
+    # Verify worker IDs are within range 1-2 (2 workers configured)
+    verify_worker_assignments(csv_records, max_workers=2)
+
+    # Verify durations are reasonable (> 0, not negative)
+    verify_durations_reasonable(csv_records, min_duration=0.0)
+
+    # Verify command field contains the indexed placeholders replaced
+    for record in csv_records:
+        assert '@ARG_1@' not in record['command'], "Placeholder @ARG_1@ was not replaced in command"
+        assert '@ARG_2@' not in record['command'], "Placeholder @ARG_2@ was not replaced in command"
+        assert '@ARG_3@' not in record['command'], "Placeholder @ARG_3@ was not replaced in command"
 
 
 @pytest.mark.integration
@@ -324,7 +359,7 @@ def test_arguments_mode_backward_compatibility(sample_task_file, sample_argument
 
 @pytest.mark.integration
 def test_arguments_mode_no_template_single_arg(sample_arguments_file, isolated_env):
-    """Test arguments-only mode without template file (single argument)."""
+    """Test arguments-only mode without template file with full validation."""
     result = subprocess.run(
         [PYTHON_FOR_PARALLELR, str(PARALLELR_BIN),
          '-A', str(sample_arguments_file),
@@ -337,16 +372,40 @@ def test_arguments_mode_no_template_single_arg(sample_arguments_file, isolated_e
         timeout=30
     )
 
-    assert result.returncode == 0
-    # Should create 3 tasks from 3 lines in args file
-    assert 'Created 3 tasks' in result.stdout
-    # Should execute successfully
-    assert 'completed successfully' in result.stdout.lower() or 'success' in result.stdout.lower()
+    # Basic success check
+    assert result.returncode == 0, f"Command failed: {result.stderr}"
+
+    # Verify summary counts in stdout
+    verify_summary_counts(result.stdout, total=3, completed=3, failed=0)
+
+    # Extract and parse CSV summary
+    csv_path = extract_log_path_from_stdout(result.stdout, 'summary')
+    assert csv_path, "Could not find CSV summary path in stdout"
+
+    csv_records = parse_csv_summary(csv_path)
+
+    # Verify CSV has exact 3 records with all required fields
+    verify_csv_completeness(csv_records, expected_count=3)
+
+    # Verify all tasks succeeded (STATUS=SUCCESS, exit_code=0)
+    verify_all_tasks_succeeded(csv_records)
+
+    # Verify worker IDs are within range 1-2 (2 workers configured)
+    verify_worker_assignments(csv_records, max_workers=2)
+
+    # Verify durations are reasonable (> 0, not negative)
+    verify_durations_reasonable(csv_records, min_duration=0.0)
+
+    # Verify @ARG@ placeholder was replaced in command field
+    for record in csv_records:
+        assert '@ARG@' not in record['command'], "Placeholder @ARG@ was not replaced in command"
+        assert 'echo' in record['command'] and 'Testing' in record['command'], \
+            "Command doesn't contain expected keywords"
 
 
 @pytest.mark.integration
 def test_arguments_mode_no_template_multi_args(sample_multi_args_file, isolated_env):
-    """Test arguments-only mode without template file (multiple arguments)."""
+    """Test arguments-only mode without template file with full validation."""
     result = subprocess.run(
         [PYTHON_FOR_PARALLELR, str(PARALLELR_BIN),
          '-A', str(sample_multi_args_file),
@@ -360,11 +419,37 @@ def test_arguments_mode_no_template_multi_args(sample_multi_args_file, isolated_
         timeout=30
     )
 
-    assert result.returncode == 0
-    # Should create 3 tasks from 3 lines in multi-args file
-    assert 'Created 3 tasks' in result.stdout
-    # Should execute successfully
-    assert 'completed successfully' in result.stdout.lower() or 'success' in result.stdout.lower()
+    # Basic success check
+    assert result.returncode == 0, f"Command failed: {result.stderr}"
+
+    # Verify summary counts in stdout
+    verify_summary_counts(result.stdout, total=3, completed=3, failed=0)
+
+    # Extract and parse CSV summary
+    csv_path = extract_log_path_from_stdout(result.stdout, 'summary')
+    assert csv_path, "Could not find CSV summary path in stdout"
+
+    csv_records = parse_csv_summary(csv_path)
+
+    # Verify CSV has exact 3 records with all required fields
+    verify_csv_completeness(csv_records, expected_count=3)
+
+    # Verify all tasks succeeded (STATUS=SUCCESS, exit_code=0)
+    verify_all_tasks_succeeded(csv_records)
+
+    # Verify worker IDs are within range 1-2 (2 workers configured)
+    verify_worker_assignments(csv_records, max_workers=2)
+
+    # Verify durations are reasonable (> 0, not negative)
+    verify_durations_reasonable(csv_records, min_duration=0.0)
+
+    # Verify indexed placeholders were replaced in command field
+    for record in csv_records:
+        assert '@ARG_1@' not in record['command'], "Placeholder @ARG_1@ was not replaced in command"
+        assert '@ARG_2@' not in record['command'], "Placeholder @ARG_2@ was not replaced in command"
+        assert '@ARG_3@' not in record['command'], "Placeholder @ARG_3@ was not replaced in command"
+        assert 'echo' in record['command'] and 'Server:' in record['command'], \
+            "Command doesn't contain expected keywords"
 
 
 @pytest.mark.integration

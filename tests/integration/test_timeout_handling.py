@@ -13,6 +13,15 @@ import pytest
 import sys
 sys.path.insert(0, str(Path(__file__).parent.parent))
 from conftest import PARALLELR_BIN, PYTHON_FOR_PARALLELR
+from tests.integration.test_helpers import (
+    extract_log_path_from_stdout,
+    parse_csv_summary,
+    verify_csv_completeness,
+    verify_all_tasks_succeeded,
+    verify_worker_assignments,
+    verify_durations_reasonable,
+    verify_summary_counts
+)
 
 # Skip all tests if bash is not available (POSIX dependency)
 pytestmark = pytest.mark.skipif(shutil.which("bash") is None,
@@ -73,10 +82,30 @@ def test_futures_timeout_with_slow_tasks(temp_dir, isolated_env):
         timeout=30
     )
 
-    # Should complete successfully despite timeout loop iterations
+    # Basic success check
     assert result.returncode == 0, f"Command failed: {result.stderr}"
-    assert 'Discovered 3 task files' in result.stdout
-    assert 'completed successfully' in result.stdout.lower() or 'success' in result.stdout.lower()
+
+    # Verify summary counts in stdout
+    verify_summary_counts(result.stdout, total=3, completed=3, failed=0)
+
+    # Extract and parse CSV summary
+    csv_path = extract_log_path_from_stdout(result.stdout, 'summary')
+    assert csv_path, "Could not find CSV summary path in stdout"
+
+    csv_records = parse_csv_summary(csv_path)
+
+    # Verify CSV has exact 3 records with all required fields
+    verify_csv_completeness(csv_records, expected_count=3)
+
+    # Verify all tasks succeeded (STATUS=SUCCESS, exit_code=0)
+    verify_all_tasks_succeeded(csv_records)
+
+    # Verify worker IDs are all 1 (single worker configured)
+    verify_worker_assignments(csv_records, max_workers=1)
+
+    # Verify each task took at least 0.2s (we sleep for 0.3s)
+    # Use lenient bounds for CI environments which can be slower
+    verify_durations_reasonable(csv_records, min_duration=0.2, max_duration=5.0)
 
 
 @pytest.mark.integration
@@ -104,8 +133,34 @@ def test_futures_timeout_with_arguments_mode(temp_dir, isolated_env):
         timeout=30
     )
 
+    # Basic success check
     assert result.returncode == 0, f"Command failed: {result.stderr}"
-    assert 'Created 3 tasks' in result.stdout
+
+    # Verify summary counts in stdout
+    verify_summary_counts(result.stdout, total=3, completed=3, failed=0)
+
+    # Extract and parse CSV summary
+    csv_path = extract_log_path_from_stdout(result.stdout, 'summary')
+    assert csv_path, "Could not find CSV summary path in stdout"
+
+    csv_records = parse_csv_summary(csv_path)
+
+    # Verify CSV has exact 3 records with all required fields
+    verify_csv_completeness(csv_records, expected_count=3)
+
+    # Verify all tasks succeeded (STATUS=SUCCESS, exit_code=0)
+    verify_all_tasks_succeeded(csv_records)
+
+    # Verify worker IDs are all 1 (single worker configured)
+    verify_worker_assignments(csv_records, max_workers=1)
+
+    # Verify each task took at least 0.2s (we sleep for 0.3s)
+    # Use lenient bounds for CI environments
+    verify_durations_reasonable(csv_records, min_duration=0.2, max_duration=5.0)
+
+    # Verify @ARG@ placeholder was replaced in command field
+    for record in csv_records:
+        assert '@ARG@' not in record['command'], "Placeholder @ARG@ was not replaced in command"
 
 
 @pytest.mark.integration
@@ -134,8 +189,30 @@ def test_futures_timeout_with_multiple_workers(temp_dir, isolated_env):
         timeout=30
     )
 
+    # Basic success check
     assert result.returncode == 0, f"Command failed: {result.stderr}"
-    assert 'Discovered 6 task files' in result.stdout
+
+    # Verify summary counts in stdout
+    verify_summary_counts(result.stdout, total=6, completed=6, failed=0)
+
+    # Extract and parse CSV summary
+    csv_path = extract_log_path_from_stdout(result.stdout, 'summary')
+    assert csv_path, "Could not find CSV summary path in stdout"
+
+    csv_records = parse_csv_summary(csv_path)
+
+    # Verify CSV has exact 6 records with all required fields
+    verify_csv_completeness(csv_records, expected_count=6)
+
+    # Verify all tasks succeeded (STATUS=SUCCESS, exit_code=0)
+    verify_all_tasks_succeeded(csv_records)
+
+    # Verify worker IDs are properly assigned (2 workers configured)
+    verify_worker_assignments(csv_records, max_workers=2)
+
+    # Verify each task took at least 0.2s (we sleep for 0.3s)
+    # Use lenient bounds for CI environments
+    verify_durations_reasonable(csv_records, min_duration=0.2, max_duration=5.0)
 
 
 @pytest.mark.integration
