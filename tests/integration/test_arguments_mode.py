@@ -320,3 +320,208 @@ def test_arguments_mode_backward_compatibility(sample_task_file, sample_argument
     assert result.returncode == 0
     # Should work with @ARG@ placeholder
     assert 'Created 3 tasks' in result.stdout
+
+
+@pytest.mark.integration
+def test_arguments_mode_no_template_single_arg(sample_arguments_file, isolated_env):
+    """Test arguments-only mode without template file (single argument)."""
+    result = subprocess.run(
+        [PYTHON_FOR_PARALLELR, str(PARALLELR_BIN),
+         '-A', str(sample_arguments_file),
+         '-C', 'echo "Testing @ARG@"',
+         '-r', '-m', '2'],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        universal_newlines=True,
+        env=isolated_env['env'],
+        timeout=30
+    )
+
+    assert result.returncode == 0
+    # Should create 3 tasks from 3 lines in args file
+    assert 'Created 3 tasks' in result.stdout
+    # Should execute successfully
+    assert 'completed successfully' in result.stdout.lower() or 'success' in result.stdout.lower()
+
+
+@pytest.mark.integration
+def test_arguments_mode_no_template_multi_args(sample_multi_args_file, isolated_env):
+    """Test arguments-only mode without template file (multiple arguments)."""
+    result = subprocess.run(
+        [PYTHON_FOR_PARALLELR, str(PARALLELR_BIN),
+         '-A', str(sample_multi_args_file),
+         '-S', 'comma',
+         '-C', 'echo "Server: @ARG_1@, Port: @ARG_2@, Env: @ARG_3@"',
+         '-r', '-m', '2'],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        universal_newlines=True,
+        env=isolated_env['env'],
+        timeout=30
+    )
+
+    assert result.returncode == 0
+    # Should create 3 tasks from 3 lines in multi-args file
+    assert 'Created 3 tasks' in result.stdout
+    # Should execute successfully
+    assert 'completed successfully' in result.stdout.lower() or 'success' in result.stdout.lower()
+
+
+@pytest.mark.integration
+def test_arguments_mode_no_template_env_var(sample_multi_args_file, isolated_env):
+    """Test arguments-only mode with environment variables (no template)."""
+    result = subprocess.run(
+        [PYTHON_FOR_PARALLELR, str(PARALLELR_BIN),
+         '-A', str(sample_multi_args_file),
+         '-S', 'comma',
+         '-E', 'HOSTNAME,PORT,ENVIRONMENT',
+         '-C', 'echo "Host: $HOSTNAME, Port: $PORT, Env: $ENVIRONMENT"',
+         '-r', '-m', '2'],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        universal_newlines=True,
+        env=isolated_env['env'],
+        timeout=30
+    )
+
+    assert result.returncode == 0
+    # Should create and execute 3 tasks with environment variables
+    assert 'Created 3 tasks' in result.stdout
+
+    # Extract output log file path from stdout
+    import re
+    import os
+    import time
+    output_match = re.search(r'- Output: (.+\.txt)', result.stdout)
+    assert output_match, "Could not find output log file path in stdout"
+    output_file = output_match.group(1)
+
+    # Wait for output log file to be written (with timeout to avoid hanging)
+    max_wait = 2.0  # seconds
+    wait_interval = 0.1  # seconds
+    elapsed = 0.0
+    while not os.path.exists(output_file) and elapsed < max_wait:
+        time.sleep(wait_interval)
+        elapsed += wait_interval
+
+    assert os.path.exists(output_file), f"Output log file was not created: {output_file}"
+
+    # Read the output log file to verify environment variables were expanded
+    with open(output_file, 'r') as f:
+        output_content = f.read()
+
+    # Verify environment variables were actually injected by checking the echo output
+    # Each task should output the environment variables from its CSV line
+    assert 'Host: server1, Port: 8080, Env: prod' in output_content
+    assert 'Host: server2, Port: 8081, Env: dev' in output_content
+    assert 'Host: server3, Port: 8082, Env: staging' in output_content
+
+
+@pytest.mark.integration
+def test_arguments_mode_template_must_be_file(sample_arguments_file, sample_task_dir, isolated_env):
+    """Test that -T with -A must be a file, not a directory."""
+    result = subprocess.run(
+        [PYTHON_FOR_PARALLELR, str(PARALLELR_BIN),
+         '-T', str(sample_task_dir),  # Directory, not file
+         '-A', str(sample_arguments_file),
+         '-C', 'bash @TASK@ @ARG@'],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        universal_newlines=True,
+        env=isolated_env['env'],
+        timeout=10
+    )
+
+    # Should fail validation
+    assert result.returncode != 0
+    # Error message should mention template file requirement
+    assert 'template' in result.stderr.lower() and ('file' in result.stderr.lower() or 'directory' in result.stderr.lower())
+
+
+@pytest.mark.integration
+def test_arguments_mode_template_optional(sample_arguments_file, isolated_env):
+    """Test that template is truly optional with -A."""
+    # Test without -T - should work
+    result_no_template = subprocess.run(
+        [PYTHON_FOR_PARALLELR, str(PARALLELR_BIN),
+         '-A', str(sample_arguments_file),
+         '-C', 'echo @ARG@',
+         '-r'],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        universal_newlines=True,
+        env=isolated_env['env'],
+        timeout=30
+    )
+
+    assert result_no_template.returncode == 0
+    assert 'Created 3 tasks' in result_no_template.stdout
+
+
+@pytest.mark.integration
+def test_arguments_mode_overlapping_env_var_names(temp_dir, isolated_env):
+    """
+    Test that overlapping environment variable names are handled correctly.
+
+    Regression test for bug where per-key str.replace caused corruption:
+    Example: HOST=server, HOSTNAME=server1, command="echo $HOSTNAME"
+    - Old bug: Replaces $HOST first, turning $HOSTNAME into "serverNAME"
+    - Fixed: Uses regex to match complete variable names atomically
+
+    This test verifies that:
+    1. $HOSTNAME correctly expands to its full value (not corrupted by $HOST)
+    2. Both ${VAR} and $VAR syntax work correctly
+    3. Unknown variables are left unchanged
+    """
+    # Create arguments file with 3 arguments per line (comma-separated)
+    args_file = temp_dir / 'args.txt'
+    args_file.write_text('server,server1,8080\n')
+
+    # Use overlapping variable names that would trigger the bug
+    # HOST is a substring of HOSTNAME - old code would corrupt this
+    result = subprocess.run(
+        [PYTHON_FOR_PARALLELR, str(PARALLELR_BIN),
+         '-A', str(args_file),
+         '-S', 'comma',  # Specify comma delimiter for multi-argument parsing
+         '-E', 'HOST,HOSTNAME,PORT',
+         '-C', 'echo "Host: $HOST | Hostname: $HOSTNAME | Port: ${PORT} | Unknown: $UNKNOWN"',
+         '-r', '-m', '1'],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        universal_newlines=True,
+        env=isolated_env['env'],
+        timeout=30
+    )
+
+    assert result.returncode == 0, f"Command failed: {result.stderr}"
+
+    # Extract output log file path
+    import re
+    import os
+    import time
+    output_match = re.search(r'- Output: (.+\.txt)', result.stdout)
+    assert output_match, "Could not find output log file path in stdout"
+    output_file = output_match.group(1)
+
+    # Wait for output file
+    max_wait = 2.0
+    wait_interval = 0.1
+    elapsed = 0.0
+    while not os.path.exists(output_file) and elapsed < max_wait:
+        time.sleep(wait_interval)
+        elapsed += wait_interval
+
+    assert os.path.exists(output_file), f"Output log file was not created: {output_file}"
+
+    # Read and verify output
+    with open(output_file, 'r') as f:
+        output_content = f.read()
+
+    # The arguments file has one line "server,server1,8080", which maps to:
+    # HOST=server, HOSTNAME=server1, PORT=8080
+    # Verify each variable is correctly expanded (not corrupted)
+    # CRITICAL: With old buggy code, $HOSTNAME would become "serverNAME" (corrupted by $HOST replacement)
+    assert 'Host: server' in output_content, "HOST not correctly expanded"
+    assert 'Hostname: server1' in output_content, "HOSTNAME not correctly expanded (may be corrupted by HOST)"
+    assert 'Port: 8080' in output_content, "PORT (with ${} syntax) not correctly expanded"
+    assert 'Unknown: $UNKNOWN' in output_content, "Unknown variables should be left unchanged"

@@ -48,7 +48,7 @@ try:
     HAS_FCNTL = True
 except ImportError:
     HAS_FCNTL = False
-from concurrent.futures import ThreadPoolExecutor, Future, as_completed
+from concurrent.futures import ThreadPoolExecutor, Future, as_completed, TimeoutError
 from enum import Enum
 
 # Optional imports with fallbacks
@@ -593,6 +593,10 @@ class SecureTaskExecutor:
 
     def _validate_task_file_security(self, task_file):
         """Basic security validation for task file."""
+        # Arguments-only mode: task_file can be None
+        if task_file is None:
+            return  # No file to validate in arguments-only mode
+
         try:
             if os.path.getsize(task_file) > self.config.advanced.max_file_size:
                 raise SecurityError(f"Task file too large: {task_file}")
@@ -601,12 +605,34 @@ class SecureTaskExecutor:
 
     def _build_secure_command(self, task_file):
         """Build command arguments with basic security validation."""
-        abs_task_file = str(Path(task_file).resolve())
-        command_str = self.command_template.replace("@TASK@", abs_task_file)
+        # Start with command template
+        command_str = self.command_template
+
+        # Replace @TASK@ only if we have a task file (not in arguments-only mode)
+        if task_file is not None:
+            abs_task_file = str(Path(task_file).resolve())
+            command_str = command_str.replace("@TASK@", abs_task_file)
 
         # Replace argument placeholders if we have task arguments
         if self.task_arguments is not None:
             command_str = replace_argument_placeholders(command_str, self.task_arguments)
+
+        # Expand environment variables from extra_env (only variables set via -E flag)
+        # This allows commands like "echo $HOSTNAME" to work without shell=True
+        # Uses regex to avoid overlapping name corruption (e.g., $HOST then $HOSTNAME)
+        if self.extra_env:
+            def replace_var(match):
+                """Replace callback for regex substitution."""
+                # Extract variable name from ${VAR} or $VAR
+                # Group 1: ${VAR} syntax, Group 2: $VAR syntax
+                var_name = match.group(1) if match.group(1) else match.group(2)
+                # Return value if found in extra_env, otherwise keep original match unchanged
+                return str(self.extra_env.get(var_name, match.group(0)))
+
+            # Match both ${VAR} and $VAR in a single pass (POSIX variable name rules)
+            # This prevents overlap issues: matches complete variable names atomically
+            command_str = re.sub(r'\$\{([A-Za-z_][A-Za-z0-9_]*)\}|\$([A-Za-z_][A-Za-z0-9_]*)',
+                                replace_var, command_str)
 
         # Validate that no argument placeholders remain unmatched
         unmatched_placeholders = re.findall(r'@ARG(?:_\d+)?@', command_str)
@@ -1040,19 +1066,34 @@ class ParallelTaskManager:
         # Check if we're in arguments mode
         if self.arguments_file:
             # Arguments mode: Read arguments from file and create tasks
-            if not self.tasks_paths or len(self.tasks_paths) != 1:
-                raise ParallelTaskExecutorError("Arguments mode requires exactly one template file with -T")
+            # Template file is optional - can be None, or if provided must be exactly one file
+            if self.tasks_paths:
+                if len(self.tasks_paths) != 1:
+                    raise ParallelTaskExecutorError(
+                        "Arguments mode with -T requires exactly one template file (not multiple paths or directories)"
+                    )
+                template_file = Path(self.tasks_paths[0])
+                if template_file.is_dir():
+                    raise ParallelTaskExecutorError(
+                        f"Arguments mode requires a template FILE, not a directory: {template_file}. "
+                        "Omit -T to execute commands directly without a template."
+                    )
+                if not template_file.is_file():
+                    raise ParallelTaskExecutorError(f"Template file not found: {template_file}")
+            else:
+                template_file = None  # No template - direct command execution
 
-            template_file = Path(self.tasks_paths[0])
-            if not template_file.is_file():
-                raise ParallelTaskExecutorError(f"Template file not found: {template_file}")
-
-            # Validate that command template contains @ARG@ placeholder if not using env var mode
-            if '@ARG@' not in self.command_template and not self.env_var:
-                self.logger.warning(
-                    "Arguments mode active but command template does not contain @ARG@ placeholder "
-                    "and no environment variable specified. Arguments will not be used."
-                )
+            # Validate command template placeholders based on mode
+            if not template_file:
+                # No template mode - warn if no placeholders for arguments
+                # Check for both @ARG@ and indexed placeholders like @ARG_1@, @ARG_2@, etc.
+                # Use regex for precise detection of indexed placeholders to avoid false positives
+                has_arg_placeholder = '@ARG@' in self.command_template or re.search(r'@ARG_\d+@', self.command_template)
+                if not has_arg_placeholder and not self.env_var:
+                    self.logger.warning(
+                        "Arguments mode without template: command does not contain @ARG@ or @ARG_N@ placeholder "
+                        "and no environment variable specified (-E). Arguments may not be used."
+                    )
 
             args_file = Path(self.arguments_file)
             if not args_file.is_file():
@@ -1093,7 +1134,7 @@ class ParallelTaskManager:
                         # Create a task entry for each line
                         task_entries.append({
                             'type': 'argument',
-                            'template': str(template_file),
+                            'template': str(template_file) if template_file else None,
                             'arguments': arguments,  # Now a list
                             'line_num': line_num
                         })
@@ -1359,9 +1400,12 @@ class ParallelTaskManager:
                 self.logger.info("DRY RUN MODE")
                 for i, task_entry in enumerate(self.task_entries, 1):
                     if task_entry['type'] == 'argument':
-                        # Build command with absolute path and proper quoting
-                        abs_task_file = str(Path(task_entry['template']).resolve())
-                        command_str = self.command_template.replace("@TASK@", abs_task_file)
+                        # Build command - template is optional in arguments-only mode
+                        command_str = self.command_template
+                        if task_entry['template'] is not None:
+                            # Template mode: replace @TASK@ with template path
+                            abs_task_file = str(Path(task_entry['template']).resolve())
+                            command_str = command_str.replace("@TASK@", abs_task_file)
 
                         # Handle arguments (list)
                         arguments = task_entry['arguments']
@@ -1440,7 +1484,7 @@ class ParallelTaskManager:
                             for future in as_completed(self.futures.keys(), timeout=self.wait_time):
                                 self._handle_completed_task(future)
                                 break
-                        except concurrent.futures.TimeoutError:
+                        except TimeoutError:
                             time.sleep(self.wait_time)
                 
                 if self.shutdown_requested:
@@ -1820,6 +1864,18 @@ Examples:
   # Execute tasks (background/detached)
   %(prog)s -T ./tasks -C "python3 @TASK@" -r -d
 
+  # Arguments-only mode (no task files needed)
+  %(prog)s -A hosts.txt -C "ping -c 1 @ARG@" -r
+
+  # Arguments with environment variables
+  %(prog)s -A servers.txt -E HOSTNAME -C "ssh $HOSTNAME uptime" -r
+
+  # Arguments with template file
+  %(prog)s -T script.sh -A args.txt -C "bash @TASK@ @ARG@" -r
+
+  # Multiple arguments per line
+  %(prog)s -A servers.csv -S comma -E HOST,PORT -C "curl http://$HOST:$PORT/health" -r
+
   # List running workers (safe)
   %(prog)s --list-workers
 
@@ -1843,8 +1899,10 @@ Examples:
                        help='Delay between starting new tasks (0-60 seconds, default: 0). Use to throttle resource consumption')
 
     parser.add_argument('-T', '--TasksDir', nargs='+', action='append',
-                       help='Directory containing task files or specific file paths (can be used multiple times). '
-                            'File Mode: Each file becomes a task, use @TASK@ placeholder in -C for file path')
+                       help='[Optional with -A] Task directory, file paths, or template file. '
+                            'Without -A: directory of task files or specific files (can specify multiple). '
+                            'With -A: single template file where @TASK@ is replaced with template path. '
+                            'Omit -T with -A to execute commands directly with arguments (no template)')
 
     parser.add_argument('--file-extension',
                        help='Filter task files by extension(s), e.g., "txt" or "txt,log,dat"')
@@ -1949,14 +2007,19 @@ Examples:
 
     if not args.validate_config and not args.show_config and not args.check_dependencies:
         missing_args = []
-        if not args.TasksDir:
-            missing_args.append("--TasksDir")
+
+        # Validate required arguments based on execution mode
+        if not args.arguments_file and not args.TasksDir:
+            # Neither arguments file nor task dir provided - need at least one
+            parser.error("Error: Either --TasksDir (-T) or --arguments-file (-A) is required")
+
         if not args.Command:
             if ptasker_mode:
                 # In ptasker mode, Command should have been auto-generated
                 parser.error("Internal error: Command not generated in ptasker mode")
             else:
                 missing_args.append("--Command")
+
         if missing_args:
             parser.error(f"The following arguments are required: {', '.join(missing_args)}")
 

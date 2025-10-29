@@ -123,14 +123,15 @@ parallelr --check-dependencies
 
 | Argument | Description |
 |----------|-------------|
-| `-T, --TasksDir PATHS...` | Directory, file paths, or glob patterns, and can be used multiple times:<br>• Directory: `-T /path/to/dir`<br>• Specific files: `-T /path/*.txt` (shell expansion)<br>• Multiple sources: `-T /dir1 -T /dir2 -T file.txt` |
-| `-C, --Command CMD` | Command template with `@TASK@` placeholder for task file path |
+| `-T, --TasksDir PATHS...` | **[Optional with -A]** Directory, file paths, glob patterns, or template file:<br>• **Without -A**: Directory of task files, specific files, or glob patterns<br>• **With -A**: Single template file (not directory) where `@TASK@` is replaced<br>• **Omit with -A**: Execute commands directly without template (arguments-only mode)<br>• Examples: `-T /path/to/dir`, `-T /path/*.txt`, `-T template.sh -A args.txt` |
+| `-C, --Command CMD` | Command template with `@TASK@` placeholder for task file path (file mode) or `@ARG@`/`@ARG_N@` placeholders for arguments (arguments mode) |
+| | **Note**: Either `-T` or `-A` is required (or both) |
 
 #### Execution Control
 
 | Argument | Description |
 |----------|-------------|
-| `-r, --run` | Execute tasks (without this flag, runs in dry-run mode) |
+| `-r, --run` | Execute tasks (without this flag, runs in dry-run mode). **Dry-run mode** shows full command with environment variables (e.g., `HOSTNAME=value cmd`). **Execution mode** sets environment variables internally and passes them to subprocesses. |
 | `-m, --max N` | Maximum parallel workers (default: 20, max: 100, overrides config) |
 | `-t, --timeout N` | Task timeout in seconds (default: 600, max: 3600, overrides config) |
 | `-s, --sleep N` | Delay between starting new tasks (0-60 seconds, default: 0). Use to throttle resource consumption |
@@ -168,9 +169,11 @@ parallelr --check-dependencies
 
 ```bash
 # Dry-run to preview commands (safe, no execution)
+# NOTE: Dry-run mode displays full commands including environment variable assignments
 parallelr -T ./tasks -C "python3 @TASK@"
 
 # Execute Python scripts with 5 workers
+# NOTE: In execution mode, environment variables are set internally (not printed to stdout)
 parallelr -T ./tasks -C "python3 @TASK@" -r -m 5
 
 # Execute only .txt files from a directory
@@ -271,6 +274,65 @@ parallelr -T deploy.sh -A servers.txt -S comma -E HOSTNAME,PORT,ENV -C "bash @TA
 **Environment Variable Validation**:
 - **Fewer env vars than arguments**: Only available env vars are set, warning logged
 - **More env vars than arguments**: Error logged, execution stops
+
+#### Arguments-Only Mode (No Template)
+
+The `-T` (template) argument is now **optional** when using `-A` (arguments file). This allows you to execute commands directly in parallel without needing a template file.
+
+**Use Cases**:
+- Execute simple commands for each argument (ping, curl, ssh, etc.)
+- Run one-liner operations across multiple targets
+- Quick parallel command execution without creating template files
+
+**1. Direct Command Execution** - Use placeholders directly in command:
+```bash
+# Ping multiple hosts
+echo "server1.example.com
+server2.example.com
+server3.example.com" > hosts.txt
+
+parallelr -A hosts.txt -C "ping -c 1 @ARG@" -r
+# Each task runs: ping -c 1 <hostname>
+```
+
+**2. Environment Variables Without Template**:
+```bash
+# SSH to multiple servers using environment variable
+parallelr -A hosts.txt -E HOSTNAME -C "ssh $HOSTNAME uptime" -r
+# Each task runs: HOSTNAME=<hostname> ssh $HOSTNAME uptime
+```
+
+**3. Multiple Arguments Without Template**:
+```bash
+# Create multi-column file
+echo "server1.example.com,8080,prod
+server2.example.com,8081,dev
+server3.example.com,8082,staging" > servers.csv
+
+# Use indexed placeholders directly
+parallelr -A servers.csv -S comma -C "curl http://@ARG_1@:@ARG_2@/health" -r
+# Each task runs: curl http://server1.example.com:8080/health
+
+# Or with environment variables
+parallelr -A servers.csv -S comma -E HOST,PORT,ENV -C "curl http://$HOST:$PORT/health" -r
+# Each task runs: HOST=server1.example.com PORT=8080 ENV=prod curl http://$HOST:$PORT/health
+```
+
+**4. Complex One-Liners**:
+```bash
+# Execute complex commands for each target
+parallelr -A databases.txt -E DB -C "mysqldump -h $DB -u backup --password=\$PASS mydb | gzip > backup_$DB.sql.gz" -r
+```
+
+**When to Use Template vs Arguments-Only**:
+- **Use Template** (`-T file.sh`): When command logic is complex, multi-line, or reusable
+- **Use Arguments-Only** (no `-T`): When command is simple, one-liner, or ad-hoc
+
+**Important Notes**:
+- When `-T` is used with `-A`, it must be a **single template file** (not a directory)
+- Without `-T`, the command template (`-C`) must contain placeholders (`@ARG@`, `@ARG_N@`) or environment variables (`-E`) to use arguments
+- All delimiter options (`-S`) work the same with or without template
+- Environment variable mode (`-E`) works the same with or without template
 
 #### ptasker Integration
 
