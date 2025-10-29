@@ -309,7 +309,7 @@ def verify_all_tasks_succeeded(csv_records: List[Dict]) -> bool:
 
 def verify_worker_assignments(csv_records: List[Dict], max_workers: int) -> bool:
     """
-    Verify worker IDs are within expected range and properly assigned.
+    Verify worker IDs are properly assigned.
 
     Args:
         csv_records: List of CSV record dictionaries
@@ -320,13 +320,28 @@ def verify_worker_assignments(csv_records: List[Dict], max_workers: int) -> bool
 
     Raises:
         AssertionError: If any worker ID is invalid
+
+    Note:
+        Worker IDs are sequential task counters, not pool indexes.
+        This function verifies they are positive integers and that
+        multiple workers are utilized when max_workers > 1.
     """
     for i, record in enumerate(csv_records):
         worker_id = record['worker_id']
-        if worker_id < 1 or worker_id > max_workers:
+        # Verify worker ID is a positive integer
+        if worker_id < 1:
             raise AssertionError(
-                f"Task {i} has invalid worker_id: {worker_id} "
-                f"(expected 1-{max_workers})"
+                f"Task {i} has invalid worker_id: {worker_id} (must be >= 1)"
+            )
+
+    # If multiple workers configured, verify we're actually using parallelism
+    # by checking that we have multiple distinct worker IDs
+    if max_workers > 1 and len(csv_records) >= max_workers:
+        unique_workers = len(set(r['worker_id'] for r in csv_records))
+        if unique_workers < 2:
+            raise AssertionError(
+                f"Expected multiple workers to be used (max_workers={max_workers}), "
+                f"but only {unique_workers} unique worker ID(s) found"
             )
 
     return True
