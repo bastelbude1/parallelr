@@ -75,7 +75,7 @@ def test_futures_timeout_with_slow_tasks(temp_dir, isolated_env):
 
     # Should complete successfully despite timeout loop iterations
     assert result.returncode == 0, f"Command failed: {result.stderr}"
-    assert 'Created 3 tasks' in result.stdout
+    assert 'Discovered 3 task files' in result.stdout
     assert 'completed successfully' in result.stdout.lower() or 'success' in result.stdout.lower()
 
 
@@ -135,7 +135,7 @@ def test_futures_timeout_with_multiple_workers(temp_dir, isolated_env):
     )
 
     assert result.returncode == 0, f"Command failed: {result.stderr}"
-    assert 'Created 6 tasks' in result.stdout
+    assert 'Discovered 6 task files' in result.stdout
 
 
 @pytest.mark.integration
@@ -165,4 +165,4 @@ def test_no_timeout_with_fast_tasks(temp_dir, isolated_env):
     )
 
     assert result.returncode == 0
-    assert 'Created 3 tasks' in result.stdout
+    assert 'Discovered 3 task files' in result.stdout
