@@ -473,15 +473,16 @@ def test_arguments_mode_overlapping_env_var_names(temp_dir, isolated_env):
     2. Both ${VAR} and $VAR syntax work correctly
     3. Unknown variables are left unchanged
     """
-    # Create arguments file
+    # Create arguments file with 3 arguments per line (comma-separated)
     args_file = temp_dir / 'args.txt'
-    args_file.write_text('test\n')
+    args_file.write_text('server,server1,8080\n')
 
     # Use overlapping variable names that would trigger the bug
     # HOST is a substring of HOSTNAME - old code would corrupt this
     result = subprocess.run(
         [PYTHON_FOR_PARALLELR, str(PARALLELR_BIN),
          '-A', str(args_file),
+         '-S', 'comma',  # Specify comma delimiter for multi-argument parsing
          '-E', 'HOST,HOSTNAME,PORT',
          '-C', 'echo "Host: $HOST | Hostname: $HOSTNAME | Port: ${PORT} | Unknown: $UNKNOWN"',
          '-r', '-m', '1'],
@@ -516,10 +517,11 @@ def test_arguments_mode_overlapping_env_var_names(temp_dir, isolated_env):
     with open(output_file, 'r') as f:
         output_content = f.read()
 
-    # The arguments file has one line "test", which maps to:
-    # HOST=test, HOSTNAME=test, PORT=test
+    # The arguments file has one line "server,server1,8080", which maps to:
+    # HOST=server, HOSTNAME=server1, PORT=8080
     # Verify each variable is correctly expanded (not corrupted)
-    assert 'Host: test' in output_content, "HOST not correctly expanded"
-    assert 'Hostname: test' in output_content, "HOSTNAME not correctly expanded (may be corrupted by HOST)"
-    assert 'Port: test' in output_content, "PORT (with ${} syntax) not correctly expanded"
+    # CRITICAL: With old buggy code, $HOSTNAME would become "serverNAME" (corrupted by $HOST replacement)
+    assert 'Host: server' in output_content, "HOST not correctly expanded"
+    assert 'Hostname: server1' in output_content, "HOSTNAME not correctly expanded (may be corrupted by HOST)"
+    assert 'Port: 8080' in output_content, "PORT (with ${} syntax) not correctly expanded"
     assert 'Unknown: $UNKNOWN' in output_content, "Unknown variables should be left unchanged"
