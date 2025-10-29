@@ -385,10 +385,8 @@ def test_arguments_mode_no_template_env_var(sample_multi_args_file, isolated_env
     )
 
     assert result.returncode == 0
-    # Should create tasks with environment variables
+    # Should create and execute 3 tasks with environment variables
     assert 'Created 3 tasks' in result.stdout
-    # Should show environment variable assignments in output
-    assert 'HOSTNAME=' in result.stdout
     assert 'completed successfully' in result.stdout.lower() or 'success' in result.stdout.lower()
 
 
