@@ -593,6 +593,10 @@ class SecureTaskExecutor:
 
     def _validate_task_file_security(self, task_file):
         """Basic security validation for task file."""
+        # Arguments-only mode: task_file can be None
+        if task_file is None:
+            return  # No file to validate in arguments-only mode
+
         try:
             if os.path.getsize(task_file) > self.config.advanced.max_file_size:
                 raise SecurityError(f"Task file too large: {task_file}")
@@ -601,8 +605,13 @@ class SecureTaskExecutor:
 
     def _build_secure_command(self, task_file):
         """Build command arguments with basic security validation."""
-        abs_task_file = str(Path(task_file).resolve())
-        command_str = self.command_template.replace("@TASK@", abs_task_file)
+        # Start with command template
+        command_str = self.command_template
+
+        # Replace @TASK@ only if we have a task file (not in arguments-only mode)
+        if task_file is not None:
+            abs_task_file = str(Path(task_file).resolve())
+            command_str = command_str.replace("@TASK@", abs_task_file)
 
         # Replace argument placeholders if we have task arguments
         if self.task_arguments is not None:
@@ -1371,9 +1380,12 @@ class ParallelTaskManager:
                 self.logger.info("DRY RUN MODE")
                 for i, task_entry in enumerate(self.task_entries, 1):
                     if task_entry['type'] == 'argument':
-                        # Build command with absolute path and proper quoting
-                        abs_task_file = str(Path(task_entry['template']).resolve())
-                        command_str = self.command_template.replace("@TASK@", abs_task_file)
+                        # Build command - template is optional in arguments-only mode
+                        command_str = self.command_template
+                        if task_entry['template'] is not None:
+                            # Template mode: replace @TASK@ with template path
+                            abs_task_file = str(Path(task_entry['template']).resolve())
+                            command_str = command_str.replace("@TASK@", abs_task_file)
 
                         # Handle arguments (list)
                         arguments = task_entry['arguments']
