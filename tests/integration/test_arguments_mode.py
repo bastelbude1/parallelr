@@ -388,11 +388,23 @@ def test_arguments_mode_no_template_env_var(sample_multi_args_file, isolated_env
     # Should create and execute 3 tasks with environment variables
     assert 'Created 3 tasks' in result.stdout
 
+    # Extract output log file path from stdout
+    import re
+    output_match = re.search(r'- Output: (.+\.txt)', result.stdout)
+    assert output_match, "Could not find output log file path in stdout"
+    output_file = output_match.group(1)
+
+    # Read the output log file to verify environment variables were expanded
+    import time
+    time.sleep(0.1)  # Brief delay to ensure file is written
+    with open(output_file, 'r') as f:
+        output_content = f.read()
+
     # Verify environment variables were actually injected by checking the echo output
     # Each task should output the environment variables from its CSV line
-    assert 'Host: server1, Port: 8080, Env: prod' in result.stdout
-    assert 'Host: server2, Port: 8081, Env: dev' in result.stdout
-    assert 'Host: server3, Port: 8082, Env: staging' in result.stdout
+    assert 'Host: server1, Port: 8080, Env: prod' in output_content
+    assert 'Host: server2, Port: 8081, Env: dev' in output_content
+    assert 'Host: server3, Port: 8082, Env: staging' in output_content
 
 
 @pytest.mark.integration
