@@ -14,6 +14,15 @@ import sys
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 from conftest import PARALLELR_BIN, PYTHON_FOR_PARALLELR
+from tests.integration.test_helpers import (
+    extract_log_path_from_stdout,
+    parse_csv_summary,
+    verify_csv_completeness,
+    verify_all_tasks_succeeded,
+    verify_worker_assignments,
+    verify_durations_reasonable,
+    verify_summary_counts
+)
 
 # Skip all tests if not on POSIX (bash-dependent integration tests)
 pytestmark = pytest.mark.skipif(os.name != "posix",
@@ -73,7 +82,7 @@ def test_file_mode_directory_execution(sample_task_dir, isolated_env):
 
 @pytest.mark.integration
 def test_file_mode_actual_execution(sample_task_dir, isolated_env):
-    """Test actual task execution in file mode."""
+    """Test actual task execution in file mode with comprehensive validation."""
     result = subprocess.run(
         [PYTHON_FOR_PARALLELR, str(PARALLELR_BIN),
          '-T', str(sample_task_dir),
@@ -86,9 +95,29 @@ def test_file_mode_actual_execution(sample_task_dir, isolated_env):
         timeout=30
     )
 
-    assert result.returncode == 0
-    # Should complete all 5 tasks
-    assert 'Completed Successfully: 5' in result.stdout or 'completed: 5' in result.stdout.lower()
+    # Basic success check
+    assert result.returncode == 0, f"Command failed: {result.stderr}"
+
+    # Verify summary counts in stdout
+    verify_summary_counts(result.stdout, total=5, completed=5, failed=0)
+
+    # Extract and parse CSV summary
+    csv_path = extract_log_path_from_stdout(result.stdout, 'summary')
+    assert csv_path, "Could not find CSV summary path in stdout"
+
+    csv_records = parse_csv_summary(csv_path)
+
+    # Verify CSV has exact 5 records with all required fields
+    verify_csv_completeness(csv_records, expected_count=5)
+
+    # Verify all tasks succeeded (STATUS=SUCCESS, exit_code=0)
+    verify_all_tasks_succeeded(csv_records)
+
+    # Verify worker IDs are within range 1-2 (2 workers configured)
+    verify_worker_assignments(csv_records, max_workers=2)
+
+    # Verify durations are reasonable (> 0, not negative)
+    verify_durations_reasonable(csv_records, min_duration=0.0)
 
 
 @pytest.mark.integration
