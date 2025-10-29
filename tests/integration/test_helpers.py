@@ -325,35 +325,52 @@ def verify_worker_assignments(csv_records: List[Dict], max_workers: int) -> bool
 
     Args:
         csv_records: List of CSV record dictionaries
-        max_workers: Maximum number of workers
+        max_workers: Maximum number of workers configured
 
     Returns:
         True if all worker assignments are valid
 
     Raises:
-        AssertionError: If any worker ID is invalid
+        AssertionError: If any worker ID is invalid or if the number of unique
+                       worker IDs exceeds max_workers
 
     Note:
         Worker IDs are sequential task counters, not pool indexes.
-        This function verifies they are positive integers and that
-        multiple workers are utilized when max_workers > 1.
+        This function verifies:
+        1. Each worker_id is a positive integer (> 0)
+        2. The count of distinct worker_id values does not exceed max_workers
+        3. Multiple workers are utilized when max_workers > 1 and enough tasks exist
     """
+    unique_worker_ids = set()
+
+    # Validate each record has a positive integer worker_id
     for i, record in enumerate(csv_records):
         worker_id = record['worker_id']
-        # Verify worker ID is a positive integer
-        if worker_id < 1:
+
+        # Check worker_id is a positive integer
+        if not isinstance(worker_id, int) or worker_id < 1:
             raise AssertionError(
-                f"Task {i} has invalid worker_id: {worker_id} (must be >= 1)"
+                f"Task {i} has invalid worker_id: {worker_id!r} "
+                f"(must be a positive integer)"
             )
 
+        unique_worker_ids.add(worker_id)
+
+    # Verify unique worker count does not exceed configured max_workers
+    num_unique_workers = len(unique_worker_ids)
+    if num_unique_workers > max_workers:
+        raise AssertionError(
+            f"Found {num_unique_workers} unique worker IDs but max_workers is {max_workers}. "
+            f"Unique IDs: {sorted(unique_worker_ids)}"
+        )
+
     # If multiple workers configured, verify we're actually using parallelism
-    # by checking that we have multiple distinct worker IDs
+    # when we have enough tasks to warrant it
     if max_workers > 1 and len(csv_records) >= max_workers:
-        unique_workers = len(set(r['worker_id'] for r in csv_records))
-        if unique_workers < 2:
+        if num_unique_workers < 2:
             raise AssertionError(
                 f"Expected multiple workers to be used (max_workers={max_workers}), "
-                f"but only {unique_workers} unique worker ID(s) found"
+                f"but only {num_unique_workers} unique worker ID(s) found"
             )
 
     return True
