@@ -48,7 +48,7 @@ try:
     HAS_FCNTL = True
 except ImportError:
     HAS_FCNTL = False
-from concurrent.futures import ThreadPoolExecutor, Future, as_completed
+from concurrent.futures import ThreadPoolExecutor, Future, as_completed, TimeoutError
 from enum import Enum
 
 # Optional imports with fallbacks
