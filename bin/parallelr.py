@@ -1063,31 +1063,70 @@ class ParallelTaskManager:
         """
         Resolve template file path with fallback search in standard TASKER locations.
 
+        Security: Prevents path traversal attacks by:
+        - Rejecting paths with parent directory components (..)
+        - Verifying resolved paths are within intended base directories
+
         Args:
             template_path_str: Template file path as string
 
         Returns:
-            Path object if file is found, None otherwise
+            Path object if file is found and safe, None otherwise
         """
         template_path = Path(template_path_str)
 
-        # First check if file exists as specified (current dir or absolute path)
+        # Security: Reject absolute paths - handle them directly without fallback
+        if template_path.is_absolute():
+            if template_path.is_file():
+                return template_path
+            return None
+
+        # Security: Reject paths with parent directory traversal
+        # Prevents attacks like "../../../etc/passwd"
+        if '..' in template_path.parts:
+            self.logger.warning(f"Rejected template path with parent traversal: {template_path_str}")
+            return None
+
+        # First check if file exists as specified (current dir or relative path)
         if template_path.is_file():
             return template_path
 
         # If not found, search in standard TASKER test_cases locations
         home = Path.home()
-        search_paths = [
-            home / 'tasker' / 'test_cases' / template_path_str,
-            home / 'TASKER' / 'test_cases' / template_path_str,
-            home / 'tasker' / 'test_cases' / 'functional' / template_path_str,
-            home / 'TASKER' / 'test_cases' / 'functional' / template_path_str,
+        base_dirs = [
+            home / 'tasker' / 'test_cases',
+            home / 'TASKER' / 'test_cases',
+            home / 'tasker' / 'test_cases' / 'functional',
+            home / 'TASKER' / 'test_cases' / 'functional',
         ]
 
-        for search_path in search_paths:
-            if search_path.is_file():
-                self.logger.debug(f"Template file '{template_path_str}' resolved to: {search_path}")
-                return search_path
+        for base_dir in base_dirs:
+            candidate = base_dir / template_path_str
+
+            # Security: Verify candidate is inside the intended base directory
+            try:
+                # Resolve both paths to handle symlinks and normalize
+                candidate_resolved = candidate.resolve()
+                base_resolved = base_dir.resolve()
+
+                # Verify containment using relative_to()
+                # This will raise ValueError if candidate is not under base
+                try:
+                    candidate_resolved.relative_to(base_resolved)
+                except ValueError:
+                    # Path is outside base directory - skip this candidate
+                    self.logger.debug(f"Skipped candidate outside base: {candidate}")
+                    continue
+
+                # Path is safe and within base - check if file exists
+                if candidate_resolved.is_file():
+                    self.logger.debug(f"Template file '{template_path_str}' resolved to: {candidate_resolved}")
+                    return candidate_resolved
+
+            except (OSError, RuntimeError):
+                # resolve() can fail on broken symlinks or permission issues
+                self.logger.debug(f"Failed to resolve candidate: {candidate}")
+                continue
 
         # File not found in any location
         return None
