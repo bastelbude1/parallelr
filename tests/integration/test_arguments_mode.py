@@ -320,3 +320,114 @@ def test_arguments_mode_backward_compatibility(sample_task_file, sample_argument
     assert result.returncode == 0
     # Should work with @ARG@ placeholder
     assert 'Created 3 tasks' in result.stdout
+
+
+@pytest.mark.integration
+def test_arguments_mode_no_template_single_arg(sample_arguments_file, isolated_env):
+    """Test arguments-only mode without template file (single argument)."""
+    result = subprocess.run(
+        [PYTHON_FOR_PARALLELR, str(PARALLELR_BIN),
+         '-A', str(sample_arguments_file),
+         '-C', 'echo "Testing @ARG@"',
+         '-r', '-m', '2'],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        universal_newlines=True,
+        env=isolated_env['env'],
+        timeout=30
+    )
+
+    assert result.returncode == 0
+    # Should create 3 tasks from 3 lines in args file
+    assert 'Created 3 tasks' in result.stdout
+    # Should execute successfully
+    assert 'completed successfully' in result.stdout.lower() or 'success' in result.stdout.lower()
+
+
+@pytest.mark.integration
+def test_arguments_mode_no_template_multi_args(sample_multi_args_file, isolated_env):
+    """Test arguments-only mode without template file (multiple arguments)."""
+    result = subprocess.run(
+        [PYTHON_FOR_PARALLELR, str(PARALLELR_BIN),
+         '-A', str(sample_multi_args_file),
+         '-S', 'comma',
+         '-C', 'echo "Server: @ARG_1@, Port: @ARG_2@, Env: @ARG_3@"',
+         '-r', '-m', '2'],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        universal_newlines=True,
+        env=isolated_env['env'],
+        timeout=30
+    )
+
+    assert result.returncode == 0
+    # Should create 3 tasks from 3 lines in multi-args file
+    assert 'Created 3 tasks' in result.stdout
+    # Should execute successfully
+    assert 'completed successfully' in result.stdout.lower() or 'success' in result.stdout.lower()
+
+
+@pytest.mark.integration
+def test_arguments_mode_no_template_env_var(sample_multi_args_file, isolated_env):
+    """Test arguments-only mode with environment variables (no template)."""
+    result = subprocess.run(
+        [PYTHON_FOR_PARALLELR, str(PARALLELR_BIN),
+         '-A', str(sample_multi_args_file),
+         '-S', 'comma',
+         '-E', 'HOSTNAME,PORT,ENVIRONMENT',
+         '-C', 'echo "Host: $HOSTNAME, Port: $PORT, Env: $ENVIRONMENT"',
+         '-r', '-m', '2'],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        universal_newlines=True,
+        env=isolated_env['env'],
+        timeout=30
+    )
+
+    assert result.returncode == 0
+    # Should create tasks with environment variables
+    assert 'Created 3 tasks' in result.stdout
+    # Should show environment variable assignments in output
+    assert 'HOSTNAME=' in result.stdout
+    assert 'completed successfully' in result.stdout.lower() or 'success' in result.stdout.lower()
+
+
+@pytest.mark.integration
+def test_arguments_mode_template_must_be_file(sample_arguments_file, sample_task_dir, isolated_env):
+    """Test that -T with -A must be a file, not a directory."""
+    result = subprocess.run(
+        [PYTHON_FOR_PARALLELR, str(PARALLELR_BIN),
+         '-T', str(sample_task_dir),  # Directory, not file
+         '-A', str(sample_arguments_file),
+         '-C', 'bash @TASK@ @ARG@'],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        universal_newlines=True,
+        env=isolated_env['env'],
+        timeout=10
+    )
+
+    # Should fail validation
+    assert result.returncode != 0
+    # Error message should mention template file requirement
+    assert 'template' in result.stderr.lower() and ('file' in result.stderr.lower() or 'directory' in result.stderr.lower())
+
+
+@pytest.mark.integration
+def test_arguments_mode_template_optional(sample_arguments_file, isolated_env):
+    """Test that template is truly optional with -A."""
+    # Test without -T - should work
+    result_no_template = subprocess.run(
+        [PYTHON_FOR_PARALLELR, str(PARALLELR_BIN),
+         '-A', str(sample_arguments_file),
+         '-C', 'echo @ARG@',
+         '-r'],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        universal_newlines=True,
+        env=isolated_env['env'],
+        timeout=30
+    )
+
+    assert result_no_template.returncode == 0
+    assert 'Created 3 tasks' in result_no_template.stdout
