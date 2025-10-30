@@ -1111,28 +1111,18 @@ class ParallelTaskManager:
             return (None, False, None)
 
         # First check if file exists in current directory (or relative to cwd)
-        # Security: Resolve and verify it's safe before returning
+        # For explicitly provided paths: trust user intent and filesystem permissions
         if template_path.exists():
             try:
-                # Resolve to absolute path to check actual location
+                # Resolve to absolute path (handles symlinks and normalizes path)
                 resolved = template_path.resolve()
 
                 # Verify the resolved path is a regular file
                 if resolved.is_file():
-                    # Security: Check if resolved path is within current working directory
-                    # This prevents "../../../etc/passwd" from succeeding
-                    cwd_resolved = Path.cwd().resolve()
-                    try:
-                        resolved.relative_to(cwd_resolved)
-                        # Path is within cwd, safe to use
-                        return (resolved, False, None)
-                    except ValueError:
-                        # Path resolved outside cwd - check if it's trying to escape
-                        self.logger.warning(
-                            f"Rejected template path that resolves outside working directory: "
-                            f"{template_path_str} -> {resolved}"
-                        )
-                        return (None, False, None)
+                    # User explicitly provided this path - allow it
+                    # Security is enforced by filesystem permissions
+                    # This allows legitimate use cases like ../sibling_dir/template.txt
+                    return (resolved, False, None)
             except (OSError, RuntimeError) as e:
                 # resolve() can fail on broken symlinks or permission issues
                 self.logger.debug(f"Failed to resolve path {template_path_str}: {e}")
