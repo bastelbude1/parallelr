@@ -43,7 +43,8 @@ def test_validate_config_command_success(isolated_env):
 
     # Should succeed with validation message
     assert result.returncode == 0, f"Validation failed: {result.stderr}"
-    assert 'valid' in result.stdout.lower() or 'config' in result.stdout.lower()
+    assert 'configuration is valid' in result.stdout.lower(), \
+        f"Expected 'Configuration is valid' message in output:\n{result.stdout}"
 
 @pytest.mark.integration
 def test_validate_config_command_with_user_overrides(isolated_env):
@@ -76,7 +77,8 @@ limits:
     )
 
     assert result.returncode == 0, f"Validation failed: {result.stderr}"
-    assert 'valid' in result.stdout.lower() or 'config' in result.stdout.lower()
+    assert 'configuration is valid' in result.stdout.lower(), \
+        f"Expected 'Configuration is valid' message in output:\n{result.stdout}"
 
 @pytest.mark.integration
 def test_validate_config_user_exceeds_max_allowed_workers(isolated_env):
