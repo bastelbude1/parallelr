@@ -52,7 +52,7 @@ def run_parallelr(args, isolated_env, timeout=10):
         subprocess.CompletedProcess with stdout, stderr, and returncode
     """
     return subprocess.run(
-        [PYTHON_FOR_PARALLELR, str(PARALLELR_BIN)] + args,
+        [PYTHON_FOR_PARALLELR, str(PARALLELR_BIN), *args],
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
         universal_newlines=True,
