@@ -456,24 +456,27 @@ def test_workspace_isolation_separate_task_execution(temp_dir, config_with_isola
 @pytest.mark.integration
 def test_workspace_isolation_no_cross_contamination(temp_dir, config_with_isolation):
     """
-    Test that workers use isolated workspace directories without cross-contamination.
+    Test that isolated workspaces prevent cross-contamination between workers.
 
-    Verifies that tasks write files to their worker's isolated workspace and
-    that files don't leak between workers. Each worker should process a subset
-    of tasks, not all tasks.
+    Each worker executes tasks in its own isolated directory (pid{PID}_worker{N}).
+    Tasks write marker files to their current working directory (the isolated workspace).
+    This test verifies:
+    1. Marker files appear in per-worker directories, not in shared workspace base
+    2. All tasks complete successfully across all workers
+    3. No single worker has all tasks (proves work distribution)
     """
-    # Create tasks that write marker files to workspace
+    # Create tasks that write marker files to CWD (which should be isolated workspace)
     for i in range(6):
         task = temp_dir / f'marker_{i}.sh'
-        # Write a marker file to the workspace to verify isolation
-        task.write_text(f'#!/bin/bash\ntouch marker_{i}.txt\necho "Task {i} completed"\n')
+        # Write marker to CWD and echo for verification
+        task.write_text(f'#!/bin/bash\ntouch marker_{i}.txt\necho "Task {i} completed in $(pwd)"\n')
         task.chmod(0o755)
 
     result = subprocess.run(
         [PYTHON_FOR_PARALLELR, str(PARALLELR_BIN),
          '-T', str(temp_dir),
          '-C', 'bash @TASK@',
-         '-r', '-m', '3'],  # 3 workers
+         '-r', '-m', '2'],  # 2 workers
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
         universal_newlines=True,
@@ -481,39 +484,44 @@ def test_workspace_isolation_no_cross_contamination(temp_dir, config_with_isolat
         timeout=30
     )
 
-    assert result.returncode == 0
+    assert result.returncode == 0, f"Execution failed: {result.stderr}"
 
     # Verify output mentions isolated workspace
     assert 'isolated' in result.stdout.lower()
 
-    # Verify workers created isolated directories
+    # Verify isolated workspace base was created
     workspace_base = config_with_isolation['workspace']
 
     # Fail fast if workspace base directory doesn't exist or is not a directory
     assert workspace_base.exists(), f"Workspace base directory should exist at {workspace_base}"
     assert workspace_base.is_dir(), f"Workspace base path should be a directory at {workspace_base}"
 
+    # Find per-worker directories
     worker_dirs = [d for d in workspace_base.iterdir()
                   if d.is_dir() and 'worker' in d.name]
 
-    # With 3 workers and 6 tasks, should have multiple worker directories
+    # Should have 1-2 worker directories (matching -m 2)
     assert len(worker_dirs) >= 1, "Should have at least one worker directory"
+    assert len(worker_dirs) <= 2, f"Should have at most 2 worker directories (-m 2), found {len(worker_dirs)}"
 
-    # Verify no cross-contamination: each worker has its own subset of marker files
+    # Verify marker files are distributed across worker directories
     total_marker_files = 0
     for worker_dir in worker_dirs:
         marker_files = list(worker_dir.glob('marker_*.txt'))
         marker_count = len(marker_files)
         total_marker_files += marker_count
 
-        # Each worker should have processed some tasks
-        assert marker_count > 0, f"Worker {worker_dir.name} should have executed at least one task"
-
-        # No single worker should have ALL 6 tasks (proves distribution/isolation)
-        assert marker_count < 6, f"Worker {worker_dir.name} should not have all tasks (found {marker_count}/6)"
+        # If this worker executed tasks, verify it didn't execute ALL tasks
+        # (which would indicate lack of distribution or isolation failure)
+        if marker_count > 0:
+            assert marker_count < 6, f"Worker {worker_dir.name} should not have all 6 tasks (found {marker_count}/6)"
 
     # All 6 tasks should have been completed across all workers
-    assert total_marker_files == 6, f"Expected 6 total marker files, found {total_marker_files}"
+    assert total_marker_files == 6, f"Expected 6 total marker files across all workers, found {total_marker_files}"
+
+    # CRITICAL: Verify no marker files in workspace base (should only be in worker subdirs)
+    base_markers = list(workspace_base.glob('marker_*.txt'))
+    assert len(base_markers) == 0, f"Marker files should be in worker directories, not workspace base. Found {len(base_markers)} in base."
 
 
 @pytest.mark.integration
