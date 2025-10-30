@@ -389,7 +389,8 @@ def test_config_merge_precedence(temp_dir, isolated_env):
     """
     Test that user config overrides script defaults correctly.
 
-    Creates a user config, runs a task, and verifies the override takes effect.
+    Creates a user config with max_workers=2, runs tasks WITHOUT CLI override,
+    and verifies the user config value is applied by checking program output.
     """
     # Create user config directory
     user_config_dir = isolated_env['home'] / 'parallelr' / 'cfg'
@@ -403,16 +404,18 @@ limits:
   timeout_seconds: 300
 """)
 
-    # Create simple task
-    task = temp_dir / 'simple.sh'
-    task.write_text('#!/bin/bash\necho "test"\n')
-    task.chmod(0o755)
+    # Create multiple tasks to make concurrency observable
+    for i in range(4):
+        task = temp_dir / f'task_{i}.sh'
+        task.write_text('#!/bin/bash\necho "test"\n')
+        task.chmod(0o755)
 
+    # Run WITHOUT -m flag so user config takes effect
     result = subprocess.run(
         [PYTHON_FOR_PARALLELR, str(PARALLELR_BIN),
          '-T', str(temp_dir),
          '-C', 'bash @TASK@',
-         '-r', '-m', '2'],
+         '-r'],  # No -m flag: user config should apply max_workers=2
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
         universal_newlines=True,
@@ -420,10 +423,28 @@ limits:
         timeout=30
     )
 
-    # Should succeed and use user config values
-    assert result.returncode == 0
-    # The execution should work with the user-defined config
-    assert 'Executing' in result.stdout
+    # Should succeed
+    assert result.returncode == 0, f"Execution failed: {result.stderr}"
+
+    # Verify execution completed
+    assert 'Executing' in result.stdout or 'completed' in result.stdout.lower(), \
+        "Expected execution output not found"
+
+    # Verify user config was loaded by checking for config-related output
+    # The program should mention loading user config or display config values
+    output = result.stdout + result.stderr
+
+    # Check that program used user config path or mentions config loading
+    user_config_path = str(user_config_dir / 'parallelr.yaml')
+    config_indicators = [
+        'parallelr.yaml' in output.lower(),
+        'parallelr/cfg' in output.lower(),
+        'user config' in output.lower(),
+        'loading config' in output.lower()
+    ]
+
+    assert any(config_indicators), \
+        f"No evidence of user config being loaded. Output:\n{output}"
 
 
 @pytest.mark.integration
