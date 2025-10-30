@@ -418,7 +418,7 @@ limits:
         f"Expected Workers=2 from user config, got {actual_workers}. Output:\n{output}"
 
 @pytest.mark.integration
-def test_config_missing_user_file_uses_defaults(temp_dir, isolated_env):
+def test_config_missing_user_file_uses_defaults(isolated_env):
     """
     Test that missing user config falls back to script defaults gracefully.
 
