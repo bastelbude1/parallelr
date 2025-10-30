@@ -6,6 +6,7 @@ Tests two-tier config hierarchy (script + user configs) and validation commands.
 
 import subprocess
 import os
+import re
 from pathlib import Path
 import pytest
 
@@ -138,7 +139,6 @@ limits:
     output = result.stdout + result.stderr
 
     # Extract the actual workers value from "Workers: N (max allowed: M)" pattern
-    import re
     workers_match = re.search(r'Workers:\s+(\d+)', output, re.IGNORECASE)
     assert workers_match, f"Could not find 'Workers:' pattern in output:\n{output}"
 
@@ -189,7 +189,6 @@ limits:
     output = result.stdout + result.stderr
 
     # Extract timeout value with unit handling (supports "s" for seconds, "ms" for milliseconds)
-    import re
     timeout_match = re.search(r'Timeout:\s+(\d+)(ms|s)?', output, re.IGNORECASE)
     assert timeout_match, f"Could not find 'Timeout:' pattern in output:\n{output}"
 
@@ -248,7 +247,6 @@ limits:
     output = result.stdout + result.stderr
 
     # Extract all numeric values from output that might be related to max_output_capture
-    import re
     all_numbers = [int(m) for m in re.findall(r'\b(\d+)\b', output)]
 
     # Should see warning that user value exceeded limit
@@ -324,16 +322,17 @@ limits:
         timeout=10
     )
 
-    # Should fail or warn about invalid YAML
-    # The tool may fall back to defaults gracefully
+    # Tool should either fail or explicitly warn about YAML issues
     output = (result.stdout + result.stderr).lower()
-    # Accept either failure or warning
-    assert (result.returncode != 0 or
-            'error' in output or
-            'warning' in output or
-            'invalid' in output or
-            'yaml' in output or
-            'default' in output)  # Falls back to defaults
+
+    if result.returncode == 0:
+        # If it succeeds, it must explicitly warn about YAML and fallback
+        assert 'yaml' in output and ('warning' in output or 'error' in output), \
+            f"Expected explicit YAML warning/error in output:\n{output}"
+    else:
+        # If it fails, error message should mention YAML or parsing
+        assert 'yaml' in output or 'parse' in output or 'invalid' in output, \
+            f"Expected YAML-related error message:\n{output}"
 
 
 @pytest.mark.integration
@@ -356,8 +355,11 @@ def test_show_config_command(isolated_env):
     assert result.returncode == 0, f"Show config failed: {result.stderr}"
     output = result.stdout.lower()
 
-    # Should display key configuration values
-    assert 'config' in output or 'worker' in output or 'timeout' in output
+    # Should display multiple key configuration values
+    assert 'worker' in output, "Expected workers config in output"
+    assert 'timeout' in output, "Expected timeout config in output"
+    # At least one numeric value should be present
+    assert re.search(r'\d+', output), "Expected numeric config values in output"
 
 
 @pytest.mark.integration
@@ -380,8 +382,10 @@ def test_show_config_displays_workspace_mode(isolated_env):
     assert result.returncode == 0
     output = result.stdout.lower()
 
-    # Should mention workspace mode
-    assert 'workspace' in output or 'shared' in output or 'isolated' in output
+    # Should explicitly display workspace mode with a value
+    assert 'workspace' in output, "Expected 'workspace' in config output"
+    assert ('shared' in output or 'isolated' in output), \
+        "Expected workspace mode value ('shared' or 'isolated') in output"
 
 
 @pytest.mark.integration
@@ -435,7 +439,6 @@ limits:
     output = result.stdout + result.stderr
 
     # Extract the Workers value from output (e.g., "Workers: 2")
-    import re
     workers_match = re.search(r'Workers:\s+(\d+)', output, re.IGNORECASE)
     assert workers_match, f"Could not find 'Workers:' pattern in output:\n{output}"
 
@@ -451,28 +454,39 @@ def test_config_missing_user_file_uses_defaults(temp_dir, isolated_env):
     """
     Test that missing user config falls back to script defaults gracefully.
 
-    Does NOT create user config and verifies execution uses defaults.
+    Does NOT create user config and verifies execution uses script default values.
     """
     # Explicitly do NOT create user config
     # User config directory doesn't exist, tool should use script defaults
 
-    # Create simple task
-    task = temp_dir / 'test_task.sh'
-    task.write_text('#!/bin/bash\necho "default config"\n')
-    task.chmod(0o755)
-
+    # Use --show-config to verify default values are loaded
     result = subprocess.run(
         [PYTHON_FOR_PARALLELR, str(PARALLELR_BIN),
-         '-T', str(temp_dir),
-         '-C', 'bash @TASK@',
-         '-r'],
+         '--show-config'],
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
         universal_newlines=True,
         env=isolated_env['env'],
-        timeout=30
+        timeout=10
     )
 
-    # Should succeed using script defaults
-    assert result.returncode == 0, f"Execution with defaults failed: {result.stderr}"
-    assert 'Executing' in result.stdout
+    # Should succeed with script defaults
+    assert result.returncode == 0, f"Show config failed: {result.stderr}"
+    output = result.stdout + result.stderr
+
+    # Verify script default values are loaded (not user overrides)
+    # Previous test (test_config_merge_precedence) used max_workers=2
+    # This test should NOT show max_workers=2 since no user config exists
+    workers_match = re.search(r'Workers:\s+(\d+)', output, re.IGNORECASE)
+    assert workers_match, f"Could not find 'Workers:' pattern in output:\n{output}"
+
+    actual_workers = int(workers_match.group(1))
+
+    # Should use script default (likely CPU count or configured default like 4)
+    # NOT the user override value of 2 from the other test
+    assert actual_workers != 2, \
+        f"Workers={actual_workers} suggests user config loaded, but none exists. Output:\n{output}"
+
+    # Verify config output contains key settings
+    assert 'timeout' in output.lower(), "Expected timeout in default config"
+    assert 'worker' in output.lower(), "Expected workers in default config"
