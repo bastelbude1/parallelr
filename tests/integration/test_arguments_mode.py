@@ -28,29 +28,7 @@ from tests.integration.test_helpers import (
 pytestmark = pytest.mark.skipif(shutil.which("bash") is None,
                                 reason="Requires bash (POSIX)")
 
-
-@pytest.fixture
-def isolated_env(tmp_path):
-    """
-    Provide isolated environment for argument tests.
-
-    Creates a subprocess-only environment without mutating global os.environ.
-    Safe for parallel test execution.
-    """
-    temp_home = tmp_path / 'home'
-    temp_home.mkdir()
-
-    # Create isolated environment copy for subprocess use only
-    # No global os.environ mutation - safe for parallel tests
-    env_copy = {**os.environ, 'HOME': str(temp_home)}
-
-    yield {
-        'home': temp_home,
-        'env': env_copy
-    }
-
     # Cleanup is automatic via tmp_path fixture
-
 
 @pytest.mark.integration
 def test_arguments_mode_single_argument(sample_task_file, sample_arguments_file, isolated_env):
@@ -71,7 +49,6 @@ def test_arguments_mode_single_argument(sample_task_file, sample_arguments_file,
     assert result.returncode == 0
     # Should create 3 tasks (3 lines in args file)
     assert 'Created 3 tasks' in result.stdout
-
 
 @pytest.mark.integration
 def test_arguments_mode_multi_args_comma(sample_task_file, sample_multi_args_file, isolated_env):
@@ -121,7 +98,6 @@ def test_arguments_mode_multi_args_comma(sample_task_file, sample_multi_args_fil
         assert '@ARG_2@' not in record['command'], "Placeholder @ARG_2@ was not replaced in command"
         assert '@ARG_3@' not in record['command'], "Placeholder @ARG_3@ was not replaced in command"
 
-
 @pytest.mark.integration
 @pytest.mark.parametrize("delim_name,line_content", [
     ("comma", "val1,val2,val3"),
@@ -152,7 +128,6 @@ def test_arguments_mode_all_delimiters(temp_dir, sample_task_file, isolated_env,
     assert result.returncode == 0, f"Failed for delimiter: {delim_name}"
     assert 'Created 1 tasks' in result.stdout or 'Created 1 task' in result.stdout
 
-
 @pytest.mark.integration
 def test_arguments_mode_indexed_placeholders(sample_task_file, temp_dir, isolated_env):
     """Test indexed placeholder replacement."""
@@ -178,7 +153,6 @@ def test_arguments_mode_indexed_placeholders(sample_task_file, temp_dir, isolate
     assert '8080' in result.stdout
     assert 'prod' in result.stdout
 
-
 @pytest.mark.integration
 def test_arguments_mode_env_var_mapping(sample_task_file, sample_multi_args_file, isolated_env):
     """Test environment variable mapping to arguments."""
@@ -201,7 +175,6 @@ def test_arguments_mode_env_var_mapping(sample_task_file, sample_multi_args_file
     assert 'HOST=' in result.stdout
     assert 'PORT=' in result.stdout
     assert 'ENVIRONMENT=' in result.stdout
-
 
 @pytest.mark.integration
 def test_arguments_mode_inconsistent_args_validation(sample_task_file, temp_dir, isolated_env):
@@ -226,7 +199,6 @@ def test_arguments_mode_inconsistent_args_validation(sample_task_file, temp_dir,
     assert result.returncode != 0
     assert 'Inconsistent argument counts' in result.stderr
 
-
 @pytest.mark.integration
 def test_arguments_mode_invalid_placeholder_validation(sample_task_file, temp_dir, isolated_env):
     """Test validation of invalid placeholder indexes."""
@@ -250,7 +222,6 @@ def test_arguments_mode_invalid_placeholder_validation(sample_task_file, temp_di
     assert result.returncode != 0
     assert '@ARG_5@' in result.stderr or 'placeholder' in result.stderr.lower()
 
-
 @pytest.mark.integration
 def test_arguments_mode_separator_without_args_file(sample_task_file, isolated_env):
     """Test that separator requires arguments file."""
@@ -269,7 +240,6 @@ def test_arguments_mode_separator_without_args_file(sample_task_file, isolated_e
     # Should fail validation
     assert result.returncode != 0
     assert 'separator' in result.stderr.lower() and 'arguments' in result.stderr.lower()
-
 
 @pytest.mark.integration
 def test_arguments_mode_empty_env_var_validation(sample_task_file, sample_arguments_file, isolated_env):
@@ -291,7 +261,6 @@ def test_arguments_mode_empty_env_var_validation(sample_task_file, sample_argume
     assert result.returncode != 0
     assert 'empty' in result.stderr.lower()
 
-
 @pytest.mark.integration
 def test_arguments_mode_more_env_vars_than_args(sample_task_file, sample_arguments_file, isolated_env):
     """Test error when more env vars than arguments."""
@@ -311,7 +280,6 @@ def test_arguments_mode_more_env_vars_than_args(sample_task_file, sample_argumen
     # Should fail with error
     assert result.returncode != 0
     assert 'mismatch' in result.stderr.lower() or 'cannot proceed' in result.stderr.lower()
-
 
 @pytest.mark.integration
 def test_arguments_mode_fewer_env_vars_than_args(sample_task_file, sample_multi_args_file, isolated_env):
@@ -335,7 +303,6 @@ def test_arguments_mode_fewer_env_vars_than_args(sample_task_file, sample_multi_
     assert result.returncode == 0
     assert 'mismatch' in result.stdout.lower() or 'warning' in result.stdout.lower()
 
-
 @pytest.mark.integration
 def test_arguments_mode_backward_compatibility(sample_task_file, sample_arguments_file, isolated_env):
     """Test backward compatibility with single arguments (no separator)."""
@@ -355,7 +322,6 @@ def test_arguments_mode_backward_compatibility(sample_task_file, sample_argument
     assert result.returncode == 0
     # Should work with @ARG@ placeholder
     assert 'Created 3 tasks' in result.stdout
-
 
 @pytest.mark.integration
 def test_arguments_mode_no_template_single_arg(sample_arguments_file, isolated_env):
@@ -401,7 +367,6 @@ def test_arguments_mode_no_template_single_arg(sample_arguments_file, isolated_e
         assert '@ARG@' not in record['command'], "Placeholder @ARG@ was not replaced in command"
         assert 'echo' in record['command'] and 'Testing' in record['command'], \
             "Command doesn't contain expected keywords"
-
 
 @pytest.mark.integration
 def test_arguments_mode_no_template_multi_args(sample_multi_args_file, isolated_env):
@@ -450,7 +415,6 @@ def test_arguments_mode_no_template_multi_args(sample_multi_args_file, isolated_
         assert '@ARG_3@' not in record['command'], "Placeholder @ARG_3@ was not replaced in command"
         assert 'echo' in record['command'] and 'Server:' in record['command'], \
             "Command doesn't contain expected keywords"
-
 
 @pytest.mark.integration
 def test_arguments_mode_no_template_env_var(sample_multi_args_file, isolated_env):
@@ -501,7 +465,6 @@ def test_arguments_mode_no_template_env_var(sample_multi_args_file, isolated_env
     assert 'Host: server2, Port: 8081, Env: dev' in output_content
     assert 'Host: server3, Port: 8082, Env: staging' in output_content
 
-
 @pytest.mark.integration
 def test_arguments_mode_template_must_be_file(sample_arguments_file, sample_task_dir, isolated_env):
     """Test that -T with -A must be a file, not a directory."""
@@ -522,7 +485,6 @@ def test_arguments_mode_template_must_be_file(sample_arguments_file, sample_task
     # Error message should mention template file requirement
     assert 'template' in result.stderr.lower() and ('file' in result.stderr.lower() or 'directory' in result.stderr.lower())
 
-
 @pytest.mark.integration
 def test_arguments_mode_template_optional(sample_arguments_file, isolated_env):
     """Test that template is truly optional with -A."""
@@ -541,7 +503,6 @@ def test_arguments_mode_template_optional(sample_arguments_file, isolated_env):
 
     assert result_no_template.returncode == 0
     assert 'Created 3 tasks' in result_no_template.stdout
-
 
 @pytest.mark.integration
 def test_arguments_mode_overlapping_env_var_names(temp_dir, isolated_env):

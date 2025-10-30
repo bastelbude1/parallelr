@@ -14,38 +14,15 @@ import sys
 sys.path.insert(0, str(Path(__file__).parent.parent))
 from conftest import PARALLELR_BIN, PYTHON_FOR_PARALLELR
 
-
 # Configuration limits expected by tests (must match script config max_allowed_* values)
 MAX_ALLOWED_WORKERS = 100
 MAX_ALLOWED_TIMEOUT_SECONDS = 3600
 MAX_ALLOWED_OUTPUT_CAPTURE = 10000
 
-
 # Early abort if parallelr.py is missing
 if not PARALLELR_BIN.exists():
     pytest.skip("bin/parallelr.py not found - integration tests skipped",
                 allow_module_level=True)
-
-
-@pytest.fixture
-def isolated_env(tmp_path):
-    """
-    Provide isolated environment for config tests.
-
-    Creates a subprocess-only environment without mutating global os.environ.
-    Safe for parallel test execution.
-    """
-    temp_home = tmp_path / 'home'
-    temp_home.mkdir()
-
-    # Create isolated environment copy for subprocess use only
-    env_copy = {**os.environ, 'HOME': str(temp_home)}
-
-    yield {
-        'home': temp_home,
-        'env': env_copy
-    }
-
 
 @pytest.mark.integration
 def test_validate_config_command_success(isolated_env):
@@ -67,7 +44,6 @@ def test_validate_config_command_success(isolated_env):
     # Should succeed with validation message
     assert result.returncode == 0, f"Validation failed: {result.stderr}"
     assert 'valid' in result.stdout.lower() or 'config' in result.stdout.lower()
-
 
 @pytest.mark.integration
 def test_validate_config_command_with_user_overrides(isolated_env):
@@ -101,7 +77,6 @@ limits:
 
     assert result.returncode == 0, f"Validation failed: {result.stderr}"
     assert 'valid' in result.stdout.lower() or 'config' in result.stdout.lower()
-
 
 @pytest.mark.integration
 def test_validate_config_user_exceeds_max_allowed_workers(isolated_env):
@@ -151,7 +126,6 @@ limits:
     # Verify the original value 150 is NOT present in the final config
     assert '150' not in output or 'exceeds limit' in output.lower(), \
         "Original uncapped value (150) should not appear in final config (except in warning)"
-
 
 @pytest.mark.integration
 def test_validate_config_user_exceeds_max_allowed_timeout(isolated_env):
@@ -208,7 +182,6 @@ limits:
     # Verify the original value 5000 is NOT present in the final config
     assert '5000' not in output or 'exceeds limit' in output.lower(), \
         "Original uncapped value (5000) should not appear in final config (except in warning)"
-
 
 @pytest.mark.integration
 def test_validate_config_user_exceeds_max_allowed_output(isolated_env):
@@ -292,7 +265,6 @@ limits:
     # Ensure warning mentions using the limit
     assert 'using limit' in output.lower(), "Warning should mention 'using limit'"
 
-
 @pytest.mark.integration
 def test_validate_config_invalid_yaml(isolated_env):
     """
@@ -334,7 +306,6 @@ limits:
         assert 'yaml' in output or 'parse' in output or 'invalid' in output, \
             f"Expected YAML-related error message:\n{output}"
 
-
 @pytest.mark.integration
 def test_show_config_command(isolated_env):
     """
@@ -361,7 +332,6 @@ def test_show_config_command(isolated_env):
     # At least one numeric value should be present
     assert re.search(r'\d+', output), "Expected numeric config values in output"
 
-
 @pytest.mark.integration
 def test_show_config_displays_workspace_mode(isolated_env):
     """
@@ -386,7 +356,6 @@ def test_show_config_displays_workspace_mode(isolated_env):
     assert 'workspace' in output, "Expected 'workspace' in config output"
     assert ('shared' in output or 'isolated' in output), \
         "Expected workspace mode value ('shared' or 'isolated') in output"
-
 
 @pytest.mark.integration
 def test_config_merge_precedence(temp_dir, isolated_env):
@@ -447,7 +416,6 @@ limits:
     # Verify the user config value (max_workers: 2) was applied
     assert actual_workers == 2, \
         f"Expected Workers=2 from user config, got {actual_workers}. Output:\n{output}"
-
 
 @pytest.mark.integration
 def test_config_missing_user_file_uses_defaults(temp_dir, isolated_env):

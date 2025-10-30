@@ -22,27 +22,6 @@ from tests.integration.test_helpers import (
 pytestmark = pytest.mark.skipif(shutil.which("bash") is None,
                                 reason="Requires bash (POSIX)")
 
-
-@pytest.fixture
-def isolated_env(tmp_path):
-    """
-    Provide isolated environment for timeout tests.
-
-    Creates a subprocess-only environment without mutating global os.environ.
-    Safe for parallel test execution.
-    """
-    temp_home = tmp_path / 'home'
-    temp_home.mkdir()
-
-    # Create isolated environment copy for subprocess use only
-    env_copy = {**os.environ, 'HOME': str(temp_home)}
-
-    yield {
-        'home': temp_home,
-        'env': env_copy
-    }
-
-
 @pytest.mark.integration
 def test_task_timeout_kills_long_running_task(temp_dir, isolated_env):
     """
@@ -80,7 +59,6 @@ def test_task_timeout_kills_long_running_task(temp_dir, isolated_env):
     record = csv_records[0]
     assert record['status'] == 'TIMEOUT', f"Expected TIMEOUT, got {record['status']}"
 
-
 @pytest.mark.integration
 def test_task_timeout_status_in_csv(temp_dir, isolated_env):
     """
@@ -110,7 +88,6 @@ def test_task_timeout_status_in_csv(temp_dir, isolated_env):
 
     assert len(csv_records) == 1
     assert csv_records[0]['status'] == 'TIMEOUT'
-
 
 @pytest.mark.integration
 def test_task_timeout_error_message(temp_dir, isolated_env):
@@ -144,7 +121,6 @@ def test_task_timeout_error_message(temp_dir, isolated_env):
 
     # Error message should mention timeout
     assert 'timeout' in error_msg, f"Expected 'timeout' in error message, got: {error_msg}"
-
 
 @pytest.mark.integration
 def test_task_timeout_custom_value(temp_dir, isolated_env):
@@ -197,7 +173,6 @@ def test_task_timeout_custom_value(temp_dir, isolated_env):
     # Should timeout
     assert csv_records2[0]['status'] == 'TIMEOUT', "Task should timeout with 1s timeout"
 
-
 @pytest.mark.integration
 def test_task_timeout_multiple_workers(temp_dir, isolated_env):
     """
@@ -230,7 +205,6 @@ def test_task_timeout_multiple_workers(temp_dir, isolated_env):
     assert len(csv_records) == 4, "All 4 tasks should be recorded"
     for record in csv_records:
         assert record['status'] == 'TIMEOUT', "All tasks should timeout"
-
 
 @pytest.mark.integration
 def test_fast_tasks_complete_before_timeout(temp_dir, isolated_env):

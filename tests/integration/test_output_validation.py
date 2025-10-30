@@ -30,27 +30,6 @@ from tests.integration.test_helpers import (
 pytestmark = pytest.mark.skipif(shutil.which("bash") is None,
                                 reason="Requires bash (POSIX)")
 
-
-@pytest.fixture
-def isolated_env(tmp_path):
-    """
-    Provide isolated environment for output validation tests.
-
-    Creates a subprocess-only environment without mutating global os.environ.
-    Safe for parallel test execution.
-    """
-    temp_home = tmp_path / 'home'
-    temp_home.mkdir()
-
-    # Create isolated environment copy for subprocess use only
-    env_copy = {**os.environ, 'HOME': str(temp_home)}
-
-    yield {
-        'home': temp_home,
-        'env': env_copy
-    }
-
-
 @pytest.mark.integration
 def test_csv_summary_all_required_fields(sample_task_dir, isolated_env):
     """
@@ -90,7 +69,6 @@ def test_csv_summary_all_required_fields(sample_task_dir, isolated_env):
         for field in required_fields:
             assert field in record, \
                 f"Record {i} missing required field: {field}"
-
 
 @pytest.mark.integration
 def test_csv_summary_field_data_types(sample_task_dir, isolated_env):
@@ -140,7 +118,6 @@ def test_csv_summary_field_data_types(sample_task_dir, isolated_env):
         assert isinstance(record['command'], str), \
             f"Record {i}: command should be str, got {type(record['command'])}"
 
-
 @pytest.mark.integration
 def test_csv_summary_timestamp_format(sample_task_dir, isolated_env):
     """
@@ -185,7 +162,6 @@ def test_csv_summary_timestamp_format(sample_task_dir, isolated_env):
         assert start_time <= end_time, \
             f"Record {i}: start_time ({start_time}) should be <= end_time ({end_time})"
 
-
 @pytest.mark.integration
 def test_csv_summary_status_values(sample_task_dir, isolated_env):
     """
@@ -227,7 +203,6 @@ def test_csv_summary_status_values(sample_task_dir, isolated_env):
             assert exit_code == 0, \
                 f"Record {i}: status=SUCCESS but exit_code={exit_code} (should be 0)"
 
-
 @pytest.mark.integration
 def test_output_log_file_created(sample_task_dir, isolated_env):
     """
@@ -263,7 +238,6 @@ def test_output_log_file_created(sample_task_dir, isolated_env):
     content = read_task_output_log(output_path)
     assert content is not None, "Could not read output log file"
     assert len(content) > 0, "Output log file is empty (should contain task output)"
-
 
 @pytest.mark.integration
 def test_output_log_task_separation(temp_dir, isolated_env):
@@ -307,7 +281,6 @@ def test_output_log_task_separation(temp_dir, isolated_env):
     assert 'Unique content 0' in output_content, "Task 0 unique content not found"
     assert 'Unique content 1' in output_content, "Task 1 unique content not found"
     assert 'Unique content 2' in output_content, "Task 2 unique content not found"
-
 
 @pytest.mark.integration
 def test_performance_metrics_reasonable_values(sample_task_dir, isolated_env):
@@ -356,7 +329,6 @@ def test_performance_metrics_reasonable_values(sample_task_dir, isolated_env):
         # CPU shouldn't be absurdly high (e.g., > 1000%)
         assert cpu <= 1000, \
             f"Record {i}: cpu_percent seems too high: {cpu}%"
-
 
 @pytest.mark.integration
 def test_summary_statistics_match_csv(sample_task_dir, isolated_env):
@@ -411,7 +383,6 @@ def test_summary_statistics_match_csv(sample_task_dir, isolated_env):
     assert stdout_failed == csv_failed, \
         f"Failed mismatch: stdout says {stdout_failed}, CSV has {csv_failed} failures"
 
-
 @pytest.mark.integration
 def test_worker_id_assignment_validity(sample_task_dir, isolated_env):
     """
@@ -449,7 +420,6 @@ def test_worker_id_assignment_validity(sample_task_dir, isolated_env):
     unique_workers = set(worker_ids)
     assert len(unique_workers) >= 2, \
         f"Expected multiple workers to be utilized, found {len(unique_workers)} unique worker IDs"
-
 
 @pytest.mark.integration
 def test_log_file_paths_in_stdout(sample_task_dir, isolated_env):

@@ -22,27 +22,6 @@ from tests.integration.test_helpers import (
 pytestmark = pytest.mark.skipif(shutil.which("bash") is None,
                                 reason="Requires bash (POSIX)")
 
-
-@pytest.fixture
-def isolated_env(tmp_path):
-    """
-    Provide isolated environment for auto-stop tests.
-
-    Creates a subprocess-only environment without mutating global os.environ.
-    Safe for parallel test execution.
-    """
-    temp_home = tmp_path / 'home'
-    temp_home.mkdir()
-
-    # Create isolated environment copy for subprocess use only
-    env_copy = {**os.environ, 'HOME': str(temp_home)}
-
-    yield {
-        'home': temp_home,
-        'env': env_copy
-    }
-
-
 @pytest.mark.integration
 def test_auto_stop_consecutive_failures(temp_dir, isolated_env):
     """
@@ -82,7 +61,6 @@ def test_auto_stop_consecutive_failures(temp_dir, isolated_env):
         # Should have stopped, likely around 5-6 tasks
         assert len(csv_records) < 10, "Auto-stop should prevent all 10 tasks from completing"
 
-
 @pytest.mark.integration
 def test_auto_stop_failure_rate_threshold(temp_dir, isolated_env):
     """
@@ -118,7 +96,6 @@ def test_auto_stop_failure_rate_threshold(temp_dir, isolated_env):
     # Should trigger auto-stop due to high failure rate
     assert 'auto-stop' in combined.lower() or 'failure rate' in combined.lower() or 'rate' in combined.lower()
 
-
 @pytest.mark.integration
 def test_auto_stop_requires_min_tasks_for_rate(temp_dir, isolated_env):
     """
@@ -150,7 +127,6 @@ def test_auto_stop_requires_min_tasks_for_rate(temp_dir, isolated_env):
     # Should stop via consecutive failures (5 consecutive), NOT rate
     # Rate check needs >=10 tasks
     assert 'consecutive' in combined.lower() or 'auto-stop' in combined.lower()
-
 
 @pytest.mark.integration
 def test_auto_stop_not_triggered_without_flag(temp_dir, isolated_env):
@@ -184,7 +160,6 @@ def test_auto_stop_not_triggered_without_flag(temp_dir, isolated_env):
         # All 10 tasks should execute
         assert len(csv_records) == 10, "Without --enable-stop-limits, all tasks should run"
 
-
 @pytest.mark.integration
 def test_auto_stop_logs_reason(temp_dir, isolated_env):
     """
@@ -217,7 +192,6 @@ def test_auto_stop_logs_reason(temp_dir, isolated_env):
     assert ('consecutive' in combined.lower() or
             'limit' in combined.lower() or
             'auto-stop' in combined.lower())
-
 
 @pytest.mark.integration
 def test_auto_stop_partial_completion_in_csv(temp_dir, isolated_env):

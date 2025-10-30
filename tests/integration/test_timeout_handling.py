@@ -27,27 +27,6 @@ from tests.integration.test_helpers import (
 pytestmark = pytest.mark.skipif(shutil.which("bash") is None,
                                 reason="Requires bash (POSIX)")
 
-
-@pytest.fixture
-def isolated_env(tmp_path):
-    """
-    Provide isolated environment for timeout tests.
-
-    Creates a subprocess-only environment without mutating global os.environ.
-    Safe for parallel test execution.
-    """
-    temp_home = tmp_path / 'home'
-    temp_home.mkdir()
-
-    # Create isolated environment copy for subprocess use only
-    env_copy = {**os.environ, 'HOME': str(temp_home)}
-
-    yield {
-        'home': temp_home,
-        'env': env_copy
-    }
-
-
 @pytest.mark.integration
 def test_futures_timeout_with_slow_tasks(temp_dir, isolated_env):
     """
@@ -107,7 +86,6 @@ def test_futures_timeout_with_slow_tasks(temp_dir, isolated_env):
     # Use lenient bounds for CI environments which can be slower
     verify_durations_reasonable(csv_records, min_duration=0.2, max_duration=5.0)
 
-
 @pytest.mark.integration
 def test_futures_timeout_with_arguments_mode(temp_dir, isolated_env):
     """
@@ -162,7 +140,6 @@ def test_futures_timeout_with_arguments_mode(temp_dir, isolated_env):
     for record in csv_records:
         assert '@ARG@' not in record['command'], "Placeholder @ARG@ was not replaced in command"
 
-
 @pytest.mark.integration
 def test_futures_timeout_with_multiple_workers(temp_dir, isolated_env):
     """
@@ -213,7 +190,6 @@ def test_futures_timeout_with_multiple_workers(temp_dir, isolated_env):
     # Verify each task took at least 0.2s (we sleep for 0.3s)
     # Use lenient bounds for CI environments
     verify_durations_reasonable(csv_records, min_duration=0.2, max_duration=5.0)
-
 
 @pytest.mark.integration
 def test_no_timeout_with_fast_tasks(temp_dir, isolated_env):

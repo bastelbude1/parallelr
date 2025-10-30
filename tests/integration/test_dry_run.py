@@ -13,27 +13,6 @@ import sys
 sys.path.insert(0, str(Path(__file__).parent.parent))
 from conftest import PARALLELR_BIN, PYTHON_FOR_PARALLELR
 
-
-@pytest.fixture
-def isolated_env(tmp_path):
-    """
-    Provide isolated environment for dry run tests.
-
-    Creates a subprocess-only environment without mutating global os.environ.
-    Safe for parallel test execution.
-    """
-    temp_home = tmp_path / 'home'
-    temp_home.mkdir()
-
-    # Create isolated environment copy for subprocess use only
-    env_copy = {**os.environ, 'HOME': str(temp_home)}
-
-    yield {
-        'home': temp_home,
-        'env': env_copy
-    }
-
-
 @pytest.mark.integration
 def test_dry_run_displays_commands(temp_dir, isolated_env):
     """
@@ -64,7 +43,6 @@ def test_dry_run_displays_commands(temp_dir, isolated_env):
     # Should indicate dry run or show command
     assert 'dry' in output or 'would' in output or 'task' in output or 'executing' in output
 
-
 @pytest.mark.integration
 def test_dry_run_no_task_execution(temp_dir, isolated_env):
     """
@@ -93,7 +71,6 @@ def test_dry_run_no_task_execution(temp_dir, isolated_env):
     # Should succeed but NOT create marker
     assert result.returncode == 0
     assert not marker.exists(), "Dry run should not execute tasks"
-
 
 @pytest.mark.integration
 def test_dry_run_no_logs_created(temp_dir, isolated_env):
@@ -131,7 +108,6 @@ def test_dry_run_no_logs_created(temp_dir, isolated_env):
         assert len(csv_files) == 0, "Dry run should not create CSV summary"
         assert len(output_files) == 0, "Dry run should not create output logs"
 
-
 @pytest.mark.integration
 def test_dry_run_with_arguments_mode(temp_dir, isolated_env):
     """
@@ -160,7 +136,6 @@ def test_dry_run_with_arguments_mode(temp_dir, isolated_env):
 
     # Should show dry run info or command preview
     assert 'dry' in output or 'would' in output or 'arg' in output or 'task' in output
-
 
 @pytest.mark.integration
 def test_dry_run_shows_environment_vars(temp_dir, isolated_env):
@@ -196,7 +171,6 @@ def test_dry_run_shows_environment_vars(temp_dir, isolated_env):
             'host' in output.lower() or
             'port' in output.lower() or
             'task' in output.lower())
-
 
 @pytest.mark.integration
 def test_real_run_flag_executes_tasks(temp_dir, isolated_env):
