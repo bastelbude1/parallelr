@@ -176,6 +176,26 @@ def capture_logs(caplog):
     return caplog
 
 
+@pytest.fixture
+def isolated_env(tmp_path):
+    """
+    Provide isolated environment for integration tests.
+
+    Creates a subprocess-only environment without mutating global os.environ.
+    Safe for parallel test execution.
+    """
+    temp_home = tmp_path / 'home'
+    temp_home.mkdir()
+
+    # Create isolated environment copy for subprocess use only
+    env_copy = {**os.environ, 'HOME': str(temp_home)}
+
+    yield {
+        'home': temp_home,
+        'env': env_copy
+    }
+
+
 @pytest.fixture(autouse=True, scope="function")
 def cleanup_daemon_processes():
     """

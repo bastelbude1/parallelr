@@ -33,29 +33,6 @@ if not PARALLELR_BIN.exists():
     pytest.skip("bin/parallelr.py not found - integration tests skipped",
                 allow_module_level=True)
 
-
-@pytest.fixture
-def isolated_env(tmp_path):
-    """
-    Provide isolated environment for file mode tests.
-
-    Returns a dict with 'home' and 'env' keys. The 'env' dict contains
-    a copy of os.environ with HOME set to temp directory, avoiding
-    global os.environ mutation.
-    """
-    temp_home = tmp_path / 'home'
-    temp_home.mkdir()
-
-    # Create isolated environment dict without mutating global os.environ
-    env = os.environ.copy()
-    env['HOME'] = str(temp_home)
-
-    yield {
-        'home': temp_home,
-        'env': env
-    }
-
-
 @pytest.mark.integration
 def test_file_mode_directory_execution(sample_task_dir, isolated_env):
     """Test executing tasks from a directory."""
@@ -78,7 +55,6 @@ def test_file_mode_directory_execution(sample_task_dir, isolated_env):
     # Should discover 5 tasks
     assert 'task1.sh' in result.stdout
     assert 'task5.sh' in result.stdout
-
 
 @pytest.mark.integration
 def test_file_mode_actual_execution(sample_task_dir, isolated_env):
@@ -119,7 +95,6 @@ def test_file_mode_actual_execution(sample_task_dir, isolated_env):
     # Verify durations are reasonable (> 0, not negative)
     verify_durations_reasonable(csv_records, min_duration=0.0)
 
-
 @pytest.mark.integration
 def test_file_mode_specific_files(sample_task_dir, isolated_env):
     """Test executing specific task files."""
@@ -142,7 +117,6 @@ def test_file_mode_specific_files(sample_task_dir, isolated_env):
     assert result.returncode == 0
     # Should only execute 2 tasks (robust text check with regex)
     assert re.search(r'(?i)\bexecut(?:e|ing)\b.*\b2\b.*\btasks?\b', result.stdout)
-
 
 @pytest.mark.integration
 def test_file_mode_glob_patterns(sample_task_dir, isolated_env):
@@ -169,7 +143,6 @@ def test_file_mode_glob_patterns(sample_task_dir, isolated_env):
     assert result.returncode == 0
     assert 'task1.sh' in result.stdout
     assert 'task2.sh' in result.stdout
-
 
 @pytest.mark.integration
 def test_file_mode_file_extension_filter(temp_dir, isolated_env):
@@ -203,7 +176,6 @@ def test_file_mode_file_extension_filter(temp_dir, isolated_env):
     assert 'task2.py' not in result.stdout
     assert 'readme.txt' not in result.stdout
 
-
 @pytest.mark.integration
 def test_file_mode_empty_directory(temp_dir, isolated_env):
     """Test handling of empty task directory."""
@@ -223,7 +195,6 @@ def test_file_mode_empty_directory(temp_dir, isolated_env):
 
     # Should fail or warn about no tasks found
     assert result.returncode != 0 or 'No task files found' in result.stderr
-
 
 @pytest.mark.integration
 def test_file_mode_nonexistent_path(temp_dir, isolated_env):
@@ -245,7 +216,6 @@ def test_file_mode_nonexistent_path(temp_dir, isolated_env):
     assert result.returncode != 0
     assert 'does not exist' in result.stderr.lower() or 'not found' in result.stderr.lower()
 
-
 @pytest.mark.integration
 def test_file_mode_worker_count(sample_task_dir, isolated_env):
     """Test execution with different worker counts."""
@@ -265,7 +235,6 @@ def test_file_mode_worker_count(sample_task_dir, isolated_env):
     assert result.returncode == 0
     # Check for worker count with robust regex (handles singular/plural, case variations)
     assert re.search(r'\bworkers?\b[:=]?\s*1\b', result.stdout, re.I)
-
 
 @pytest.mark.integration
 def test_file_mode_timeout(temp_dir, isolated_env):
@@ -293,7 +262,6 @@ def test_file_mode_timeout(temp_dir, isolated_env):
     # Should timeout (check both stdout and stderr)
     combined = (result.stdout + result.stderr).lower()
     assert ('timeout' in combined) or ('timed out' in combined)
-
 
 @pytest.mark.integration
 def test_file_mode_multiple_directories(temp_dir, isolated_env):

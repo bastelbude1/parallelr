@@ -518,6 +518,7 @@ class Configuration:
         return f"""Configuration for {self.script_name}:
   Workers: {self.limits.max_workers} (max allowed: {self.limits.max_allowed_workers})
   Timeout: {self.limits.timeout_seconds}s (max allowed: {self.limits.max_allowed_timeout}s)
+  Max Output Capture: {self.limits.max_output_capture} (max allowed: {self.limits.max_allowed_output})
   Log Level: {self.logging.level}
   Workspace: {workspace_type}
   Working Dir: {self.get_working_directory()}

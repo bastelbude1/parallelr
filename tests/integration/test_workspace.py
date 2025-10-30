@@ -331,3 +331,238 @@ def test_workspace_no_task_output_log_flag(sample_task_dir, isolated_workspace):
 
     # Count should be the same (no new output file created)
     assert count_after == count_before
+
+
+# ============================================================================
+# WORKSPACE ISOLATION MODE TESTS
+# Tests for workspace_isolation config option (per-worker directories)
+# ============================================================================
+
+
+@pytest.fixture
+def config_with_isolation(isolated_workspace):
+    """
+    Create user config with workspace_isolation enabled.
+
+    Returns the config file path and isolated env.
+    """
+    # Create user config directory
+    config_dir = isolated_workspace['home'] / 'parallelr' / 'cfg'
+    config_dir.mkdir(parents=True)
+
+    # Create user config with workspace isolation enabled
+    config_file = config_dir / 'parallelr.yaml'
+    config_file.write_text("""
+execution:
+  workspace_isolation: true
+""")
+
+    return {
+        'config': config_file,
+        'env': isolated_workspace['env'],
+        'home': isolated_workspace['home'],
+        'workspace': isolated_workspace['workspace']
+    }
+
+
+@pytest.mark.integration
+def test_workspace_isolation_mode_creates_per_worker_dirs(temp_dir, config_with_isolation):
+    """
+    Test that workspace_isolation: true creates per-worker directories.
+
+    Verifies pid{PID}_worker{N} directories are created.
+    """
+    # Create test tasks
+    for i in range(3):
+        task = temp_dir / f'task_{i}.sh'
+        task.write_text('#!/bin/bash\necho "task execution"\n')
+        task.chmod(0o755)
+
+    result = subprocess.run(
+        [PYTHON_FOR_PARALLELR, str(PARALLELR_BIN),
+         '-T', str(temp_dir),
+         '-C', 'bash @TASK@',
+         '-r', '-m', '2'],  # 2 workers
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        universal_newlines=True,
+        env=config_with_isolation['env'],
+        timeout=30
+    )
+
+    assert result.returncode == 0
+
+    # Check that per-worker workspace directories were created
+    workspace_base = config_with_isolation['workspace']
+
+    # Fail fast if workspace base directory doesn't exist or is not a directory
+    assert workspace_base.exists(), f"Workspace base directory should exist at {workspace_base}"
+    assert workspace_base.is_dir(), f"Workspace base path should be a directory at {workspace_base}"
+
+    # Find directories matching pattern pid{PID}_worker{N}
+    worker_dirs = [d for d in workspace_base.iterdir()
+                  if d.is_dir() and 'pid' in d.name and 'worker' in d.name]
+
+    # Should have created worker-specific directories
+    assert len(worker_dirs) > 0, "Workspace isolation should create per-worker directories"
+
+
+@pytest.mark.integration
+def test_workspace_isolation_separate_task_execution(temp_dir, config_with_isolation):
+    """
+    Test that different workers use isolated workspaces.
+
+    Verifies tasks execute successfully with workspace isolation enabled.
+    """
+    # Create simple tasks that just echo
+    for i in range(4):
+        task = temp_dir / f'workspace_write_{i}.sh'
+        task.write_text(f'#!/bin/bash\necho "Task {i} executing"\n')
+        task.chmod(0o755)
+
+    result = subprocess.run(
+        [PYTHON_FOR_PARALLELR, str(PARALLELR_BIN),
+         '-T', str(temp_dir),
+         '-C', 'bash @TASK@',
+         '-r', '-m', '2'],  # 2 workers
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        universal_newlines=True,
+        env=config_with_isolation['env'],
+        timeout=30
+    )
+
+    assert result.returncode == 0
+
+    # Verify output indicates isolated workspace mode
+    assert 'isolated' in result.stdout.lower()
+
+    # Each worker should have its own workspace directory
+    # Verify multiple worker directories exist
+    workspace_base = config_with_isolation['workspace']
+
+    # Fail fast if workspace base directory doesn't exist or is not a directory
+    assert workspace_base.exists(), f"Workspace base directory should exist at {workspace_base}"
+    assert workspace_base.is_dir(), f"Workspace base path should be a directory at {workspace_base}"
+
+    worker_dirs = [d for d in workspace_base.iterdir()
+                  if d.is_dir() and 'worker' in d.name]
+
+    # With 2 workers and 4 tasks, both workers should have been used
+    # So we should see at least 1 worker directory (possibly 2)
+    assert len(worker_dirs) >= 1, "Should have at least one worker directory"
+
+
+@pytest.mark.integration
+def test_workspace_isolation_no_cross_contamination(temp_dir, config_with_isolation):
+    """
+    Test that isolated workspaces prevent cross-contamination between workers.
+
+    Each worker executes tasks in its own isolated directory (pid{PID}_worker{N}).
+    Tasks write marker files to their current working directory (the isolated workspace).
+    This test verifies:
+    1. Marker files appear in per-worker directories, not in shared workspace base
+    2. All tasks complete successfully across all workers
+    3. No single worker has all tasks (proves work distribution)
+    """
+    # Create tasks that write marker files to CWD (which should be isolated workspace)
+    for i in range(6):
+        task = temp_dir / f'marker_{i}.sh'
+        # Write marker to CWD and echo for verification
+        task.write_text(f'#!/bin/bash\ntouch marker_{i}.txt\necho "Task {i} completed in $(pwd)"\n')
+        task.chmod(0o755)
+
+    result = subprocess.run(
+        [PYTHON_FOR_PARALLELR, str(PARALLELR_BIN),
+         '-T', str(temp_dir),
+         '-C', 'bash @TASK@',
+         '-r', '-m', '2'],  # 2 workers
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        universal_newlines=True,
+        env=config_with_isolation['env'],
+        timeout=30
+    )
+
+    assert result.returncode == 0, f"Execution failed: {result.stderr}"
+
+    # Verify output mentions isolated workspace
+    assert 'isolated' in result.stdout.lower()
+
+    # Verify isolated workspace base was created
+    workspace_base = config_with_isolation['workspace']
+
+    # Fail fast if workspace base directory doesn't exist or is not a directory
+    assert workspace_base.exists(), f"Workspace base directory should exist at {workspace_base}"
+    assert workspace_base.is_dir(), f"Workspace base path should be a directory at {workspace_base}"
+
+    # Find per-worker directories
+    worker_dirs = [d for d in workspace_base.iterdir()
+                  if d.is_dir() and 'worker' in d.name]
+
+    # Should have worker directories created (implementation may create one per task)
+    assert len(worker_dirs) >= 1, "Should have at least one worker directory"
+    assert len(worker_dirs) <= 6, f"Should have at most 6 worker directories (one per task), found {len(worker_dirs)}"
+
+    # Verify marker files are distributed across worker directories
+    total_marker_files = 0
+    for worker_dir in worker_dirs:
+        marker_files = list(worker_dir.glob('marker_*.txt'))
+        marker_count = len(marker_files)
+        total_marker_files += marker_count
+
+        # If this worker executed tasks, verify it didn't execute ALL tasks
+        # (which would indicate lack of distribution or isolation failure)
+        if marker_count > 0:
+            assert marker_count < 6, f"Worker {worker_dir.name} should not have all 6 tasks (found {marker_count}/6)"
+
+    # All 6 tasks should have been completed across all workers
+    assert total_marker_files == 6, f"Expected 6 total marker files across all workers, found {total_marker_files}"
+
+    # CRITICAL: Verify no marker files in workspace base (should only be in worker subdirs)
+    base_markers = list(workspace_base.glob('marker_*.txt'))
+    assert len(base_markers) == 0, f"Marker files should be in worker directories, not workspace base. Found {len(base_markers)} in base."
+
+
+@pytest.mark.integration
+def test_workspace_isolation_directories_accessible(temp_dir, config_with_isolation):
+    """
+    Test that isolated workspace directories are created and accessible.
+
+    Verifies that workspace isolation creates per-worker directories with
+    the expected naming pattern (pid{PID}_worker{N}) and that these
+    directories are accessible after task execution.
+    """
+    # Create simple tasks
+    for i in range(2):
+        task = temp_dir / f'simple_{i}.sh'
+        task.write_text('#!/bin/bash\necho "Test task"\n')
+        task.chmod(0o755)
+
+    result = subprocess.run(
+        [PYTHON_FOR_PARALLELR, str(PARALLELR_BIN),
+         '-T', str(temp_dir),
+         '-C', 'bash @TASK@',
+         '-r', '-m', '1'],  # Single worker
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        universal_newlines=True,
+        env=config_with_isolation['env'],
+        timeout=30
+    )
+
+    assert result.returncode == 0
+
+    # Verify output shows isolated workspace mode
+    assert 'isolated' in result.stdout.lower()
+
+    # Verify workspace directories were created
+    workspace_base = config_with_isolation['workspace']
+
+    # Fail fast if workspace base directory doesn't exist or is not a directory
+    assert workspace_base.exists(), f"Workspace base directory should exist at {workspace_base}"
+    assert workspace_base.is_dir(), f"Workspace base path should be a directory at {workspace_base}"
+
+    # Check for worker-specific directories
+    worker_dirs = list(workspace_base.glob('pid*_worker*'))
+    assert len(worker_dirs) > 0, "Should have created worker-specific workspace"

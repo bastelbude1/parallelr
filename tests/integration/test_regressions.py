@@ -25,27 +25,6 @@ from tests.integration.test_helpers import (
 pytestmark = pytest.mark.skipif(shutil.which("bash") is None,
                                 reason="Requires bash (POSIX)")
 
-
-@pytest.fixture
-def isolated_env(tmp_path):
-    """
-    Provide isolated environment for regression tests.
-
-    Creates a subprocess-only environment without mutating global os.environ.
-    Safe for parallel test execution.
-    """
-    temp_home = tmp_path / 'home'
-    temp_home.mkdir()
-
-    # Create isolated environment copy for subprocess use only
-    env_copy = {**os.environ, 'HOME': str(temp_home)}
-
-    yield {
-        'home': temp_home,
-        'env': env_copy
-    }
-
-
 @pytest.mark.integration
 def test_regression_env_var_overlap_corruption(temp_dir, isolated_env):
     """
@@ -113,7 +92,6 @@ def test_regression_env_var_overlap_corruption(temp_dir, isolated_env):
     csv_records = parse_csv_summary(csv_path)
     verify_all_tasks_succeeded(csv_records)
 
-
 @pytest.mark.integration
 def test_regression_timeout_error_not_imported(temp_dir, isolated_env):
     """
@@ -173,7 +151,6 @@ def test_regression_timeout_error_not_imported(temp_dir, isolated_env):
     assert len(csv_records) == 3, "Should have 3 completed tasks"
     verify_all_tasks_succeeded(csv_records)
 
-
 @pytest.mark.integration
 def test_regression_csv_semicolon_escaping(temp_dir, isolated_env):
     """
@@ -224,7 +201,6 @@ def test_regression_csv_semicolon_escaping(temp_dir, isolated_env):
     # Main test is that CSV parsing succeeded without errors
     # If semicolons weren't properly escaped, CSV parsing would have failed above
 
-
 @pytest.mark.integration
 def test_regression_indexed_placeholder_validation(temp_dir, isolated_env):
     """
@@ -267,7 +243,6 @@ def test_regression_indexed_placeholder_validation(temp_dir, isolated_env):
     error_output = result.stderr.lower()
     assert '@arg_5@' in error_output or 'placeholder' in error_output or 'index' in error_output, \
         f"Error message should mention invalid placeholder. Got: {result.stderr}"
-
 
 @pytest.mark.integration
 def test_regression_missing_separator_with_indexed_placeholders(temp_dir, isolated_env):
@@ -316,7 +291,6 @@ def test_regression_missing_separator_with_indexed_placeholders(temp_dir, isolat
             assert '@ARG_1@' in output_content or '@ARG_2@' in output_content, \
                 "Indexed placeholders should not be replaced without separator specified"
     # If it fails, that's also acceptable behavior
-
 
 @pytest.mark.integration
 def test_regression_empty_task_directory(temp_dir, isolated_env):

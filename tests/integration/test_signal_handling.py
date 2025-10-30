@@ -12,7 +12,6 @@ import pytest
 
 from conftest import PARALLELR_BIN, PYTHON_FOR_PARALLELR
 
-
 def terminate_process_gracefully(proc, timeout=10):
     """
     Terminate a process gracefully with proper retry logic.
@@ -36,28 +35,6 @@ def terminate_process_gracefully(proc, timeout=10):
             proc.kill()
             stdout, stderr = proc.communicate(timeout=2)
             return stdout, stderr
-
-
-@pytest.fixture
-def isolated_env(tmp_path):
-    """
-    Provide isolated environment for signal handling tests.
-
-    Returns environment dict with HOME set to temp directory,
-    avoiding global os.environ mutation.
-    """
-    temp_home = tmp_path / 'home'
-    temp_home.mkdir()
-
-    # Create isolated environment without mutating global os.environ
-    env = os.environ.copy()
-    env['HOME'] = str(temp_home)
-
-    yield {
-        'home': temp_home,
-        'env': env
-    }
-
 
 @pytest.mark.integration
 def test_sigint_graceful_shutdown(temp_dir, isolated_env):
@@ -94,7 +71,6 @@ def test_sigint_graceful_shutdown(temp_dir, isolated_env):
     output = stdout + stderr
     assert 'shutdown' in output.lower() or 'interrupt' in output.lower() or 'cancelled' in output.lower()
 
-
 @pytest.mark.integration
 def test_sigterm_graceful_shutdown(temp_dir, isolated_env):
     """Test that SIGTERM triggers graceful shutdown."""
@@ -128,7 +104,6 @@ def test_sigterm_graceful_shutdown(temp_dir, isolated_env):
     assert proc.returncode is not None
     output = stdout + stderr
     assert 'shutdown' in output.lower() or 'terminated' in output.lower() or 'cancelled' in output.lower()
-
 
 @pytest.mark.integration
 @pytest.mark.skipif(os.name != "posix" or not hasattr(signal, "SIGHUP"),
@@ -193,7 +168,6 @@ def test_sighup_ignored_in_daemon(temp_dir, isolated_env):
                    input='yes\n', stdout=subprocess.PIPE, stderr=subprocess.PIPE,
                    env=isolated_env['env'], universal_newlines=True, timeout=10)
 
-
 @pytest.mark.integration
 def test_multiple_interrupts_force_exit(temp_dir, isolated_env):
     """Test that multiple SIGINT signals force immediate exit."""
@@ -226,7 +200,6 @@ def test_multiple_interrupts_force_exit(temp_dir, isolated_env):
     # Should exit quickly with robust termination
     stdout, stderr = terminate_process_gracefully(proc, timeout=5)
     assert proc.returncode is not None
-
 
 @pytest.mark.integration
 def test_task_cancellation_on_interrupt(temp_dir, isolated_env):
@@ -264,7 +237,6 @@ def test_task_cancellation_on_interrupt(temp_dir, isolated_env):
     # Should show shutdown/cancelled tasks
     assert ('cancel' in output.lower() or 'interrupt' in output.lower() or 'shutdown' in output.lower())
 
-
 @pytest.mark.integration
 def test_cleanup_on_forced_exit(temp_dir, isolated_env):
     """Test that cleanup happens even on forced exit."""
@@ -299,7 +271,6 @@ def test_cleanup_on_forced_exit(temp_dir, isolated_env):
     assert log_dir.exists()
     log_files = list(log_dir.glob('parallelr_*.log'))
     assert len(log_files) > 0
-
 
 @pytest.mark.integration
 def test_signal_handler_registration(sample_task_dir, isolated_env):
