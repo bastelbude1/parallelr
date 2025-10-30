@@ -252,10 +252,6 @@ limits:
         assert limit_value == MAX_ALLOWED_OUTPUT_CAPTURE, \
             f"Expected limit {MAX_ALLOWED_OUTPUT_CAPTURE} in warning, found {limit_value}"
 
-        # Critical: ensure limit is enforced (limit must be <= MAX_ALLOWED_OUTPUT_CAPTURE)
-        assert limit_value <= MAX_ALLOWED_OUTPUT_CAPTURE, \
-            f"Limit value {limit_value} exceeds maximum allowed {MAX_ALLOWED_OUTPUT_CAPTURE}"
-
     # Fallback: at minimum, verify excessive value appears (in warning context)
     # and doesn't appear outside warning context
     assert str(excessive_value) in output, \
