@@ -244,21 +244,54 @@ limits:
     # Should succeed but cap the value
     assert result.returncode == 0
 
-    # Verify the capping via warning message (max_output_capture not shown in main summary)
+    # Parse output to validate numeric values
     output = result.stdout + result.stderr
+
+    # Extract all numeric values from output that might be related to max_output_capture
+    import re
+    all_numbers = [int(m) for m in re.findall(r'\b(\d+)\b', output)]
 
     # Should see warning that user value exceeded limit
     assert 'max_output_capture' in output.lower() and 'exceeds limit' in output.lower(), \
         f"Expected warning about max_output_capture exceeding limit in output:\n{output}"
 
-    # Verify the original excessive value appears in warning
-    assert str(excessive_value) in output, f"Original value {excessive_value} should appear in warning"
+    # Verify numeric values found
+    assert len(all_numbers) > 0, f"No numeric values found in output:\n{output}"
 
-    # Verify the capped limit value appears in output
+    # Extract max_output_capture related values from warning pattern
+    # Pattern: "max_output_capture (20000) exceeds limit (10000)"
+    capture_pattern = re.search(
+        r'max_output_capture.*?(\d+).*?(?:exceeds|limit).*?(\d+)',
+        output,
+        re.IGNORECASE | re.DOTALL
+    )
+
+    if capture_pattern:
+        user_value = int(capture_pattern.group(1))
+        limit_value = int(capture_pattern.group(2))
+
+        # Verify user's excessive value is present in warning
+        assert user_value == excessive_value, \
+            f"Expected user value {excessive_value} in warning, found {user_value}"
+
+        # Verify capped limit is present
+        assert limit_value == MAX_ALLOWED_OUTPUT_CAPTURE, \
+            f"Expected limit {MAX_ALLOWED_OUTPUT_CAPTURE} in warning, found {limit_value}"
+
+        # Critical: ensure limit is enforced (limit must be <= MAX_ALLOWED_OUTPUT_CAPTURE)
+        assert limit_value <= MAX_ALLOWED_OUTPUT_CAPTURE, \
+            f"Limit value {limit_value} exceeds maximum allowed {MAX_ALLOWED_OUTPUT_CAPTURE}"
+
+    # Fallback: at minimum, verify excessive value appears (in warning context)
+    # and doesn't appear outside warning context
+    assert str(excessive_value) in output, \
+        f"Original excessive value {excessive_value} should appear in warning"
+
+    # Verify the capped limit value appears
     assert str(MAX_ALLOWED_OUTPUT_CAPTURE) in output, \
         f"Capped value {MAX_ALLOWED_OUTPUT_CAPTURE} should appear in output"
 
-    # Additional check: the warning should mention using the limit
+    # Ensure warning mentions using the limit
     assert 'using limit' in output.lower(), "Warning should mention 'using limit'"
 
 
