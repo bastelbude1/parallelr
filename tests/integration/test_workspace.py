@@ -395,13 +395,15 @@ def test_workspace_isolation_mode_creates_per_worker_dirs(temp_dir, isolated_wor
     # Check that per-worker workspace directories were created
     workspace_base = config_with_isolation['workspace']
 
-    # Find directories matching pattern pid{PID}_worker{N}
-    if workspace_base.exists():
-        worker_dirs = [d for d in workspace_base.iterdir()
-                      if d.is_dir() and 'pid' in d.name and 'worker' in d.name]
+    # Fail fast if workspace base directory doesn't exist
+    assert workspace_base.exists(), f"Workspace base directory should exist at {workspace_base}"
 
-        # Should have created worker-specific directories
-        assert len(worker_dirs) > 0, "Workspace isolation should create per-worker directories"
+    # Find directories matching pattern pid{PID}_worker{N}
+    worker_dirs = [d for d in workspace_base.iterdir()
+                  if d.is_dir() and 'pid' in d.name and 'worker' in d.name]
+
+    # Should have created worker-specific directories
+    assert len(worker_dirs) > 0, "Workspace isolation should create per-worker directories"
 
 
 @pytest.mark.integration
@@ -437,13 +439,16 @@ def test_workspace_isolation_separate_task_execution(temp_dir, isolated_workspac
     # Each worker should have its own workspace directory
     # Verify multiple worker directories exist
     workspace_base = config_with_isolation['workspace']
-    if workspace_base.exists():
-        worker_dirs = [d for d in workspace_base.iterdir()
-                      if d.is_dir() and 'worker' in d.name]
 
-        # With 2 workers and 4 tasks, both workers should have been used
-        # So we should see at least 1 worker directory (possibly 2)
-        assert len(worker_dirs) >= 1, "Should have at least one worker directory"
+    # Fail fast if workspace base directory doesn't exist
+    assert workspace_base.exists(), f"Workspace base directory should exist at {workspace_base}"
+
+    worker_dirs = [d for d in workspace_base.iterdir()
+                  if d.is_dir() and 'worker' in d.name]
+
+    # With 2 workers and 4 tasks, both workers should have been used
+    # So we should see at least 1 worker directory (possibly 2)
+    assert len(worker_dirs) >= 1, "Should have at least one worker directory"
 
 
 @pytest.mark.integration
@@ -479,12 +484,15 @@ def test_workspace_isolation_no_cross_contamination(temp_dir, isolated_workspace
 
     # Verify workers created isolated directories
     workspace_base = config_with_isolation['workspace']
-    if workspace_base.exists():
-        worker_dirs = [d for d in workspace_base.iterdir()
-                      if d.is_dir() and 'worker' in d.name]
 
-        # With 3 workers and 6 tasks, should have multiple worker directories
-        assert len(worker_dirs) >= 1, "Should have at least one worker directory"
+    # Fail fast if workspace base directory doesn't exist
+    assert workspace_base.exists(), f"Workspace base directory should exist at {workspace_base}"
+
+    worker_dirs = [d for d in workspace_base.iterdir()
+                  if d.is_dir() and 'worker' in d.name]
+
+    # With 3 workers and 6 tasks, should have multiple worker directories
+    assert len(worker_dirs) >= 1, "Should have at least one worker directory"
 
 
 @pytest.mark.integration
