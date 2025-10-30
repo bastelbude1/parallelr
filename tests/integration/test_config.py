@@ -430,21 +430,20 @@ limits:
     assert 'Executing' in result.stdout or 'completed' in result.stdout.lower(), \
         "Expected execution output not found"
 
-    # Verify user config was loaded by checking for config-related output
-    # The program should mention loading user config or display config values
+    # Verify user config was loaded by checking the Workers value in output
+    # The program should display "Workers: 2" from the user config
     output = result.stdout + result.stderr
 
-    # Check that program used user config path or mentions config loading
-    user_config_path = str(user_config_dir / 'parallelr.yaml')
-    config_indicators = [
-        'parallelr.yaml' in output.lower(),
-        'parallelr/cfg' in output.lower(),
-        'user config' in output.lower(),
-        'loading config' in output.lower()
-    ]
+    # Extract the Workers value from output (e.g., "Workers: 2")
+    import re
+    workers_match = re.search(r'Workers:\s+(\d+)', output, re.IGNORECASE)
+    assert workers_match, f"Could not find 'Workers:' pattern in output:\n{output}"
 
-    assert any(config_indicators), \
-        f"No evidence of user config being loaded. Output:\n{output}"
+    actual_workers = int(workers_match.group(1))
+
+    # Verify the user config value (max_workers: 2) was applied
+    assert actual_workers == 2, \
+        f"Expected Workers=2 from user config, got {actual_workers}. Output:\n{output}"
 
 
 @pytest.mark.integration
