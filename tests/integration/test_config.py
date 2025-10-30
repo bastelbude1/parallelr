@@ -9,6 +9,7 @@ import os
 import re
 from pathlib import Path
 import pytest
+import yaml
 
 import sys
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -453,10 +454,17 @@ def test_config_missing_user_file_uses_defaults(isolated_env):
     assert 'timeout' in output.lower(), "Expected timeout in default config"
     assert 'worker' in output.lower(), "Expected workers in default config"
 
-    # Verify Workers value is present and numeric (actual value depends on system)
+    # Read script config to get the expected default value
+    script_config_path = PARALLELR_BIN.parent.parent / 'cfg' / 'parallelr.yaml'
+    with open(script_config_path, 'r') as f:
+        script_config = yaml.safe_load(f)
+
+    expected_default_workers = script_config['limits']['max_workers']
+
+    # Verify Workers value matches the script default
     workers_match = re.search(r'Workers:\s+(\d+)', output, re.IGNORECASE)
     assert workers_match, f"Could not find 'Workers:' pattern in output:\n{output}"
 
-    # Just verify it's a positive integer (don't hardcode expected value)
     actual_workers = int(workers_match.group(1))
-    assert actual_workers > 0, f"Workers should be positive, got {actual_workers}"
+    assert actual_workers == expected_default_workers, \
+        f"Expected Workers={expected_default_workers} from script config, got {actual_workers}"
