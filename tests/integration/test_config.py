@@ -126,9 +126,21 @@ limits:
 
     # Should succeed but cap the value
     assert result.returncode == 0
-    # Verify the capped value is shown (max_allowed_workers = 100)
+
+    # Parse and verify the capped value (should be 100, not 150)
     output = result.stdout + result.stderr
-    assert 'max_workers' in output.lower() or 'worker' in output.lower()
+
+    # Extract the actual workers value from "Workers: N (max allowed: M)" pattern
+    import re
+    workers_match = re.search(r'Workers:\s+(\d+)', output, re.IGNORECASE)
+    assert workers_match, f"Could not find 'Workers:' pattern in output:\n{output}"
+
+    actual_workers = int(workers_match.group(1))
+    assert actual_workers == 100, f"Expected workers to be capped at 100, but got {actual_workers}"
+
+    # Verify the original value 150 is NOT present in the final config
+    assert '150' not in output or 'exceeds limit' in output.lower(), \
+        "Original uncapped value (150) should not appear in final config (except in warning)"
 
 
 @pytest.mark.integration
@@ -161,8 +173,21 @@ limits:
 
     # Should succeed but cap the value
     assert result.returncode == 0
+
+    # Parse and verify the capped value (should be 3600, not 5000)
     output = result.stdout + result.stderr
-    assert 'timeout' in output.lower()
+
+    # Extract the actual timeout value from "Timeout: Ns (max allowed: Ms)" pattern
+    import re
+    timeout_match = re.search(r'Timeout:\s+(\d+)s', output, re.IGNORECASE)
+    assert timeout_match, f"Could not find 'Timeout:' pattern in output:\n{output}"
+
+    actual_timeout = int(timeout_match.group(1))
+    assert actual_timeout == 3600, f"Expected timeout to be capped at 3600, but got {actual_timeout}"
+
+    # Verify the original value 5000 is NOT present in the final config
+    assert '5000' not in output or 'exceeds limit' in output.lower(), \
+        "Original uncapped value (5000) should not appear in final config (except in warning)"
 
 
 @pytest.mark.integration
@@ -195,8 +220,20 @@ limits:
 
     # Should succeed but cap the value
     assert result.returncode == 0
+
+    # Verify the capping via warning message (max_output_capture not shown in main summary)
     output = result.stdout + result.stderr
-    assert 'output' in output.lower() or 'capture' in output.lower()
+
+    # Should see warning that user value exceeded limit
+    assert 'max_output_capture' in output.lower() and 'exceeds limit' in output.lower(), \
+        f"Expected warning about max_output_capture exceeding limit in output:\n{output}"
+
+    # Verify the original value 20000 appears only in warning, and capped value 10000 is used
+    assert '20000' in output, "Original value 20000 should appear in warning"
+    assert '10000' in output, "Capped value 10000 should appear in output"
+
+    # Additional check: the warning should mention using the limit
+    assert 'using limit' in output.lower(), "Warning should mention 'using limit'"
 
 
 @pytest.mark.integration
