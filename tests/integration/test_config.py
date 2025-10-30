@@ -256,19 +256,31 @@ limits:
     assert str(MAX_ALLOWED_OUTPUT_CAPTURE) in output, \
         f"Capped value {MAX_ALLOWED_OUTPUT_CAPTURE} should appear in output"
 
-    # Note: Unlike max_workers and timeout_seconds, max_output_capture is NOT displayed
-    # in the human-readable configuration summary (Configuration.__str__ in parallelr.py:518-527).
-    # Therefore, we cannot parse and verify the effective runtime value from --show-config output.
-    # We can only verify:
-    # 1. The warning appears with correct values
-    # 2. The warning mentions "using limit"
-    #
-    # TODO: Consider adding max_output_capture to Configuration.__str__ for consistency
-    # with max_workers and timeout_seconds, which would allow stronger runtime verification.
-
     # Ensure warning mentions using the limit (confirms capping behavior)
     assert 'using limit' in output.lower(), \
         "Warning should mention 'using limit' to confirm value will be capped at runtime"
+
+    # Parse and verify the effective runtime value from config display
+    # Pattern: "Max Output Capture: N (max allowed: M)"
+    capture_config_match = re.search(
+        r'Max Output Capture:\s+(\d+)\s+\(max allowed:\s+(\d+)\)',
+        output,
+        re.IGNORECASE
+    )
+
+    assert capture_config_match, \
+        f"Could not find 'Max Output Capture:' pattern in config display:\n{output}"
+
+    actual_capture = int(capture_config_match.group(1))
+    max_allowed_capture = int(capture_config_match.group(2))
+
+    # Verify the effective value is capped at max_allowed
+    assert actual_capture <= MAX_ALLOWED_OUTPUT_CAPTURE, \
+        f"Max Output Capture {actual_capture} exceeds maximum allowed {MAX_ALLOWED_OUTPUT_CAPTURE}"
+
+    # Verify it shows the correct max_allowed value
+    assert max_allowed_capture == MAX_ALLOWED_OUTPUT_CAPTURE, \
+        f"Expected max allowed {MAX_ALLOWED_OUTPUT_CAPTURE}, found {max_allowed_capture}"
 
 @pytest.mark.integration
 def test_validate_config_invalid_yaml(isolated_env):
