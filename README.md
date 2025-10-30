@@ -707,6 +707,7 @@ ptasker --validate-config
 ✓ Workspace mode: Shared
 ✓ Workers: 20 (max allowed: 100)
 ✓ Timeout: 600s (max allowed: 3600s)
+✓ Max Output Capture: 1000 (max allowed: 10000)
 ```
 
 **Example Output (with fallback)**:
@@ -719,6 +720,7 @@ ptasker --validate-config
 ✓ Workspace mode: Shared
 ✓ Workers: 20 (max allowed: 100)
 ✓ Timeout: 600s (max allowed: 3600s)
+✓ Max Output Capture: 1000 (max allowed: 10000)
 ```
 
 **Example Output (no configs)**:
@@ -731,6 +733,7 @@ ptasker --validate-config
 ✓ Workspace mode: Shared
 ✓ Workers: 20 (max allowed: 100)
 ✓ Timeout: 600s (max allowed: 3600s)
+✓ Max Output Capture: 1000 (max allowed: 10000)
 ```
 
 **Status Indicators**:
