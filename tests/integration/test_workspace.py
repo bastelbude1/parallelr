@@ -456,15 +456,17 @@ def test_workspace_isolation_separate_task_execution(temp_dir, isolated_workspac
 @pytest.mark.integration
 def test_workspace_isolation_no_cross_contamination(temp_dir, isolated_workspace, config_with_isolation):
     """
-    Test that workers use isolated workspace directories.
+    Test that workers use isolated workspace directories without cross-contamination.
 
-    Verifies workspace isolation mode with multiple workers.
+    Verifies that tasks write files to their worker's isolated workspace and
+    that files don't leak between workers. Each worker should process a subset
+    of tasks, not all tasks.
     """
-    # Create simple tasks
+    # Create tasks that write marker files to workspace
     for i in range(6):
         task = temp_dir / f'marker_{i}.sh'
-        # Simple task that just echoes
-        task.write_text(f'#!/bin/bash\necho "Task {i} completed"\n')
+        # Write a marker file to the workspace to verify isolation
+        task.write_text(f'#!/bin/bash\ntouch marker_{i}.txt\necho "Task {i} completed"\n')
         task.chmod(0o755)
 
     result = subprocess.run(
@@ -496,6 +498,22 @@ def test_workspace_isolation_no_cross_contamination(temp_dir, isolated_workspace
 
     # With 3 workers and 6 tasks, should have multiple worker directories
     assert len(worker_dirs) >= 1, "Should have at least one worker directory"
+
+    # Verify no cross-contamination: each worker has its own subset of marker files
+    total_marker_files = 0
+    for worker_dir in worker_dirs:
+        marker_files = list(worker_dir.glob('marker_*.txt'))
+        marker_count = len(marker_files)
+        total_marker_files += marker_count
+
+        # Each worker should have processed some tasks
+        assert marker_count > 0, f"Worker {worker_dir.name} should have executed at least one task"
+
+        # No single worker should have ALL 6 tasks (proves distribution/isolation)
+        assert marker_count < 6, f"Worker {worker_dir.name} should not have all tasks (found {marker_count}/6)"
+
+    # All 6 tasks should have been completed across all workers
+    assert total_marker_files == 6, f"Expected 6 total marker files, found {total_marker_files}"
 
 
 @pytest.mark.integration
