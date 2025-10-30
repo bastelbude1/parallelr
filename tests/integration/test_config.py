@@ -456,10 +456,18 @@ def test_config_missing_user_file_uses_defaults(isolated_env):
 
     # Read script config to get the expected default value
     script_config_path = PARALLELR_BIN.parent.parent / 'cfg' / 'parallelr.yaml'
-    with open(script_config_path, 'r') as f:
-        script_config = yaml.safe_load(f)
+    try:
+        with open(script_config_path, 'r') as f:
+            script_config = yaml.safe_load(f)
+    except FileNotFoundError:
+        pytest.fail(f"Script config file not found at {script_config_path}")
+    except yaml.YAMLError as e:
+        pytest.fail(f"Failed to parse script config at {script_config_path}: {e}")
 
-    expected_default_workers = script_config['limits']['max_workers']
+    try:
+        expected_default_workers = script_config['limits']['max_workers']
+    except (KeyError, TypeError) as e:
+        pytest.fail(f"Script config missing 'limits.max_workers' key: {e}")
 
     # Verify Workers value matches the script default
     workers_match = re.search(r'Workers:\s+(\d+)', output, re.IGNORECASE)
