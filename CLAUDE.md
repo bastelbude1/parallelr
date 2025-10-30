@@ -358,6 +358,30 @@ Without optional dependencies, the tool falls back gracefully with reduced funct
 
 ## Development Workflow
 
+### ⛔ CRITICAL: Never Merge Pull Requests
+
+**ABSOLUTE RULE**: Claude Code must NEVER merge pull requests to master. This must ALWAYS be done manually by the human developer.
+
+**What Claude CAN do:**
+- ✅ Create feature branches
+- ✅ Commit changes to feature branches
+- ✅ Push to feature branches
+- ✅ Create pull requests
+- ✅ Review pull requests
+- ✅ Provide merge recommendations
+
+**What Claude CANNOT do:**
+- ❌ **NEVER** run `gh pr merge`
+- ❌ **NEVER** run `git merge` to master
+- ❌ **NEVER** merge PRs via any method (web, CLI, API)
+- ❌ **NEVER** assume a PR should be auto-merged even if CI passes
+
+**Why manual merging is required:**
+- Human review ensures quality control
+- Allows final verification before master integration
+- Prevents accidental breaking changes
+- Maintains clear audit trail of who approved changes
+
 ### Git Branching Strategy
 
 **IMPORTANT**: Always create a new feature branch before making changes and pushing to GitHub. Never push directly to master.
