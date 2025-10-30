@@ -15,15 +15,50 @@ import sys
 sys.path.insert(0, str(Path(__file__).parent.parent))
 from conftest import PARALLELR_BIN, PYTHON_FOR_PARALLELR
 
-# Configuration limits expected by tests (must match script config max_allowed_* values)
-MAX_ALLOWED_WORKERS = 100
-MAX_ALLOWED_TIMEOUT_SECONDS = 3600
-MAX_ALLOWED_OUTPUT_CAPTURE = 10000
-
 # Early abort if parallelr.py is missing
 if not PARALLELR_BIN.exists():
     pytest.skip("bin/parallelr.py not found - integration tests skipped",
                 allow_module_level=True)
+
+# Load configuration limits from script config (avoids hardcoding)
+def _load_script_limits():
+    """Load max_allowed_* limits from script config to avoid hardcoding."""
+    script_config_path = PARALLELR_BIN.parent.parent / 'cfg' / 'parallelr.yaml'
+    try:
+        with open(script_config_path, 'r') as f:
+            script_config = yaml.safe_load(f)
+        return (
+            script_config['limits']['max_allowed_workers'],
+            script_config['limits']['max_allowed_timeout'],
+            script_config['limits']['max_allowed_output']
+        )
+    except (FileNotFoundError, KeyError, yaml.YAMLError) as e:
+        pytest.skip(f"Could not load script config limits: {e}",
+                    allow_module_level=True)
+
+MAX_ALLOWED_WORKERS, MAX_ALLOWED_TIMEOUT_SECONDS, MAX_ALLOWED_OUTPUT_CAPTURE = _load_script_limits()
+
+# Helper function to reduce subprocess boilerplate
+def run_parallelr(args, isolated_env, timeout=10):
+    """
+    Run parallelr with common subprocess settings.
+
+    Args:
+        args: List of command-line arguments (e.g., ['--validate-config'])
+        isolated_env: The isolated_env fixture providing test isolation
+        timeout: Command timeout in seconds (default: 10)
+
+    Returns:
+        subprocess.CompletedProcess with stdout, stderr, and returncode
+    """
+    return subprocess.run(
+        [PYTHON_FOR_PARALLELR, str(PARALLELR_BIN)] + args,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        universal_newlines=True,
+        env=isolated_env['env'],
+        timeout=timeout
+    )
 
 @pytest.mark.integration
 def test_validate_config_command_success(isolated_env):
@@ -32,15 +67,7 @@ def test_validate_config_command_success(isolated_env):
 
     Verifies that the default script config passes validation.
     """
-    result = subprocess.run(
-        [PYTHON_FOR_PARALLELR, str(PARALLELR_BIN),
-         '--validate-config'],
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        universal_newlines=True,
-        env=isolated_env['env'],
-        timeout=10
-    )
+    result = run_parallelr(['--validate-config'], isolated_env)
 
     # Should succeed with validation message
     assert result.returncode == 0, f"Validation failed: {result.stderr}"
@@ -67,15 +94,7 @@ limits:
   max_output_capture: 5000
 """)
 
-    result = subprocess.run(
-        [PYTHON_FOR_PARALLELR, str(PARALLELR_BIN),
-         '--validate-config'],
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        universal_newlines=True,
-        env=isolated_env['env'],
-        timeout=10
-    )
+    result = run_parallelr(['--validate-config'], isolated_env)
 
     assert result.returncode == 0, f"Validation failed: {result.stderr}"
     assert 'configuration is valid' in result.stdout.lower(), \
@@ -100,15 +119,7 @@ limits:
   max_workers: 150
 """)
 
-    result = subprocess.run(
-        [PYTHON_FOR_PARALLELR, str(PARALLELR_BIN),
-         '--show-config'],
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        universal_newlines=True,
-        env=isolated_env['env'],
-        timeout=10
-    )
+    result = run_parallelr(['--show-config'], isolated_env)
 
     # Should succeed but cap the value
     assert result.returncode == 0
@@ -149,15 +160,7 @@ limits:
   timeout_seconds: 5000
 """)
 
-    result = subprocess.run(
-        [PYTHON_FOR_PARALLELR, str(PARALLELR_BIN),
-         '--show-config'],
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        universal_newlines=True,
-        env=isolated_env['env'],
-        timeout=10
-    )
+    result = run_parallelr(['--show-config'], isolated_env)
 
     # Should succeed but cap the value
     assert result.returncode == 0
@@ -206,15 +209,7 @@ limits:
   max_output_capture: {excessive_value}
 """)
 
-    result = subprocess.run(
-        [PYTHON_FOR_PARALLELR, str(PARALLELR_BIN),
-         '--show-config'],
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        universal_newlines=True,
-        env=isolated_env['env'],
-        timeout=10
-    )
+    result = run_parallelr(['--show-config'], isolated_env)
 
     # Should succeed but cap the value
     assert result.returncode == 0
@@ -294,15 +289,7 @@ limits:
     no_closing_bracket
 """)
 
-    result = subprocess.run(
-        [PYTHON_FOR_PARALLELR, str(PARALLELR_BIN),
-         '--validate-config'],
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        universal_newlines=True,
-        env=isolated_env['env'],
-        timeout=10
-    )
+    result = run_parallelr(['--validate-config'], isolated_env)
 
     # Tool should either fail or explicitly warn about YAML issues
     output = (result.stdout + result.stderr).lower()
@@ -323,15 +310,7 @@ def test_show_config_command(isolated_env):
 
     Verifies the command shows config settings to stdout.
     """
-    result = subprocess.run(
-        [PYTHON_FOR_PARALLELR, str(PARALLELR_BIN),
-         '--show-config'],
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        universal_newlines=True,
-        env=isolated_env['env'],
-        timeout=10
-    )
+    result = run_parallelr(['--show-config'], isolated_env)
 
     assert result.returncode == 0, f"Show config failed: {result.stderr}"
     output = result.stdout.lower()
@@ -349,15 +328,7 @@ def test_show_config_displays_workspace_mode(isolated_env):
 
     Verifies workspace configuration is shown.
     """
-    result = subprocess.run(
-        [PYTHON_FOR_PARALLELR, str(PARALLELR_BIN),
-         '--show-config'],
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        universal_newlines=True,
-        env=isolated_env['env'],
-        timeout=10
-    )
+    result = run_parallelr(['--show-config'], isolated_env)
 
     assert result.returncode == 0
     output = result.stdout.lower()
@@ -394,17 +365,11 @@ limits:
         task.chmod(0o755)
 
     # Run WITHOUT -m flag so user config takes effect
-    result = subprocess.run(
-        [PYTHON_FOR_PARALLELR, str(PARALLELR_BIN),
-         '-T', str(temp_dir),
-         '-C', 'bash @TASK@',
-         '-r'],  # No -m flag: user config should apply max_workers=2
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        universal_newlines=True,
-        env=isolated_env['env'],
-        timeout=30
-    )
+    result = run_parallelr([
+        '-T', str(temp_dir),
+        '-C', 'bash @TASK@',
+        '-r'  # No -m flag: user config should apply max_workers=2
+    ], isolated_env, timeout=30)
 
     # Should succeed
     assert result.returncode == 0, f"Execution failed: {result.stderr}"
@@ -438,15 +403,7 @@ def test_config_missing_user_file_uses_defaults(isolated_env):
     # User config directory doesn't exist, tool should use script defaults
 
     # Use --show-config to verify default values are loaded
-    result = subprocess.run(
-        [PYTHON_FOR_PARALLELR, str(PARALLELR_BIN),
-         '--show-config'],
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        universal_newlines=True,
-        env=isolated_env['env'],
-        timeout=10
-    )
+    result = run_parallelr(['--show-config'], isolated_env)
 
     # Should succeed with script defaults
     assert result.returncode == 0, f"Show config failed: {result.stderr}"
