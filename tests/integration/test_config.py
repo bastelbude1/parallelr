@@ -261,6 +261,33 @@ limits:
     assert str(MAX_ALLOWED_OUTPUT_CAPTURE) in output, \
         f"Capped value {MAX_ALLOWED_OUTPUT_CAPTURE} should appear in output"
 
+    # CRITICAL: Verify the effective configuration value (not just the warning)
+    # Parse config lines that show max_output_capture but are NOT part of warning text
+    effective_lines = [
+        line for line in output.splitlines()
+        if 'max_output_capture' in line.lower()
+        and 'exceed' not in line.lower()
+        and 'using limit' not in line.lower()
+    ]
+    assert effective_lines, \
+        f"Expected a line with effective max_output_capture in config output:\n{output}"
+
+    # Extract numeric value from the effective config line
+    effective_match = re.search(r'(\d+)', effective_lines[0])
+    assert effective_match, \
+        f"Could not find numeric value for max_output_capture in config line:\n{effective_lines[0]}"
+
+    effective_value = int(effective_match.group(1))
+
+    # Verify the effective value is capped, NOT the excessive value
+    assert effective_value == MAX_ALLOWED_OUTPUT_CAPTURE, \
+        f"Expected effective max_output_capture={MAX_ALLOWED_OUTPUT_CAPTURE}, found {effective_value}. " \
+        f"Config should cap at limit, not use excessive value {excessive_value}."
+
+    # Additional safety check: effective value should NOT be the excessive value
+    assert effective_value != excessive_value, \
+        f"Effective max_output_capture ({effective_value}) should be capped, not the excessive value {excessive_value}"
+
     # Ensure warning mentions using the limit
     assert 'using limit' in output.lower(), "Warning should mention 'using limit'"
 
