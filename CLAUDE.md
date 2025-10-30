@@ -315,7 +315,30 @@ Uses non-blocking I/O with `fcntl` and `select` to capture stdout/stderr in real
 - Task files are validated for size (max 1MB by default)
 - Command arguments are parsed with `shlex.split()` to prevent injection
 - Each argument length is checked against `max_argument_length` (1000 chars)
-- Absolute paths are used for task files to prevent path traversal
+- Path resolution with security protections (see below)
+
+### Template/Arguments File Path Resolution
+The tool uses a multi-tier file resolution system:
+
+**Resolution Order:**
+1. Check if file exists at explicit path (including relative paths like `../template.sh`)
+2. If not found and `--no-search` not set, search fallback locations:
+   - `~/tasker/test_cases/`
+   - `~/TASKER/test_cases/`
+   - `~/tasker/test_cases/functional/`
+   - `~/TASKER/test_cases/functional/`
+
+**Security Model:**
+- **Explicit paths**: Trust user intent, rely on filesystem permissions
+- **Fallback paths**: Strict containment validation using `Path.resolve()` + `Path.relative_to()`
+- **Fallback requires confirmation**: Interactive prompt unless `--yes` flag is set
+- **INFO messages**: Show resolved path and fallback location when fallback is used
+
+**New Flags:**
+- `--no-search` / `--no-fallback`: Disable fallback search (strict mode)
+- `-y` / `--yes`: Auto-confirm fallback usage (for automation/CI)
+
+**Implementation:** See `_resolve_template_path()` (parallelr.py:~1087-1184) and `_prompt_fallback_confirmation()` (parallelr.py:~1186-1219)
 
 ### Signal Handling
 Graceful shutdown on SIGTERM and SIGINT (parallelr.py:879-887). SIGHUP is ignored to allow daemon operation.
@@ -334,6 +357,30 @@ Environment variable `PARALLELR_LIB_PATH` (default: `/app/COOL/lib`) can be set 
 Without optional dependencies, the tool falls back gracefully with reduced functionality.
 
 ## Development Workflow
+
+### ⛔ CRITICAL: Never Merge Pull Requests
+
+**ABSOLUTE RULE**: Claude Code must NEVER merge pull requests to master. This must ALWAYS be done manually by the human developer.
+
+**What Claude CAN do:**
+- ✅ Create feature branches
+- ✅ Commit changes to feature branches
+- ✅ Push to feature branches
+- ✅ Create pull requests
+- ✅ Review pull requests
+- ✅ Provide merge recommendations
+
+**What Claude CANNOT do:**
+- ❌ **NEVER** run `gh pr merge`
+- ❌ **NEVER** run `git merge` to master
+- ❌ **NEVER** merge PRs via any method (web, CLI, API)
+- ❌ **NEVER** assume a PR should be auto-merged even if CI passes
+
+**Why manual merging is required:**
+- Human review ensures quality control
+- Allows final verification before master integration
+- Prevents accidental breaking changes
+- Maintains clear audit trail of who approved changes
 
 ### Git Branching Strategy
 

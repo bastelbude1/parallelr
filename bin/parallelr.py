@@ -922,10 +922,33 @@ class SecureTaskExecutor:
 
 class ParallelTaskManager:
     """Main parallel task execution manager."""
-    
+
+    # Error message templates for consistent error handling
+    _TEMPLATE_DIR_ERROR = (
+        "Arguments mode requires a template FILE, not a directory: {path}. "
+        "Omit -T to execute commands directly without a template."
+    )
+    _TEMPLATE_NOT_FOUND_ERROR = (
+        "Template file not found: {filename}\n"
+        "Searched in current directory and standard TASKER locations:\n"
+        "  - ~/tasker/test_cases/\n"
+        "  - ~/TASKER/test_cases/\n"
+        "  - ~/tasker/test_cases/functional/\n"
+        "  - ~/TASKER/test_cases/functional/"
+    )
+    _ARGS_FILE_NOT_FOUND_ERROR = (
+        "Arguments file not found: {filename}\n"
+        "Searched in current directory and standard TASKER locations:\n"
+        "  - ~/tasker/test_cases/\n"
+        "  - ~/TASKER/test_cases/\n"
+        "  - ~/tasker/test_cases/functional/\n"
+        "  - ~/TASKER/test_cases/functional/"
+    )
+
     def __init__(self, max_workers, timeout, task_start_delay, tasks_paths, command_template,
                  script_path, dry_run=False, enable_stop_limits=False, log_task_output=True,
-                 file_extension=None, arguments_file=None, env_var=None, separator=None, debug=False):
+                 file_extension=None, arguments_file=None, env_var=None, separator=None, debug=False,
+                 no_search=False, yes_to_prompts=False):
 
         self.config = Configuration.from_script(script_path)
         self.config.validate()
@@ -959,6 +982,8 @@ class ParallelTaskManager:
         self.arguments_file = arguments_file
         self.env_var = env_var
         self.separator = separator
+        self.no_search = no_search
+        self.yes_to_prompts = yes_to_prompts
 
         self.log_dir = self.config.get_log_directory()
         self.process_id = os.getpid()
@@ -1059,6 +1084,130 @@ class ParallelTaskManager:
                     f"Available placeholders: @ARG@ or @ARG_1@ through @ARG_{num_args}@"
                 )
 
+    def _resolve_template_path(self, template_path_str):
+        """
+        Resolve template file path with fallback search in standard TASKER locations.
+
+        Security: Prevents path traversal attacks by:
+        - Resolving paths to absolute form and verifying containment
+        - Checking that resolved paths stay within intended base directories
+        - Allowing legitimate relative paths with '..' that resolve safely
+
+        Args:
+            template_path_str: Template file path as string
+
+        Returns:
+            Tuple of (resolved_path, used_fallback, fallback_source):
+            - resolved_path: Path object if found, None otherwise
+            - used_fallback: Boolean indicating if fallback search was used
+            - fallback_source: String path of fallback location that found the file, or None
+        """
+        template_path = Path(template_path_str)
+
+        # Security: Handle absolute paths - no fallback search
+        if template_path.is_absolute():
+            if template_path.is_file():
+                return (template_path, False, None)
+            return (None, False, None)
+
+        # First check if file exists in current directory (or relative to cwd)
+        # For explicitly provided paths: trust user intent and filesystem permissions
+        if template_path.exists():
+            try:
+                # Resolve to absolute path (handles symlinks and normalizes path)
+                resolved = template_path.resolve()
+
+                # Verify the resolved path is a regular file
+                if resolved.is_file():
+                    # User explicitly provided this path - allow it
+                    # Security is enforced by filesystem permissions
+                    # This allows legitimate use cases like ../sibling_dir/template.txt
+                    return (resolved, False, None)
+            except (OSError, RuntimeError) as e:
+                # resolve() can fail on broken symlinks or permission issues
+                self.logger.debug(f"Failed to resolve path {template_path_str}: {e}")
+                return (None, False, None)
+
+        # Check if fallback search is disabled
+        if self.no_search:
+            self.logger.debug(f"Fallback search disabled (--no-search), file not found: {template_path_str}")
+            return (None, False, None)
+
+        # If not found, search in standard TASKER test_cases locations
+        home = Path.home()
+        base_dirs = [
+            home / 'tasker' / 'test_cases',
+            home / 'TASKER' / 'test_cases',
+            home / 'tasker' / 'test_cases' / 'functional',
+            home / 'TASKER' / 'test_cases' / 'functional',
+        ]
+
+        for base_dir in base_dirs:
+            candidate = base_dir / template_path_str
+
+            # Security: Verify candidate is inside the intended base directory
+            try:
+                # Resolve both paths to handle symlinks and normalize
+                candidate_resolved = candidate.resolve()
+                base_resolved = base_dir.resolve()
+
+                # Verify containment using relative_to()
+                # This will raise ValueError if candidate is not under base
+                try:
+                    candidate_resolved.relative_to(base_resolved)
+                except ValueError:
+                    # Path is outside base directory - skip this candidate
+                    self.logger.debug(f"Skipped candidate outside base: {candidate}")
+                    continue
+
+                # Path is safe and within base - check if file exists
+                if candidate_resolved.is_file():
+                    self.logger.debug(f"Template file '{template_path_str}' resolved to: {candidate_resolved}")
+                    return (candidate_resolved, True, str(base_dir))
+
+            except (OSError, RuntimeError):
+                # resolve() can fail on broken symlinks or permission issues
+                self.logger.debug(f"Failed to resolve candidate: {candidate}")
+                continue
+
+        # File not found in any location
+        return (None, False, None)
+
+    def _prompt_fallback_confirmation(self, filename, resolved_path, fallback_source):
+        """
+        Prompt user for confirmation when a file was found via fallback search.
+
+        Args:
+            filename: Original filename requested
+            resolved_path: Absolute path where file was found
+            fallback_source: Base directory that contained the file
+
+        Returns:
+            True if user confirms, False otherwise
+        """
+        # If --yes flag is set, skip prompting
+        if self.yes_to_prompts:
+            return True
+
+        # Show warning about fallback resolution
+        print("\n" + "="*60)
+        print("WARNING: File found via fallback search")
+        print("="*60)
+        print(f"Requested file:  {filename}")
+        print(f"Found at:        {resolved_path}")
+        print(f"Search location: {fallback_source}")
+        print("="*60)
+
+        # Prompt for confirmation
+        while True:
+            response = input("Continue with this file? [y/N]: ").strip().lower()
+            if response in ('y', 'yes'):
+                return True
+            elif response in ('n', 'no', ''):
+                return False
+            else:
+                print("Please enter 'y' or 'n'")
+
     def _discover_tasks(self):
         """Discover task files from directories and/or explicit file paths, or create tasks from arguments."""
         task_entries = []
@@ -1072,14 +1221,42 @@ class ParallelTaskManager:
                     raise ParallelTaskExecutorError(
                         "Arguments mode with -T requires exactly one template file (not multiple paths or directories)"
                     )
-                template_file = Path(self.tasks_paths[0])
-                if template_file.is_dir():
+
+                # First check if it's a directory (before attempting to resolve as file)
+                initial_path = Path(self.tasks_paths[0])
+                if initial_path.is_dir():
                     raise ParallelTaskExecutorError(
-                        f"Arguments mode requires a template FILE, not a directory: {template_file}. "
-                        "Omit -T to execute commands directly without a template."
+                        self._TEMPLATE_DIR_ERROR.format(path=initial_path)
                     )
-                if not template_file.is_file():
-                    raise ParallelTaskExecutorError(f"Template file not found: {template_file}")
+
+                # Resolve template file path with fallback search
+                template_file, used_fallback, fallback_source = self._resolve_template_path(self.tasks_paths[0])
+                if not template_file:
+                    # Use appropriate error message based on path type and search mode
+                    if Path(self.tasks_paths[0]).is_absolute():
+                        raise ParallelTaskExecutorError(
+                            f"Template file not found: {self.tasks_paths[0]}"
+                        )
+                    elif self.no_search:
+                        raise ParallelTaskExecutorError(
+                            f"Template file not found: {self.tasks_paths[0]}\n"
+                            f"Fallback search is disabled (--no-search). File must be in current directory."
+                        )
+                    else:
+                        raise ParallelTaskExecutorError(
+                            self._TEMPLATE_NOT_FOUND_ERROR.format(filename=self.tasks_paths[0])
+                        )
+
+                # If fallback was used, show INFO message and prompt for confirmation
+                if used_fallback:
+                    self.logger.info(f"Template file '{self.tasks_paths[0]}' found via fallback search at: {template_file}")
+                    self.logger.info(f"Fallback location: {fallback_source}")
+
+                    # Prompt for confirmation unless --yes flag is set
+                    if not self._prompt_fallback_confirmation(self.tasks_paths[0], template_file, fallback_source):
+                        raise ParallelTaskExecutorError(
+                            "User declined to use fallback file. Use --no-search to enforce strict path resolution."
+                        )
             else:
                 template_file = None  # No template - direct command execution
 
@@ -1095,9 +1272,34 @@ class ParallelTaskManager:
                         "and no environment variable specified (-E). Arguments may not be used."
                     )
 
-            args_file = Path(self.arguments_file)
-            if not args_file.is_file():
-                raise ParallelTaskExecutorError(f"Arguments file not found: {args_file}")
+            # Resolve arguments file path with fallback search
+            args_file, used_fallback, fallback_source = self._resolve_template_path(self.arguments_file)
+            if not args_file:
+                # Use appropriate error message based on path type and search mode
+                if Path(self.arguments_file).is_absolute():
+                    raise ParallelTaskExecutorError(
+                        f"Arguments file not found: {self.arguments_file}"
+                    )
+                elif self.no_search:
+                    raise ParallelTaskExecutorError(
+                        f"Arguments file not found: {self.arguments_file}\n"
+                        f"Fallback search is disabled (--no-search). File must be in current directory."
+                    )
+                else:
+                    raise ParallelTaskExecutorError(
+                        self._ARGS_FILE_NOT_FOUND_ERROR.format(filename=self.arguments_file)
+                    )
+
+            # If fallback was used, show INFO message and prompt for confirmation
+            if used_fallback:
+                self.logger.info(f"Arguments file '{self.arguments_file}' found via fallback search at: {args_file}")
+                self.logger.info(f"Fallback location: {fallback_source}")
+
+                # Prompt for confirmation unless --yes flag is set
+                if not self._prompt_fallback_confirmation(self.arguments_file, args_file, fallback_source):
+                    raise ParallelTaskExecutorError(
+                        "User declined to use fallback file. Use --no-search to enforce strict path resolution."
+                    )
 
             # Delimiter mapping for multi-argument support
             # Using regex patterns for proper splitting:
@@ -1965,6 +2167,14 @@ Examples:
     parser.add_argument('--no-task-output-log', action='store_true',
                        help='Disable detailed task output logging to output file')
 
+    parser.add_argument('--no-search', '--no-fallback', action='store_true',
+                       dest='no_search',
+                       help='Disable fallback search in standard TASKER locations (fail if files not in current dir)')
+
+    parser.add_argument('-y', '--yes', action='store_true',
+                       dest='yes_to_prompts',
+                       help='Automatically confirm prompts (for automation/CI pipelines)')
+
     args = parser.parse_args()
 
     # Validate environment variable name(s) if provided
@@ -2296,7 +2506,9 @@ def main():
             arguments_file=args.arguments_file,
             env_var=args.env_var,
             separator=args.separator if hasattr(args, 'separator') else None,
-            debug=args.debug if hasattr(args, 'debug') else False
+            debug=args.debug if hasattr(args, 'debug') else False,
+            no_search=args.no_search if hasattr(args, 'no_search') else False,
+            yes_to_prompts=args.yes_to_prompts if hasattr(args, 'yes_to_prompts') else False
         )
         
         if args.daemon:

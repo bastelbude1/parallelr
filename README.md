@@ -147,6 +147,8 @@ parallelr --check-dependencies
 | `-D, --daemon` | Run as background daemon (detached from session) |
 | `--enable-stop-limits` | Enable automatic halt on excessive failures |
 | `--no-task-output-log` | Disable detailed stdout/stderr logging to output file (enabled by default) |
+| `--no-search, --no-fallback` | Disable automatic fallback search in standard TASKER directories. Files must exist in current directory. Use for strict path validation. |
+| `-y, --yes` | Automatically confirm prompts (for automation/CI pipelines). Useful when fallback file resolution is used and you want to skip interactive confirmation. |
 
 > **Note:** Be careful to distinguish between `-d` (lowercase, debug mode) and `-D` (uppercase, daemon mode). These are different flags with different purposes.
 
@@ -1113,12 +1115,91 @@ parallelr -T ./tasks -C "bash @TASK@"
 
 ## Security Considerations
 
+### Template/Arguments File Path Resolution
+
+parallelr uses a multi-tier file resolution system with security protections:
+
+#### Resolution Order
+
+When you specify a template (`-T`) or arguments file (`-A`):
+
+1. **Check explicit path**: If file exists at specified location (including relative paths like `../template.sh`), use it
+2. **Fallback search** (if not found and `--no-search` not set): Search in standard TASKER directories:
+   - `~/tasker/test_cases/`
+   - `~/TASKER/test_cases/`
+   - `~/tasker/test_cases/functional/`
+   - `~/TASKER/test_cases/functional/`
+
+#### Security Model
+
+**Explicit Paths** (user-provided):
+- Trust user intent - user has shell access anyway
+- Allow any valid path including `../sibling_dir/file.txt`
+- Rely on filesystem permissions for access control
+- Fail if file doesn't exist or isn't readable
+
+**Fallback Paths** (automatic search):
+- Strict containment validation
+- Prevent path traversal attacks
+- Verify resolved path stays within base directory
+- User confirmation required before using fallback files (unless `--yes` flag)
+
+#### Fallback Behavior
+
+When fallback finds a file:
+1. **INFO messages** show resolved path and fallback location
+2. **Interactive prompt** asks for confirmation (unless `--yes` flag)
+3. **User can decline** to use the fallback file
+
+**Example output**:
+```bash
+$ ptasker -T hello.txt -A hosts.txt -r
+2025-10-30 08:00:00 - INFO - Template file 'hello.txt' found via fallback search at: /home/user/tasker/test_cases/hello.txt
+2025-10-30 08:00:00 - INFO - Fallback location: /home/user/tasker/test_cases
+
+============================================================
+WARNING: File found via fallback search
+============================================================
+Requested file:  hello.txt
+Found at:        /home/user/tasker/test_cases/hello.txt
+Search location: /home/user/tasker/test_cases
+============================================================
+Continue with this file? [y/N]:
+```
+
+#### Controlling Fallback Behavior
+
+**Disable fallback search** (strict mode):
+```bash
+parallelr -T template.txt -A args.txt --no-search -r
+# Fails if files not in current directory
+```
+
+**Auto-confirm fallback** (automation/CI):
+```bash
+parallelr -T template.txt -A args.txt --yes -r
+# No prompts, automatically uses fallback files
+```
+
+**Use explicit paths** (bypass fallback):
+```bash
+parallelr -T /absolute/path/template.txt -A ../args.txt -r
+# No fallback search, uses exact paths specified
+```
+
+#### Why This Design?
+
+- **Usability**: Automatic fallback search for convenience
+- **Transparency**: INFO messages show which files are being used
+- **Security**: User awareness and consent before using unexpected files
+- **Flexibility**: Options for strict mode (`--no-search`) or automation (`--yes`)
+
 ### Input Validation
 
 - **Task files**: Size checked against `max_file_size`
 - **Command arguments**: Length checked against `max_argument_length`
 - **Command parsing**: Uses `shlex.split()` to prevent injection
-- **Path handling**: Absolute paths used to prevent traversal
+- **Path handling**: Absolute paths resolved, filesystem permissions enforced
 
 ### Configuration Protection
 
