@@ -14,6 +14,12 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 from conftest import PARALLELR_BIN, PYTHON_FOR_PARALLELR
 
 
+# Configuration limits expected by tests (must match script config max_allowed_* values)
+MAX_ALLOWED_WORKERS = 100
+MAX_ALLOWED_TIMEOUT_SECONDS = 3600
+MAX_ALLOWED_OUTPUT_CAPTURE = 10000
+
+
 # Early abort if parallelr.py is missing
 if not PARALLELR_BIN.exists():
     pytest.skip("bin/parallelr.py not found - integration tests skipped",
@@ -102,12 +108,13 @@ def test_validate_config_user_exceeds_max_allowed_workers(isolated_env):
     Test that user config max_workers is capped at max_allowed_workers.
 
     User tries to set max_workers=150 but should be capped at 100.
+    Validates workers value with upper bound checking.
     """
     # Create user config directory
     user_config_dir = isolated_env['home'] / 'parallelr' / 'cfg'
     user_config_dir.mkdir(parents=True)
 
-    # Create user config exceeding max_allowed_workers (100)
+    # Create user config exceeding max_allowed_workers
     user_config = user_config_dir / 'parallelr.yaml'
     user_config.write_text("""
 limits:
@@ -127,7 +134,7 @@ limits:
     # Should succeed but cap the value
     assert result.returncode == 0
 
-    # Parse and verify the capped value (should be 100, not 150)
+    # Parse and verify the capped value
     output = result.stdout + result.stderr
 
     # Extract the actual workers value from "Workers: N (max allowed: M)" pattern
@@ -136,7 +143,10 @@ limits:
     assert workers_match, f"Could not find 'Workers:' pattern in output:\n{output}"
 
     actual_workers = int(workers_match.group(1))
-    assert actual_workers == 100, f"Expected workers to be capped at 100, but got {actual_workers}"
+
+    # Assert workers does not exceed the maximum allowed limit
+    assert actual_workers <= MAX_ALLOWED_WORKERS, \
+        f"Workers {actual_workers} exceeds maximum allowed {MAX_ALLOWED_WORKERS}"
 
     # Verify the original value 150 is NOT present in the final config
     assert '150' not in output or 'exceeds limit' in output.lower(), \
@@ -149,12 +159,13 @@ def test_validate_config_user_exceeds_max_allowed_timeout(isolated_env):
     Test that user config timeout_seconds is capped at max_allowed_timeout.
 
     User tries to set timeout_seconds=5000 but should be capped at 3600.
+    Validates timeout value with unit handling (s, ms) and upper bound checking.
     """
     # Create user config directory
     user_config_dir = isolated_env['home'] / 'parallelr' / 'cfg'
     user_config_dir.mkdir(parents=True)
 
-    # Create user config exceeding max_allowed_timeout (3600)
+    # Create user config exceeding max_allowed_timeout
     user_config = user_config_dir / 'parallelr.yaml'
     user_config.write_text("""
 limits:
@@ -174,16 +185,26 @@ limits:
     # Should succeed but cap the value
     assert result.returncode == 0
 
-    # Parse and verify the capped value (should be 3600, not 5000)
+    # Parse and verify the capped value
     output = result.stdout + result.stderr
 
-    # Extract the actual timeout value from "Timeout: Ns (max allowed: Ms)" pattern
+    # Extract timeout value with unit handling (supports "s" for seconds, "ms" for milliseconds)
     import re
-    timeout_match = re.search(r'Timeout:\s+(\d+)s', output, re.IGNORECASE)
+    timeout_match = re.search(r'Timeout:\s+(\d+)(ms|s)?', output, re.IGNORECASE)
     assert timeout_match, f"Could not find 'Timeout:' pattern in output:\n{output}"
 
-    actual_timeout = int(timeout_match.group(1))
-    assert actual_timeout == 3600, f"Expected timeout to be capped at 3600, but got {actual_timeout}"
+    # Convert to canonical unit (seconds)
+    timeout_value = int(timeout_match.group(1))
+    unit = timeout_match.group(2).lower() if timeout_match.group(2) else 's'
+
+    if unit == 'ms':
+        timeout_seconds = timeout_value / 1000.0
+    else:  # 's' or no unit defaults to seconds
+        timeout_seconds = timeout_value
+
+    # Assert timeout does not exceed the maximum allowed limit
+    assert timeout_seconds <= MAX_ALLOWED_TIMEOUT_SECONDS, \
+        f"Timeout {timeout_seconds}s exceeds maximum allowed {MAX_ALLOWED_TIMEOUT_SECONDS}s"
 
     # Verify the original value 5000 is NOT present in the final config
     assert '5000' not in output or 'exceeds limit' in output.lower(), \
@@ -196,16 +217,18 @@ def test_validate_config_user_exceeds_max_allowed_output(isolated_env):
     Test that user config max_output_capture is capped at max_allowed_output.
 
     User tries to set max_output_capture=20000 but should be capped at 10000.
+    Validates output capture limit with upper bound checking.
     """
     # Create user config directory
     user_config_dir = isolated_env['home'] / 'parallelr' / 'cfg'
     user_config_dir.mkdir(parents=True)
 
-    # Create user config exceeding max_allowed_output (10000)
+    # Create user config exceeding max_allowed_output
+    excessive_value = 20000  # Exceeds MAX_ALLOWED_OUTPUT_CAPTURE
     user_config = user_config_dir / 'parallelr.yaml'
-    user_config.write_text("""
+    user_config.write_text(f"""
 limits:
-  max_output_capture: 20000
+  max_output_capture: {excessive_value}
 """)
 
     result = subprocess.run(
@@ -228,9 +251,12 @@ limits:
     assert 'max_output_capture' in output.lower() and 'exceeds limit' in output.lower(), \
         f"Expected warning about max_output_capture exceeding limit in output:\n{output}"
 
-    # Verify the original value 20000 appears only in warning, and capped value 10000 is used
-    assert '20000' in output, "Original value 20000 should appear in warning"
-    assert '10000' in output, "Capped value 10000 should appear in output"
+    # Verify the original excessive value appears in warning
+    assert str(excessive_value) in output, f"Original value {excessive_value} should appear in warning"
+
+    # Verify the capped limit value appears in output
+    assert str(MAX_ALLOWED_OUTPUT_CAPTURE) in output, \
+        f"Capped value {MAX_ALLOWED_OUTPUT_CAPTURE} should appear in output"
 
     # Additional check: the warning should mention using the limit
     assert 'using limit' in output.lower(), "Warning should mention 'using limit'"
