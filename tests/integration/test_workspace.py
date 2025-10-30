@@ -499,11 +499,13 @@ def test_workspace_isolation_no_cross_contamination(temp_dir, isolated_workspace
 
 
 @pytest.mark.integration
-def test_workspace_isolation_cleanup(temp_dir, isolated_workspace, config_with_isolation):
+def test_workspace_isolation_directories_accessible(temp_dir, isolated_workspace, config_with_isolation):
     """
     Test that isolated workspace directories are created and accessible.
 
-    Verifies directory structure with workspace isolation enabled.
+    Verifies that workspace isolation creates per-worker directories with
+    the expected naming pattern (pid{PID}_worker{N}) and that these
+    directories are accessible after task execution.
     """
     # Create simple tasks
     for i in range(2):
