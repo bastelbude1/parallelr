@@ -395,8 +395,9 @@ def test_workspace_isolation_mode_creates_per_worker_dirs(temp_dir, isolated_wor
     # Check that per-worker workspace directories were created
     workspace_base = config_with_isolation['workspace']
 
-    # Fail fast if workspace base directory doesn't exist
+    # Fail fast if workspace base directory doesn't exist or is not a directory
     assert workspace_base.exists(), f"Workspace base directory should exist at {workspace_base}"
+    assert workspace_base.is_dir(), f"Workspace base path should be a directory at {workspace_base}"
 
     # Find directories matching pattern pid{PID}_worker{N}
     worker_dirs = [d for d in workspace_base.iterdir()
@@ -440,8 +441,9 @@ def test_workspace_isolation_separate_task_execution(temp_dir, isolated_workspac
     # Verify multiple worker directories exist
     workspace_base = config_with_isolation['workspace']
 
-    # Fail fast if workspace base directory doesn't exist
+    # Fail fast if workspace base directory doesn't exist or is not a directory
     assert workspace_base.exists(), f"Workspace base directory should exist at {workspace_base}"
+    assert workspace_base.is_dir(), f"Workspace base path should be a directory at {workspace_base}"
 
     worker_dirs = [d for d in workspace_base.iterdir()
                   if d.is_dir() and 'worker' in d.name]
@@ -485,8 +487,9 @@ def test_workspace_isolation_no_cross_contamination(temp_dir, isolated_workspace
     # Verify workers created isolated directories
     workspace_base = config_with_isolation['workspace']
 
-    # Fail fast if workspace base directory doesn't exist
+    # Fail fast if workspace base directory doesn't exist or is not a directory
     assert workspace_base.exists(), f"Workspace base directory should exist at {workspace_base}"
+    assert workspace_base.is_dir(), f"Workspace base path should be a directory at {workspace_base}"
 
     worker_dirs = [d for d in workspace_base.iterdir()
                   if d.is_dir() and 'worker' in d.name]
@@ -527,7 +530,10 @@ def test_workspace_isolation_cleanup(temp_dir, isolated_workspace, config_with_i
 
     # Verify workspace directories were created
     workspace_base = config_with_isolation['workspace']
-    assert workspace_base.exists(), "Workspace base directory should exist"
+
+    # Fail fast if workspace base directory doesn't exist or is not a directory
+    assert workspace_base.exists(), f"Workspace base directory should exist at {workspace_base}"
+    assert workspace_base.is_dir(), f"Workspace base path should be a directory at {workspace_base}"
 
     # Check for worker-specific directories
     worker_dirs = list(workspace_base.glob('pid*_worker*'))
