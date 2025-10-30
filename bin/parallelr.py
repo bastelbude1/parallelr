@@ -1200,13 +1200,13 @@ class ParallelTaskManager:
             return True
 
         # Show warning about fallback resolution
-        print(f"\n{'='*60}")
-        print(f"WARNING: File found via fallback search")
-        print(f"{'='*60}")
+        print("\n" + "="*60)
+        print("WARNING: File found via fallback search")
+        print("="*60)
         print(f"Requested file:  {filename}")
         print(f"Found at:        {resolved_path}")
         print(f"Search location: {fallback_source}")
-        print(f"{'='*60}")
+        print("="*60)
 
         # Prompt for confirmation
         while True:
@@ -1265,7 +1265,7 @@ class ParallelTaskManager:
                     # Prompt for confirmation unless --yes flag is set
                     if not self._prompt_fallback_confirmation(self.tasks_paths[0], template_file, fallback_source):
                         raise ParallelTaskExecutorError(
-                            f"User declined to use fallback file. Use --no-search to enforce strict path resolution."
+                            "User declined to use fallback file. Use --no-search to enforce strict path resolution."
                         )
             else:
                 template_file = None  # No template - direct command execution
@@ -1308,7 +1308,7 @@ class ParallelTaskManager:
                 # Prompt for confirmation unless --yes flag is set
                 if not self._prompt_fallback_confirmation(self.arguments_file, args_file, fallback_source):
                     raise ParallelTaskExecutorError(
-                        f"User declined to use fallback file. Use --no-search to enforce strict path resolution."
+                        "User declined to use fallback file. Use --no-search to enforce strict path resolution."
                     )
 
             # Delimiter mapping for multi-argument support
