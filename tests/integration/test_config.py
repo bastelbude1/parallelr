@@ -444,19 +444,19 @@ def test_config_missing_user_file_uses_defaults(isolated_env):
     assert result.returncode == 0, f"Show config failed: {result.stderr}"
     output = result.stdout + result.stderr
 
-    # Verify script default values are loaded (not user overrides)
-    # Previous test (test_config_merge_precedence) used max_workers=2
-    # This test should NOT show max_workers=2 since no user config exists
-    workers_match = re.search(r'Workers:\s+(\d+)', output, re.IGNORECASE)
-    assert workers_match, f"Could not find 'Workers:' pattern in output:\n{output}"
-
-    actual_workers = int(workers_match.group(1))
-
-    # Should use script default (likely CPU count or configured default like 4)
-    # NOT the user override value of 2 from the other test
-    assert actual_workers != 2, \
-        f"Workers={actual_workers} suggests user config loaded, but none exists. Output:\n{output}"
+    # Verify that NO user config was loaded (using script defaults instead)
+    # The output should explicitly state "User config: Not found"
+    assert 'user config' in output.lower() and 'not found' in output.lower(), \
+        f"Expected 'User config: Not found' message in output:\n{output}"
 
     # Verify config output contains key settings
     assert 'timeout' in output.lower(), "Expected timeout in default config"
     assert 'worker' in output.lower(), "Expected workers in default config"
+
+    # Verify Workers value is present and numeric (actual value depends on system)
+    workers_match = re.search(r'Workers:\s+(\d+)', output, re.IGNORECASE)
+    assert workers_match, f"Could not find 'Workers:' pattern in output:\n{output}"
+
+    # Just verify it's a positive integer (don't hardcode expected value)
+    actual_workers = int(workers_match.group(1))
+    assert actual_workers > 0, f"Workers should be positive, got {actual_workers}"
