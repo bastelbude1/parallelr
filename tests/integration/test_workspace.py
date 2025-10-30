@@ -372,6 +372,7 @@ def test_workspace_isolation_mode_creates_per_worker_dirs(temp_dir, isolated_wor
 
     Verifies pid{PID}_worker{N} directories are created.
     """
+    # isolated_workspace fixture required for config_with_isolation dependency
     # Create test tasks
     for i in range(3):
         task = temp_dir / f'task_{i}.sh'
@@ -414,6 +415,7 @@ def test_workspace_isolation_separate_task_execution(temp_dir, isolated_workspac
 
     Verifies tasks execute successfully with workspace isolation enabled.
     """
+    # isolated_workspace fixture required for config_with_isolation dependency
     # Create simple tasks that just echo
     for i in range(4):
         task = temp_dir / f'workspace_write_{i}.sh'
@@ -462,6 +464,7 @@ def test_workspace_isolation_no_cross_contamination(temp_dir, isolated_workspace
     that files don't leak between workers. Each worker should process a subset
     of tasks, not all tasks.
     """
+    # isolated_workspace fixture required for config_with_isolation dependency
     # Create tasks that write marker files to workspace
     for i in range(6):
         task = temp_dir / f'marker_{i}.sh'
@@ -525,6 +528,7 @@ def test_workspace_isolation_directories_accessible(temp_dir, isolated_workspace
     the expected naming pattern (pid{PID}_worker{N}) and that these
     directories are accessible after task execution.
     """
+    # isolated_workspace fixture required for config_with_isolation dependency
     # Create simple tasks
     for i in range(2):
         task = temp_dir / f'simple_{i}.sh'
