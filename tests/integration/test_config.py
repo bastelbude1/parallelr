@@ -445,9 +445,9 @@ def test_config_missing_user_file_uses_defaults(isolated_env):
     output = result.stdout + result.stderr
 
     # Verify that NO user config was loaded (using script defaults instead)
-    # The output should explicitly state "User config: Not found"
-    assert 'user config' in output.lower() and 'not found' in output.lower(), \
-        f"Expected 'User config: Not found' message in output:\n{output}"
+    # The output should explicitly state "User Config: ... (exists: False)"
+    assert 'user config' in output.lower() and 'exists: false' in output.lower(), \
+        f"Expected 'User Config: ... (exists: False)' message in output:\n{output}"
 
     # Verify config output contains key settings
     assert 'timeout' in output.lower(), "Expected timeout in default config"
