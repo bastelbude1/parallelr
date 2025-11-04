@@ -232,6 +232,27 @@ When `--enable-stop-limits` is set, execution halts if:
 
 The tool supports Unix daemon mode for background execution using double-fork technique (parallelr.py:1035-1067). Not supported on Windows.
 
+### PID Management
+
+**PID Lifecycle:**
+- PIDs are registered in `~/parallelr/pids/parallelr.pids` when a process starts (parallelr.py:421-439)
+- PIDs are unregistered when execution completes normally or via explicit kill command
+- **Guaranteed cleanup**: try-finally ensures PID unregistration even on exceptions (parallelr.py:1774-1776)
+- **Automatic stale PID cleanup**: Dead PIDs are removed on every startup (parallelr.py:492-552, called at 1055)
+
+**PID File Behavior:**
+- Multiple parallelr instances can run simultaneously, all tracked in the same PID file
+- Duplicate PIDs are automatically prevented via set-based deduplication
+- Stale PIDs (from crashed/killed processes) are cleaned up automatically when a new instance starts
+- File is removed entirely when last process completes
+- `--list-workers` and `-k` commands only operate on validated running processes
+
+**Implementation Details:**
+- `cleanup_stale_pids()`: Validates each PID using `psutil.pid_exists()` or `os.kill(pid, 0)`
+- Runs automatically during `ParallelTaskManager` initialization
+- Logs info message when stale PIDs are removed
+- Preserves PIDs of actually running processes
+
 ## Common Commands
 
 ### Execute tasks (foreground)

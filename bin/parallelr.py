@@ -469,7 +469,7 @@ class Configuration:
         pidfile = self.get_pidfile_path()
         if not pidfile.exists():
             return []
-            
+
         try:
             pids = []
             with open(str(pidfile), 'r') as f:
@@ -483,11 +483,94 @@ class Configuration:
                             else:
                                 os.kill(int(pid), 0)
                                 pids.append(int(pid))
-                        except (OSError, ProcessLookupError):
+                        except PermissionError:
+                            # Process exists but owned by another user (EPERM)
+                            # Treat as running
+                            pids.append(int(pid))
+                        except ProcessLookupError:
+                            # Process doesn't exist (ESRCH) - skip
                             pass
+                        except OSError as e:
+                            # Fallback for other OSError types
+                            if hasattr(e, 'errno') and e.errno == errno.EPERM:
+                                pids.append(int(pid))
+                            # Otherwise treat as non-existent
             return pids
         except Exception:
             return []
+
+    def cleanup_stale_pids(self):
+        """Remove stale (dead) PIDs from the PID file.
+
+        This method reads the PID file, validates each PID to check if the process
+        is still running, and rewrites the file with only active PIDs. This prevents
+        accumulation of stale PIDs from processes that crashed or were killed without
+        proper cleanup.
+
+        Returns:
+            int: Number of stale PIDs removed.
+        """
+        pidfile = self.get_pidfile_path()
+        if not pidfile.exists():
+            return 0
+
+        try:
+            existing_pids = set()
+            running_pids = set()
+
+            # Read all PIDs from file
+            with open(str(pidfile), 'r') as f:
+                for line in f:
+                    pid = line.strip()
+                    if pid.isdigit():
+                        existing_pids.add(int(pid))
+
+            # Validate which PIDs are actually running
+            for pid in existing_pids:
+                try:
+                    if HAS_PSUTIL:
+                        if psutil.pid_exists(pid):
+                            running_pids.add(pid)
+                    else:
+                        os.kill(pid, 0)  # Signal 0 checks existence
+                        running_pids.add(pid)
+                except PermissionError:
+                    # Process exists but owned by another user (EPERM)
+                    # Treat as running - don't remove from PID file
+                    running_pids.add(pid)
+                except ProcessLookupError:
+                    # Process doesn't exist (ESRCH) - stale PID
+                    pass
+                except OSError as e:
+                    # Fallback for other OSError types
+                    # Check if it's EPERM (process exists, no permission)
+                    if hasattr(e, 'errno') and e.errno == errno.EPERM:
+                        running_pids.add(pid)
+                    # Otherwise (ESRCH or other), treat as stale
+
+            stale_count = len(existing_pids) - len(running_pids)
+
+            # Rewrite file with only running PIDs
+            if running_pids:
+                with open(str(pidfile), 'w') as f:
+                    for pid in sorted(running_pids):
+                        f.write(f"{pid}\n")
+            else:
+                # No running processes, remove file
+                pidfile.unlink()
+
+            if stale_count > 0:
+                logging.getLogger(__name__).info(
+                    "Cleaned up %d stale PID(s) from PID file", stale_count
+                )
+
+            return stale_count
+
+        except Exception as e:
+            logging.getLogger(__name__).warning(
+                "Could not cleanup stale PIDs: %s", e
+            )
+            return 0
 
     def get_custom_timestamp(self):
         """Get custom formatted timestamp."""
@@ -988,7 +1071,10 @@ class ParallelTaskManager:
 
         self.log_dir = self.config.get_log_directory()
         self.process_id = os.getpid()
-        
+
+        # Clean up stale PIDs from previous crashed/killed processes
+        self.config.cleanup_stale_pids()
+
         self.config.register_process(self.process_id)
         
         self.consecutive_failures = 0
@@ -1695,21 +1781,23 @@ class ParallelTaskManager:
                     for task_executor in self.running_tasks.values():
                         task_executor.cancel()
 
-            self.config.unregister_process(self.process_id)
-            
             stats = {
                 'total': total_tasks,
                 'completed': len(self.completed_tasks),
                 'failed': len(self.failed_tasks),
                 'cancelled': total_tasks - len(self.completed_tasks) - len(self.failed_tasks)
             }
-            
+
             self.logger.info(f"Execution completed: {stats}")
             return stats
 
         except Exception as e:
             self.logger.exception("Fatal error during task execution")
             raise
+
+        finally:
+            # Always unregister process, even on exceptions or early termination
+            self.config.unregister_process(self.process_id)
 
     def get_summary_report(self):
         """Generate a summary report of the execution."""
