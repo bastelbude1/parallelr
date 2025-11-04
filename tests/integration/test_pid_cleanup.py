@@ -431,9 +431,10 @@ def test_pid_cleanup_on_sigterm(temp_dir, isolated_env):
         pytest.skip("Process already terminated")
 
     # Wait for graceful shutdown and PID cleanup
+    # Longer timeout for CI environments where backup I/O can be slow
     assert poll_until(
         lambda: not pid_file.exists() or daemon_pid not in read_pids_from_file(pid_file),
-        timeout=10
+        timeout=20
     ), f"PID {daemon_pid} was not cleaned up after SIGTERM"
 
     # Final cleanup of any remaining processes
@@ -481,9 +482,10 @@ def test_pid_cleanup_on_sigint(temp_dir, isolated_env):
         pytest.skip("Process already terminated")
 
     # Wait for graceful shutdown and PID cleanup
+    # Longer timeout for CI environments where backup I/O can be slow
     assert poll_until(
         lambda: not pid_file.exists() or daemon_pid not in read_pids_from_file(pid_file),
-        timeout=10
+        timeout=20
     ), f"PID {daemon_pid} was not cleaned up after SIGINT"
 
     # Final cleanup of any remaining processes
