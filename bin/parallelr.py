@@ -810,26 +810,14 @@ class SecureTaskExecutor:
             command_args = self._build_secure_command(self.task_file)
             result.command = ' '.join(command_args)
 
-            # Enhanced logging with full details like dry run mode
+            # Log command in one-line format matching dry run mode
+            # Build env prefix if we have environment variables
+            env_prefix = build_env_prefix(self.env_var, self.task_arguments) if self.env_var and self.task_arguments else ""
+
+            # Format: [X/N]: ENV_VAR=value command
             progress_str = f"[{self.task_number}/{self.total_tasks}]" if self.task_number and self.total_tasks else ""
-            self.logger.info(f"Worker {self.worker_id} {progress_str}: Starting task")
-
-            # Log task file
-            if self.task_file:
-                self.logger.info(f"  Task file: {self.task_file}")
-
-            # Log environment variables (formatted like dry run)
-            if self.extra_env:
-                env_display = build_env_prefix(self.env_var, self.task_arguments) if self.env_var and self.task_arguments else None
-                if env_display:
-                    self.logger.info(f"  Environment: {env_display.strip()}")
-                elif self.extra_env:
-                    # Fallback: show as dict if no env_var name info available
-                    env_str = " ".join([f"{k}={v}" for k, v in self.extra_env.items()])
-                    self.logger.info(f"  Environment: {env_str}")
-
-            # Log full command
-            self.logger.info(f"  Command: {result.command}")
+            command_with_env = f"{env_prefix}{result.command}"
+            self.logger.info(f"{progress_str}: {command_with_env}")
 
             result.status = TaskStatus.RUNNING
             
