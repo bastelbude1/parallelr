@@ -1863,9 +1863,9 @@ Auto-Stop Protection:
 - Stop Limits: {stop_enabled}{stop_details}
 
 Log Files:
-- Main Log: {self.log_dir / f'parallelr_{self.process_id}_{self.timestamp}.log'} (rotating)
-- Summary: {self.summary_log_file} (session-specific)
-- Output: {self.task_results_file} (disable with --no-task-output-log)
+- Main Log: {self.log_dir / f'parallelr_{self.process_id}_{self.timestamp}.log'}
+- Summary: {self.summary_log_file}
+- Output: {self.task_results_file}
 
 Process Info:
 - Process ID: {self.process_id}
