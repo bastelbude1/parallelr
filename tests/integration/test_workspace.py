@@ -257,7 +257,7 @@ def test_workspace_logs_directory(sample_task_dir, isolated_workspace):
 
 @pytest.mark.integration
 def test_workspace_summary_csv_created(sample_task_dir, isolated_workspace):
-    """Test that summary CSV is created in logs directory."""
+    """Test that JSONL results file is created in logs directory."""
     log_dir = isolated_workspace['logs']
 
     result = subprocess.run(
@@ -273,9 +273,9 @@ def test_workspace_summary_csv_created(sample_task_dir, isolated_workspace):
     )
 
     assert result.returncode == 0
-    # Summary CSV should exist
-    summary_files = list(log_dir.glob('*_summary.csv'))
-    assert len(summary_files) > 0
+    # JSONL results file should exist
+    results_files = list(log_dir.glob('*_results.jsonl'))
+    assert len(results_files) > 0
 
 
 @pytest.mark.integration

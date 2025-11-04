@@ -136,9 +136,9 @@ def test_futures_timeout_with_arguments_mode(temp_dir, isolated_env):
     # Use lenient bounds for CI environments
     verify_durations_reasonable(csv_records, min_duration=0.2, max_duration=5.0)
 
-    # Verify @ARG@ placeholder was replaced in command field
+    # Verify @ARG@ placeholder was replaced in command_executed field
     for record in csv_records:
-        assert '@ARG@' not in record['command'], "Placeholder @ARG@ was not replaced in command"
+        assert '@ARG@' not in record['command_executed'], "Placeholder @ARG@ was not replaced in command_executed"
 
 @pytest.mark.integration
 def test_futures_timeout_with_multiple_workers(temp_dir, isolated_env):

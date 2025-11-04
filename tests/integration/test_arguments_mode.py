@@ -92,11 +92,11 @@ def test_arguments_mode_multi_args_comma(sample_task_file, sample_multi_args_fil
     # Verify durations are reasonable (> 0, not negative)
     verify_durations_reasonable(csv_records, min_duration=0.0)
 
-    # Verify command field contains the indexed placeholders replaced
+    # Verify command_executed field contains the indexed placeholders replaced
     for record in csv_records:
-        assert '@ARG_1@' not in record['command'], "Placeholder @ARG_1@ was not replaced in command"
-        assert '@ARG_2@' not in record['command'], "Placeholder @ARG_2@ was not replaced in command"
-        assert '@ARG_3@' not in record['command'], "Placeholder @ARG_3@ was not replaced in command"
+        assert '@ARG_1@' not in record['command_executed'], "Placeholder @ARG_1@ was not replaced in command_executed"
+        assert '@ARG_2@' not in record['command_executed'], "Placeholder @ARG_2@ was not replaced in command_executed"
+        assert '@ARG_3@' not in record['command_executed'], "Placeholder @ARG_3@ was not replaced in command_executed"
 
 @pytest.mark.integration
 @pytest.mark.parametrize("delim_name,line_content", [
@@ -362,11 +362,11 @@ def test_arguments_mode_no_template_single_arg(sample_arguments_file, isolated_e
     # Verify durations are reasonable (> 0, not negative)
     verify_durations_reasonable(csv_records, min_duration=0.0)
 
-    # Verify @ARG@ placeholder was replaced in command field
+    # Verify @ARG@ placeholder was replaced in command_executed field
     for record in csv_records:
-        assert '@ARG@' not in record['command'], "Placeholder @ARG@ was not replaced in command"
-        assert 'echo' in record['command'] and 'Testing' in record['command'], \
-            "Command doesn't contain expected keywords"
+        assert '@ARG@' not in record['command_executed'], "Placeholder @ARG@ was not replaced in command_executed"
+        assert 'echo' in record['command_executed'] and 'Testing' in record['command_executed'], \
+            "Command_executed doesn't contain expected keywords"
 
 @pytest.mark.integration
 def test_arguments_mode_no_template_multi_args(sample_multi_args_file, isolated_env):
@@ -408,13 +408,13 @@ def test_arguments_mode_no_template_multi_args(sample_multi_args_file, isolated_
     # Verify durations are reasonable (> 0, not negative)
     verify_durations_reasonable(csv_records, min_duration=0.0)
 
-    # Verify indexed placeholders were replaced in command field
+    # Verify indexed placeholders were replaced in command_executed field
     for record in csv_records:
-        assert '@ARG_1@' not in record['command'], "Placeholder @ARG_1@ was not replaced in command"
-        assert '@ARG_2@' not in record['command'], "Placeholder @ARG_2@ was not replaced in command"
-        assert '@ARG_3@' not in record['command'], "Placeholder @ARG_3@ was not replaced in command"
-        assert 'echo' in record['command'] and 'Server:' in record['command'], \
-            "Command doesn't contain expected keywords"
+        assert '@ARG_1@' not in record['command_executed'], "Placeholder @ARG_1@ was not replaced in command_executed"
+        assert '@ARG_2@' not in record['command_executed'], "Placeholder @ARG_2@ was not replaced in command_executed"
+        assert '@ARG_3@' not in record['command_executed'], "Placeholder @ARG_3@ was not replaced in command_executed"
+        assert 'echo' in record['command_executed'] and 'Server:' in record['command_executed'], \
+            "Command_executed doesn't contain expected keywords"
 
 @pytest.mark.integration
 def test_arguments_mode_no_template_env_var(sample_multi_args_file, isolated_env):

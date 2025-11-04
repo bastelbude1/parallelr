@@ -294,7 +294,7 @@ result = subprocess.run(['cmd'], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
 - **ParallelTaskManager** (parallelr.py:673-966): Main execution coordinator that manages the task queue, worker pool, and result tracking
 - **SecureTaskExecutor** (parallelr.py:436-672): Executes individual tasks with security validation, timeout handling, and resource monitoring
 - **Configuration** (parallelr.py:142-434): Manages layered configuration system with script defaults and user overrides
-- **TaskResult** (parallelr.py:63-89): Data class for task execution results with performance metrics
+- **TaskResult** (parallelr.py:63-89): Data class for task execution results with performance metrics, environment variables, and arguments. Supports JSONL serialization with `to_jsonl()` method
 
 ### Configuration System
 
@@ -307,11 +307,60 @@ User overrides for `max_workers`, `timeout_seconds`, and `max_output_capture` ar
 ### Task Execution Flow
 
 1. Tasks are discovered from the specified directory (parallelr.py:771-791)
-2. Each task file is queued and executed by a worker thread
-3. Command template uses `@TASK@` placeholder replaced with task file path
-4. Real-time output capture with non-blocking I/O using select (parallelr.py:543-595)
-5. Resource monitoring via psutil (if available) for memory and CPU tracking
-6. Results logged to CSV summary file with semicolon delimiter
+2. Input files are backed up to `~/parallelr/backups/` (unless `--no-backup-inputs` is specified)
+3. Each task file is queued and executed by a worker thread
+4. Command template uses `@TASK@` placeholder replaced with task file path
+5. Real-time output capture with non-blocking I/O using select (parallelr.py:543-595)
+6. Resource monitoring via psutil (if available) for memory and CPU tracking
+7. Results logged to JSONL file with complete per-task metadata (environment variables, arguments, executed command)
+
+### JSONL Results Format
+
+Results are stored in JSON Lines format (`*_results.jsonl`):
+- **First line**: Session metadata (session_id, hostname, user, command_template, configuration)
+- **Subsequent lines**: One JSON object per task with complete execution metadata
+
+**Task record fields:**
+- `type`: Always "task"
+- `session_id`: Links task to session metadata
+- `start_time`, `end_time`: ISO 8601 timestamps
+- `status`: Task status (SUCCESS, FAILED, TIMEOUT, etc.)
+- `process_id`, `worker_id`: Execution context
+- `task_file`: Path to task file (optional, can be null for -A/-E mode)
+- `command_executed`: Actual command executed with all substitutions
+- `env_vars`: Dictionary of environment variables for this task
+- `arguments`: List of arguments for this task
+- `exit_code`: Process exit code
+- `duration_seconds`, `memory_mb`, `cpu_percent`: Performance metrics
+- `error_message`: Error details if task failed
+
+**Reporting Tool:**
+Use `bin/psr.py` to generate CSV reports from JSONL results:
+```bash
+# Generate default CSV
+psr.py results.jsonl
+
+# Custom columns with nested field access
+psr.py results.jsonl --columns start_time,status,env_vars.TASK_ID,exit_code
+
+# Filter tasks
+psr.py results.jsonl --filter status=FAILED --output failures.csv
+
+# Show statistics
+psr.py results.jsonl --stats
+```
+
+### Input Backup Feature
+
+By default, parallelr creates a backup of all input files before execution:
+- **Backup location**: `~/parallelr/backups/parallelr_{PID}_{timestamp}/`
+- **Backed up files**:
+  - Task directories/files (from `-T`)
+  - Arguments file (from `-A`)
+  - Session metadata JSON
+- **Purpose**: Reproducibility and debugging
+- **Disable**: Use `--no-backup-inputs` flag
+- **Failure handling**: Backup failures only log warnings, don't stop execution
 
 ### Workspace Management
 
@@ -408,12 +457,14 @@ python bin/parallelr.py -T ./tasks -C "python3 @TASK@"
 
 ## File Locations
 
-- **Script**: `bin/parallelr.py`
+- **Main Script**: `bin/parallelr.py`
+- **Reporting Script**: `bin/psr.py` (Parallelr Summary Report - generates CSV from JSONL results)
 - **Script config**: `cfg/parallelr.yaml`
 - **User config**: `~/parallelr/cfg/parallelr.yaml`
 - **Logs**: `~/parallelr/logs/parallelr_{PID}_{timestamp}.log` (rotating, max 10MB, 5 backups)
-- **Summary**: `~/parallelr/logs/parallelr_{PID}_{timestamp}_summary.csv`
+- **Results**: `~/parallelr/logs/parallelr_{PID}_{timestamp}_results.jsonl` (JSONL format with complete task metadata)
 - **Task output**: `~/parallelr/logs/parallelr_{PID}_{timestamp}_output.txt` (enabled by default, disable with `--no-task-output-log`)
+- **Input backup**: `~/parallelr/backups/parallelr_{PID}_{timestamp}/` (enabled by default, disable with `--no-backup-inputs`)
 - **PID tracking**: `~/parallelr/pids/parallelr.pids`
 - **Workspace**: `~/parallelr/workspace/` or `~/parallelr/workspace/pid{PID}_worker{N}/`
 
