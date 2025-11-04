@@ -935,21 +935,24 @@ class SecureTaskExecutor:
                 max_capture = self.config.limits.max_output_capture
                 result.stdout = stdout[-max_capture:] if stdout else ""
                 result.stderr = stderr[-max_capture:] if stderr else ""
-                # Calculate duration for logging (will be recalculated in finally block)
-                duration = (datetime.now() - result.start_time).total_seconds()
-                memory_mb, cpu_percent = self._monitor_process()
+
+                # Update final metrics before logging
+                result.duration = (datetime.now() - result.start_time).total_seconds()
+                memory_mb, _ = self._monitor_process()
+                if memory_mb > result.memory_usage:
+                    result.memory_usage = memory_mb
 
                 progress_str = f"[{self.task_number}/{self.total_tasks}]" if self.task_number and self.total_tasks else ""
 
                 if result.exit_code == 0:
                     result.status = TaskStatus.SUCCESS
                     self.logger.info(f"Worker {self.worker_id} {progress_str}: Task completed successfully")
-                    self.logger.info(f"  Exit code: {result.exit_code}, Duration: {duration:.2f}s, Memory: {memory_mb:.1f}MB")
+                    self.logger.info(f"  Exit code: {result.exit_code}, Duration: {result.duration:.2f}s, Memory: {result.memory_usage:.1f}MB")
                 else:
                     result.status = TaskStatus.FAILED
                     result.error_message = "Exit code {}".format(result.exit_code)
                     self.logger.info(f"Worker {self.worker_id} {progress_str}: Task failed")
-                    self.logger.info(f"  Exit code: {result.exit_code}, Duration: {duration:.2f}s")
+                    self.logger.info(f"  Exit code: {result.exit_code}, Duration: {result.duration:.2f}s, Memory: {result.memory_usage:.1f}MB")
 
             except subprocess.TimeoutExpired:
                 result.status = TaskStatus.TIMEOUT
