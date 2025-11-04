@@ -586,15 +586,14 @@ class Configuration:
         Returns:
             Alphanumeric string of specified length
         """
-        # Generate UUID and convert to base32-like alphanumeric
+        # Generate UUID and use bytes directly for better efficiency
         # Use lowercase letters and digits for readability (k8m2p5 style)
-        uid = uuid.uuid4().hex
-        # Take first 'length' characters and convert to alphanumeric
+        uid_bytes = uuid.uuid4().bytes
         # Use a subset that avoids confusion (no 0/O, 1/l, etc.)
         result = ''
         for i in range(length):
-            # Use hex chars as indices into our alphabet
-            idx = int(uid[i * 2:i * 2 + 2], 16) % len(Configuration.UNIQUE_ID_ALPHABET)
+            # Map byte value to alphabet (256 % 32 = 0, no modulo bias)
+            idx = uid_bytes[i] % len(Configuration.UNIQUE_ID_ALPHABET)
             result += Configuration.UNIQUE_ID_ALPHABET[idx]
         return result
 
