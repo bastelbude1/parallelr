@@ -779,6 +779,12 @@ class SecureTaskExecutor:
             # Unexpected error - log at debug level only
             return 0.0, 0.0
 
+    def _get_progress_str(self):
+        """Get progress string for logging."""
+        if self.task_number and self.total_tasks:
+            return f"[{self.task_number}/{self.total_tasks}]"
+        return ""
+
     def execute(self):
         """Execute task with basic security and monitoring."""
         start_time = datetime.now()
@@ -815,7 +821,7 @@ class SecureTaskExecutor:
             env_prefix = build_env_prefix(self.env_var, self.task_arguments) if self.env_var and self.task_arguments else ""
 
             # Format: [X/N]: ENV_VAR=value command
-            progress_str = f"[{self.task_number}/{self.total_tasks}]" if self.task_number and self.total_tasks else ""
+            progress_str = self._get_progress_str()
             command_with_env = f"{env_prefix}{result.command}"
             self.logger.info(f"{progress_str}: {command_with_env}")
 
@@ -942,7 +948,7 @@ class SecureTaskExecutor:
                 if memory_mb > result.memory_usage:
                     result.memory_usage = memory_mb
 
-                progress_str = f"[{self.task_number}/{self.total_tasks}]" if self.task_number and self.total_tasks else ""
+                progress_str = self._get_progress_str()
 
                 if result.exit_code == 0:
                     result.status = TaskStatus.SUCCESS
