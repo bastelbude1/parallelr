@@ -110,7 +110,7 @@ def generate_csv(tasks, columns, output_file=None):
     # Calculate maximum width for each column (header and data)
     col_widths = []
     for i, col_name in enumerate(columns):
-        max_width = len(col_name)  # Start with header width
+        max_width = len(col_name.upper())  # Start with uppercase header width
         for row in data_rows:
             if i < len(row):
                 max_width = max(max_width, len(row[i]))
@@ -120,10 +120,10 @@ def generate_csv(tasks, columns, output_file=None):
     output = sys.stdout if output_file is None else open(output_file, 'w', encoding='utf-8')
 
     try:
-        # Write header with aligned columns
+        # Write header with aligned columns (uppercase)
         header_parts = []
         for i, col_name in enumerate(columns):
-            header_parts.append(col_name.ljust(col_widths[i]))
+            header_parts.append(col_name.upper().ljust(col_widths[i]))
         output.write('  '.join(header_parts) + '\n')
 
         # Write data rows with aligned columns
