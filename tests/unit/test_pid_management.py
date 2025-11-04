@@ -321,7 +321,7 @@ def test_pid_file_sorted_after_operations(config_with_temp_home):
 
 
 @pytest.mark.unit
-@pytest.mark.skipif(os.getuid() == 0, reason="Test requires non-root user")
+@pytest.mark.skipif(not hasattr(os, "getuid") or os.getuid() == 0, reason="Test requires non-root user")
 def test_cleanup_preserves_pids_owned_by_other_users(config_with_temp_home):
     """Test that cleanup doesn't remove PIDs of processes owned by other users (PermissionError).
 
@@ -366,7 +366,7 @@ def test_cleanup_preserves_pids_owned_by_other_users(config_with_temp_home):
 
 
 @pytest.mark.unit
-@pytest.mark.skipif(os.getuid() == 0, reason="Test requires non-root user")
+@pytest.mark.skipif(not hasattr(os, "getuid") or os.getuid() == 0, reason="Test requires non-root user")
 def test_get_running_processes_includes_other_users_pids(config_with_temp_home):
     """Test that get_running_processes() includes PIDs owned by other users.
 
