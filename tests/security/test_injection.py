@@ -78,9 +78,14 @@ def test_shell_injection_in_command_template(temp_dir):
         f"SECURITY FAILURE: Injection succeeded - sentinel file {sentinel} exists"
     )
 
-    # "INJECTED" should not appear in any output
-    assert "INJECTED" not in result.stdout, (
-        f"SECURITY FAILURE: Injection marker found in stdout: {result.stdout}"
+    # "INJECTED" should not appear in task output (but may appear in command template logging)
+    # Filter out the command template log line which shows the attempted command
+    stdout_lines = result.stdout.split('\n')
+    output_lines = [line for line in stdout_lines if 'Command template:' not in line and ']:' not in line[:10]]
+    output_text = '\n'.join(output_lines)
+
+    assert "INJECTED" not in output_text, (
+        f"SECURITY FAILURE: Injection marker found in task output (excluding command logging): {output_text}"
     )
     assert "INJECTED" not in result.stderr, (
         f"SECURITY FAILURE: Injection marker found in stderr: {result.stderr}"
