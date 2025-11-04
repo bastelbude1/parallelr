@@ -2145,7 +2145,7 @@ def list_workers(script_path):
             print(f"{pid:<8} {status:<10} {start_time:<20} {log_file:<30} {results_file}")
             
         except Exception as e:
-            print(f"{pid:<8} {'error':<10} {'unknown':<20} {'error reading info':<30} {str(e)}")
+            print(f"{pid:<8} {'error':<10} {'unknown':<20} {'error reading info':<30} {e!s}")
     
     print()
     print("Commands:")
