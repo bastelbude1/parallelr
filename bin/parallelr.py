@@ -40,6 +40,7 @@ import shlex
 import select
 import errno
 import re
+import uuid
 from datetime import datetime
 
 # POSIX-only import with fallback for Windows compatibility
@@ -165,7 +166,7 @@ class LoggingConfig:
         self.level = "INFO"
         self.console_format = "%(asctime)s - %(levelname)s - %(message)s"
         self.file_format = "%(asctime)s - %(name)s - %(levelname)s - [%(threadName)s] - %(message)s"
-        self.custom_date_format = "%d%b%y_%H%M%S"
+        self.custom_date_format = "%d%b%y"  # Date only, unique ID added automatically
         self.max_log_size_mb = 10
         self.backup_count = 5
 
@@ -572,9 +573,38 @@ class Configuration:
             )
             return 0
 
+    @staticmethod
+    def generate_unique_id(length=6):
+        """Generate a short unique identifier using UUID.
+
+        Args:
+            length: Length of the identifier (default: 6)
+
+        Returns:
+            Alphanumeric string of specified length
+        """
+        # Generate UUID and convert to base32-like alphanumeric
+        # Use lowercase letters and digits for readability (k8m2p5 style)
+        uid = uuid.uuid4().hex
+        # Take first 'length' characters and convert to alphanumeric
+        # Use a subset that avoids confusion (no 0/O, 1/l, etc.)
+        alphabet = 'abcdefghjkmnpqrstuvwxyz23456789'  # 32 chars, no ambiguous
+        result = ''
+        for i in range(length):
+            # Use hex chars as indices into our alphabet
+            idx = int(uid[i * 2:i * 2 + 2], 16) % len(alphabet)
+            result += alphabet[idx]
+        return result
+
     def get_custom_timestamp(self):
-        """Get custom formatted timestamp."""
-        return datetime.now().strftime(self.logging.custom_date_format)
+        """Get custom formatted timestamp with unique ID.
+
+        Returns date and unique ID in format: DDmmmYY_uniqueid
+        Example: 04Nov25_k8m2p5
+        """
+        date_part = datetime.now().strftime(self.logging.custom_date_format)
+        unique_id = self.generate_unique_id()
+        return f"{date_part}_{unique_id}"
 
     def get_process_log_prefix(self, process_id):
         """Get simplified log file prefix."""
@@ -1091,26 +1121,27 @@ class ParallelTaskManager:
         self.shutdown_requested = False
 
         # Create timestamp for this session (used across all log files)
+        # Format: DDmmmYY_uniqueid (e.g., 04Nov25_k8m2p5)
         self.timestamp = self.config.get_custom_timestamp()
 
         self.logger = self._setup_logging()
 
-        self.summary_log_file = self.log_dir / f"parallelr_{self.process_id}_{self.timestamp}_summary.csv"
+        self.summary_log_file = self.log_dir / f"parallelr_{self.timestamp}_summary.csv"
         self._log_lock = threading.Lock()
         self._init_summary_log()
 
         self.log_task_output = log_task_output
-        self.task_results_file = self.log_dir / f"parallelr_{self.process_id}_{self.timestamp}_output.txt"
+        self.task_results_file = self.log_dir / f"parallelr_{self.timestamp}_output.txt"
 
     def _setup_logging(self):
         """Set up logging with size-based rotation."""
         import logging.handlers
 
-        logger = logging.getLogger(f'parallelr_{self.process_id}_{self.timestamp}')
+        logger = logging.getLogger(f'parallelr_{self.timestamp}')
         logger.setLevel(getattr(logging, self.config.logging.level.upper()))
         logger.handlers.clear()
 
-        log_filename = f'parallelr_{self.process_id}_{self.timestamp}.log'
+        log_filename = f'parallelr_{self.timestamp}.log'
         max_bytes = self.config.logging.max_log_size_mb * 1024 * 1024
         
         file_handler = logging.handlers.RotatingFileHandler(
@@ -1863,9 +1894,9 @@ Auto-Stop Protection:
 - Stop Limits: {stop_enabled}{stop_details}
 
 Log Files:
-- Main Log: {self.log_dir / f'parallelr_{self.process_id}_{self.timestamp}.log'} (rotating)
-- Summary: {self.summary_log_file} (session-specific)
-- Output: {self.task_results_file} (disable with --no-task-output-log)
+- Main Log: {self.log_dir / f'parallelr_{self.timestamp}.log'}
+- Summary: {self.summary_log_file}
+- Output: {self.task_results_file}
 
 Process Info:
 - Process ID: {self.process_id}

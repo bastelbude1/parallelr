@@ -34,7 +34,7 @@ logging:
   level: "INFO"               # Log level: DEBUG, INFO, WARNING, ERROR, CRITICAL
   console_format: "%(asctime)s - %(levelname)s - %(message)s"
   file_format: "%(asctime)s - %(name)s - %(levelname)s - [%(threadName)s] - %(message)s"
-  custom_date_format: "%d%b%y_%H%M%S"  # Format: 17Jun25_181623
+  custom_date_format: "%d%b%y"  # Date format (unique ID added automatically): 04Nov25_k8m2p5
   max_log_size_mb: 10         # Log file size before rotation (MB)
   backup_count: 5             # Number of backup log files to keep
 
