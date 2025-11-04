@@ -76,7 +76,8 @@ class TaskResult:
     """Data class for task execution results."""
     def __init__(self, task_file, command, start_time, end_time=None, status=None,
                  exit_code=None, stdout="", stderr="", error_message="", duration=0.0,
-                 worker_id=0, memory_usage=0.0, cpu_usage=0.0, env_vars=None, arguments=None):
+                 worker_id=0, memory_usage=0.0, cpu_usage=0.0, env_vars=None, arguments=None,
+                 stdout_truncated=False, stderr_truncated=False):
         self.task_file = task_file
         self.command = command
         self.start_time = start_time
@@ -92,6 +93,8 @@ class TaskResult:
         self.cpu_usage = cpu_usage
         self.env_vars = env_vars if env_vars is not None else {}
         self.arguments = arguments if arguments is not None else []
+        self.stdout_truncated = stdout_truncated
+        self.stderr_truncated = stderr_truncated
 
     def to_jsonl(self, session_id, process_id=None):
         """Convert task result to JSONL format.
@@ -939,8 +942,19 @@ class SecureTaskExecutor:
                 stdout = ''.join(stdout_lines)
                 stderr = ''.join(stderr_lines)
                 max_capture = self.config.limits.max_output_capture
-                result.stdout = stdout[-max_capture:] if stdout else ""
-                result.stderr = stderr[-max_capture:] if stderr else ""
+
+                # Track truncation for accurate reporting
+                if stdout and len(stdout) > max_capture:
+                    result.stdout_truncated = True
+                    result.stdout = stdout[-max_capture:]
+                else:
+                    result.stdout = stdout
+
+                if stderr and len(stderr) > max_capture:
+                    result.stderr_truncated = True
+                    result.stderr = stderr[-max_capture:]
+                else:
+                    result.stderr = stderr
 
                 # Update final metrics before logging
                 result.duration = (datetime.now() - result.start_time).total_seconds()
@@ -968,8 +982,20 @@ class SecureTaskExecutor:
                 stdout = ''.join(stdout_lines)
                 stderr = ''.join(stderr_lines)
                 max_capture = self.config.limits.max_output_capture
-                result.stdout = stdout[-max_capture:] if stdout else ""
-                result.stderr = stderr[-max_capture:] if stderr else ""
+
+                # Track truncation for accurate reporting
+                if stdout and len(stdout) > max_capture:
+                    result.stdout_truncated = True
+                    result.stdout = stdout[-max_capture:]
+                else:
+                    result.stdout = stdout
+
+                if stderr and len(stderr) > max_capture:
+                    result.stderr_truncated = True
+                    result.stderr = stderr[-max_capture:]
+                else:
+                    result.stderr = stderr
+
                 self._terminate_process()
         
         except SecurityError as e:
@@ -1830,9 +1856,9 @@ class ParallelTaskManager:
 
                         f.write("\nSTDOUT")
                         if result.stdout:
-                            # Check if output was truncated
+                            # Use precise truncation flag
                             stdout_len = len(result.stdout)
-                            if stdout_len >= max_capture:
+                            if result.stdout_truncated:
                                 f.write(f" (showing last {max_capture} characters):\n")
                             else:
                                 f.write(f" ({stdout_len} characters):\n")
@@ -1842,9 +1868,9 @@ class ParallelTaskManager:
 
                         f.write("\nSTDERR")
                         if result.stderr:
-                            # Check if output was truncated
+                            # Use precise truncation flag
                             stderr_len = len(result.stderr)
-                            if stderr_len >= max_capture:
+                            if result.stderr_truncated:
                                 f.write(f" (showing last {max_capture} characters):\n")
                             else:
                                 f.write(f" ({stderr_len} characters):\n")
