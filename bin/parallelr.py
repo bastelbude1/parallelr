@@ -947,12 +947,12 @@ class SecureTaskExecutor:
                 if result.exit_code == 0:
                     result.status = TaskStatus.SUCCESS
                     self.logger.info(f"Worker {self.worker_id} {progress_str}: Task completed successfully")
-                    self.logger.info(f"  Exit code: {result.exit_code}, Duration: {result.duration:.2f}s, Memory: {result.memory_usage:.1f}MB")
+                    self.logger.info(f"  Exit code: {result.exit_code}, Duration: {result.duration:.2f}s, Memory: {result.memory_usage:.1f}MB, CPU: {result.cpu_usage:.1f}%")
                 else:
                     result.status = TaskStatus.FAILED
                     result.error_message = "Exit code {}".format(result.exit_code)
                     self.logger.info(f"Worker {self.worker_id} {progress_str}: Task failed")
-                    self.logger.info(f"  Exit code: {result.exit_code}, Duration: {result.duration:.2f}s, Memory: {result.memory_usage:.1f}MB")
+                    self.logger.info(f"  Exit code: {result.exit_code}, Duration: {result.duration:.2f}s, Memory: {result.memory_usage:.1f}MB, CPU: {result.cpu_usage:.1f}%")
 
             except subprocess.TimeoutExpired:
                 result.status = TaskStatus.TIMEOUT
@@ -1803,6 +1803,7 @@ class ParallelTaskManager:
                         f.write(f"Exit Code: {result.exit_code}\n")
                         f.write(f"Duration: {result.duration:.2f}s\n")
                         f.write(f"Memory: {result.memory_usage:.2f}MB\n")
+                        f.write(f"CPU: {result.cpu_usage:.1f}%\n")
                         f.write(f"Start: {result.start_time}\n")
                         f.write(f"End: {result.end_time}\n")
                         if result.stdout:

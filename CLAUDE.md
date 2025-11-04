@@ -494,7 +494,7 @@ The tool provides detailed logging at execution time, matching the format and de
 - Progress tracking `[X/N]`
 - Environment variables with values (e.g., `SERVER=ukfr TASK_ID=1`)
 - Full command being executed
-- Exit code, duration, and memory usage on completion
+- Exit code, duration, memory usage (peak), and CPU usage (peak) on completion
 
 **Example Log Output:**
 ```text
@@ -502,7 +502,7 @@ The tool provides detailed logging at execution time, matching the format and de
 [2/3]: SERVER=ukfr TASK_ID=2 bash /path/to/template.sh ukfr 2
 [3/3]: SERVER=usny TASK_ID=3 bash /path/to/template.sh usny 3
 Worker 2 [2/3]: Task completed successfully
-  Exit code: 0, Duration: 0.51s, Memory: 3.2MB
+  Exit code: 0, Duration: 0.51s, Memory: 3.2MB, CPU: 15.5%
 ```
 
 This enhanced logging ensures all execution details are available in the log file for debugging and audit purposes, making it easy to reproduce exact task execution conditions. The one-line format matches dry run output exactly, providing consistency across modes.
