@@ -139,16 +139,17 @@ def test_timestamp_generates_different_values(temp_config_home):
 def test_log_filename_format():
     """Test that log filenames follow the new format."""
     # Simulate log filename generation
+    pid = 1314628
     timestamp = "04Nov25_k8m2p5"
 
-    main_log = f"parallelr_{timestamp}.log"
-    summary = f"parallelr_{timestamp}_summary.csv"
-    output = f"parallelr_{timestamp}_output.txt"
+    main_log = f"parallelr_{pid}_{timestamp}.log"
+    summary = f"parallelr_{pid}_{timestamp}_summary.csv"
+    output = f"parallelr_{pid}_{timestamp}_output.txt"
 
     # Verify format
-    assert main_log == "parallelr_04Nov25_k8m2p5.log"
-    assert summary == "parallelr_04Nov25_k8m2p5_summary.csv"
-    assert output == "parallelr_04Nov25_k8m2p5_output.txt"
+    assert main_log == "parallelr_1314628_04Nov25_k8m2p5.log"
+    assert summary == "parallelr_1314628_04Nov25_k8m2p5_summary.csv"
+    assert output == "parallelr_1314628_04Nov25_k8m2p5_output.txt"
 
 
 @pytest.mark.unit

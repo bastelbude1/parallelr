@@ -1128,22 +1128,22 @@ class ParallelTaskManager:
 
         self.logger = self._setup_logging()
 
-        self.summary_log_file = self.log_dir / f"parallelr_{self.timestamp}_summary.csv"
+        self.summary_log_file = self.log_dir / f"parallelr_{self.process_id}_{self.timestamp}_summary.csv"
         self._log_lock = threading.Lock()
         self._init_summary_log()
 
         self.log_task_output = log_task_output
-        self.task_results_file = self.log_dir / f"parallelr_{self.timestamp}_output.txt"
+        self.task_results_file = self.log_dir / f"parallelr_{self.process_id}_{self.timestamp}_output.txt"
 
     def _setup_logging(self):
         """Set up logging with size-based rotation."""
         import logging.handlers
 
-        logger = logging.getLogger(f'parallelr_{self.timestamp}')
+        logger = logging.getLogger(f'parallelr_{self.process_id}_{self.timestamp}')
         logger.setLevel(getattr(logging, self.config.logging.level.upper()))
         logger.handlers.clear()
 
-        log_filename = f'parallelr_{self.timestamp}.log'
+        log_filename = f'parallelr_{self.process_id}_{self.timestamp}.log'
         max_bytes = self.config.logging.max_log_size_mb * 1024 * 1024
         
         file_handler = logging.handlers.RotatingFileHandler(
@@ -1896,7 +1896,7 @@ Auto-Stop Protection:
 - Stop Limits: {stop_enabled}{stop_details}
 
 Log Files:
-- Main Log: {self.log_dir / f'parallelr_{self.timestamp}.log'}
+- Main Log: {self.log_dir / f'parallelr_{self.process_id}_{self.timestamp}.log'}
 - Summary: {self.summary_log_file}
 - Output: {self.task_results_file}
 

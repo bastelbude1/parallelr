@@ -315,13 +315,13 @@ python bin/parallelr.py -T ./tasks -C "python3 @TASK@"
 - **Script**: `bin/parallelr.py`
 - **Script config**: `cfg/parallelr.yaml`
 - **User config**: `~/parallelr/cfg/parallelr.yaml`
-- **Logs**: `~/parallelr/logs/parallelr_{date}_{unique_id}.log` (e.g., `parallelr_04Nov25_k8m2p5.log`)
-- **Summary**: `~/parallelr/logs/parallelr_{date}_{unique_id}_summary.csv`
-- **Task output**: `~/parallelr/logs/parallelr_{date}_{unique_id}_output.txt`
+- **Logs**: `~/parallelr/logs/parallelr_{pid}_{date}_{unique_id}.log` (e.g., `parallelr_1314628_04Nov25_k8m2p5.log`)
+- **Summary**: `~/parallelr/logs/parallelr_{pid}_{date}_{unique_id}_summary.csv`
+- **Task output**: `~/parallelr/logs/parallelr_{pid}_{date}_{unique_id}_output.txt`
 - **PID tracking**: `~/parallelr/pids/parallelr.pids`
 - **Workspace**: `~/parallelr/workspace/` or `~/parallelr/workspace/pid{PID}_worker{N}/`
 
-**Note**: Log files use a simplified naming format with date (DDmmmYY) and a 6-character unique identifier instead of PID and full timestamp. All log files are session-specific with unique names.
+**Note**: Log files include the process ID for easy tracking with `--list-workers`, followed by a simplified timestamp with date (DDmmmYY) and a 6-character unique identifier. All log files are session-specific with unique names.
 
 ## Key Implementation Details
 
