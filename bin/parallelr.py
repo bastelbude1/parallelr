@@ -180,6 +180,9 @@ class AdvancedConfig:
 class Configuration:
     """Configuration manager with script defaults and optional user overrides."""
 
+    # Alphabet for unique ID generation (32 chars, no ambiguous: 0/O, 1/l, i/I)
+    UNIQUE_ID_ALPHABET = 'abcdefghjkmnpqrstuvwxyz23456789'
+
     def __init__(self, script_path):
         self.script_name = Path(script_path).stem
         self.original_script_name = self._get_original_script_name(script_path)
@@ -588,12 +591,11 @@ class Configuration:
         uid = uuid.uuid4().hex
         # Take first 'length' characters and convert to alphanumeric
         # Use a subset that avoids confusion (no 0/O, 1/l, etc.)
-        alphabet = 'abcdefghjkmnpqrstuvwxyz23456789'  # 32 chars, no ambiguous
         result = ''
         for i in range(length):
             # Use hex chars as indices into our alphabet
-            idx = int(uid[i * 2:i * 2 + 2], 16) % len(alphabet)
-            result += alphabet[idx]
+            idx = int(uid[i * 2:i * 2 + 2], 16) % len(Configuration.UNIQUE_ID_ALPHABET)
+            result += Configuration.UNIQUE_ID_ALPHABET[idx]
         return result
 
     def get_custom_timestamp(self):

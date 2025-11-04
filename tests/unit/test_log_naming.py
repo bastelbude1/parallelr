@@ -49,13 +49,12 @@ def test_generate_unique_id_length():
 @pytest.mark.unit
 def test_generate_unique_id_alphanumeric():
     """Test that generate_unique_id returns only alphanumeric characters."""
-    # Test with default alphabet (no ambiguous chars)
-    alphabet = 'abcdefghjkmnpqrstuvwxyz23456789'
-
+    # Test with alphabet from Configuration (no ambiguous chars)
     for _ in range(10):  # Test multiple times
         uid = Configuration.generate_unique_id()
         for char in uid:
-            assert char in alphabet, f"Character '{char}' not in allowed alphabet"
+            assert char in Configuration.UNIQUE_ID_ALPHABET, \
+                f"Character '{char}' not in allowed alphabet"
 
 
 @pytest.mark.unit
@@ -115,10 +114,10 @@ def test_get_custom_timestamp_unique_id_part(temp_config_home):
     unique_id = parts[1]
     assert len(unique_id) == 6, f"Expected 6-char unique ID, got {len(unique_id)}: {unique_id}"
 
-    # Should only contain allowed characters
-    alphabet = 'abcdefghjkmnpqrstuvwxyz23456789'
+    # Should only contain allowed characters from Configuration.UNIQUE_ID_ALPHABET
     for char in unique_id:
-        assert char in alphabet, f"Character '{char}' not in allowed alphabet"
+        assert char in Configuration.UNIQUE_ID_ALPHABET, \
+            f"Character '{char}' not in allowed alphabet"
 
 
 @pytest.mark.unit
