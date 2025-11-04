@@ -126,7 +126,7 @@ def generate_csv(tasks, columns, output_file=None):
         for row in data_rows:
             writer.writerow(row)
     finally:
-        if output_file:
+        if output_file is not None:
             output.close()
 
 
@@ -204,8 +204,11 @@ def main():
     # Read JSONL file
     try:
         session, tasks = read_jsonl(args.jsonl_file)
-    except Exception as e:
+    except (IOError, OSError) as e:
         print(f"Error reading JSONL file: {e}", file=sys.stderr)
+        sys.exit(1)
+    except json.JSONDecodeError as e:
+        print(f"Error parsing JSONL file: {e}", file=sys.stderr)
         sys.exit(1)
 
     # Filter tasks if requested
