@@ -368,7 +368,7 @@ def test_pid_cleanup_on_invalid_command_template(temp_dir, isolated_env):
     task_file.write_text('#!/bin/bash\necho "test"\n')
     task_file.chmod(0o755)
 
-    # Try to run with invalid command (missing @TASK@ placeholder will cause issues)
+    # Try to run with invalid command (non-existent command will cause task failures)
     result = subprocess.run(
         [PYTHON_FOR_PARALLELR, str(PARALLELR_BIN),
          '-T', str(task_file),
