@@ -2087,8 +2087,11 @@ class ParallelTaskManager:
         # Resource monitoring info
         resource_info = ""
         if HAS_PSUTIL:
-            resource_info = f"""- Average Memory Usage: {avg_memory:.2f}MB
-- Peak Memory Usage: {max_memory:.2f}MB"""
+            # Calculate estimated maximum total memory usage across all workers
+            estimated_max_total_memory = max_memory * self.max_workers
+            resource_info = f"""- Average Memory Usage (per worker): {avg_memory:.2f}MB
+- Peak Memory Usage (per worker): {max_memory:.2f}MB
+- Estimated Max Total Memory ({self.max_workers} workers): {estimated_max_total_memory:.2f}MB"""
         else:
             resource_info = "- Memory/CPU monitoring: Not available (psutil not installed)"
 
