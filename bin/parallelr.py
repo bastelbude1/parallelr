@@ -93,15 +93,20 @@ class TaskResult:
         self.env_vars = env_vars if env_vars is not None else {}
         self.arguments = arguments if arguments is not None else []
 
-    def to_jsonl(self, session_id):
-        """Convert task result to JSONL format."""
+    def to_jsonl(self, session_id, process_id=None):
+        """Convert task result to JSONL format.
+
+        Args:
+            session_id: Session identifier
+            process_id: Manager's process ID (uses os.getpid() as fallback if None)
+        """
         return json.dumps({
             "type": "task",
             "session_id": session_id,
             "start_time": self.start_time.isoformat(),
             "end_time": self.end_time.isoformat() if self.end_time else None,
             "status": self.status.value,
-            "process_id": os.getpid(),
+            "process_id": process_id if process_id is not None else os.getpid(),
             "worker_id": self.worker_id,
             "task_file": str(self.task_file) if self.task_file else None,
             "command_executed": self.command,
@@ -1751,7 +1756,7 @@ class ParallelTaskManager:
             try:
                 with self._log_lock:
                     with open(str(self.results_file), 'a', encoding='utf-8') as f:
-                        f.write(result.to_jsonl(self.session_id) + '\n')
+                        f.write(result.to_jsonl(self.session_id, self.process_id) + '\n')
             except Exception as e:
                 self.logger.exception("Log write failed")
 
