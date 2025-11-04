@@ -75,9 +75,9 @@ class TaskStatus(Enum):
 
 class TaskResult:
     """Data class for task execution results."""
-    def __init__(self, task_file, command, start_time, end_time=None, status=None, 
+    def __init__(self, task_file, command, start_time, end_time=None, status=None,
                  exit_code=None, stdout="", stderr="", error_message="", duration=0.0,
-                 worker_id=0, memory_usage=0.0, cpu_usage=0.0):
+                 worker_id=0, memory_usage=0.0, cpu_usage=0.0, env_vars=None, arguments=None):
         self.task_file = task_file
         self.command = command
         self.start_time = start_time
@@ -91,14 +91,29 @@ class TaskResult:
         self.worker_id = worker_id
         self.memory_usage = memory_usage
         self.cpu_usage = cpu_usage
+        self.env_vars = env_vars if env_vars is not None else {}
+        self.arguments = arguments if arguments is not None else []
 
-    def to_log_line(self):
-        """Convert task result to CSV log line with process info."""
-        end_time_str = self.end_time.isoformat() if self.end_time else ''
-        exit_code_str = self.exit_code if self.exit_code is not None else ''
-        error_msg_str = self.error_message.replace(';', '|') if self.error_message else ''
-        
-        return f"{self.start_time.isoformat()};{end_time_str};{self.status.value};{os.getpid()};{self.worker_id};{self.task_file};{self.command};{exit_code_str};{self.duration:.2f};{self.memory_usage:.2f};{self.cpu_usage:.2f};{error_msg_str}"
+    def to_jsonl(self, session_id):
+        """Convert task result to JSONL format."""
+        return json.dumps({
+            "type": "task",
+            "session_id": session_id,
+            "start_time": self.start_time.isoformat(),
+            "end_time": self.end_time.isoformat() if self.end_time else None,
+            "status": self.status.value,
+            "process_id": os.getpid(),
+            "worker_id": self.worker_id,
+            "task_file": str(self.task_file) if self.task_file else None,
+            "command_executed": self.command,
+            "env_vars": self.env_vars,
+            "arguments": self.arguments,
+            "exit_code": self.exit_code,
+            "duration_seconds": round(self.duration, 2),
+            "memory_mb": round(self.memory_usage, 2),
+            "cpu_percent": round(self.cpu_usage, 2),
+            "error_message": self.error_message
+        }, ensure_ascii=False)
 
 class ParallelTaskExecutorError(Exception):
     pass
@@ -760,7 +775,7 @@ class SecureTaskExecutor:
     def execute(self):
         """Execute task with basic security and monitoring."""
         start_time = datetime.now()
-        
+
         result = TaskResult(
             task_file=self.task_file,
             command="",
@@ -774,7 +789,9 @@ class SecureTaskExecutor:
             duration=0.0,
             worker_id=self.worker_id,
             memory_usage=0.0,
-            cpu_usage=0.0
+            cpu_usage=0.0,
+            env_vars=self.extra_env if self.extra_env else {},
+            arguments=self.task_arguments if self.task_arguments else []
         )
 
         # fix buffer issue 
@@ -1031,8 +1048,8 @@ class ParallelTaskManager:
 
     def __init__(self, max_workers, timeout, task_start_delay, tasks_paths, command_template,
                  script_path, dry_run=False, enable_stop_limits=False, log_task_output=True,
-                 file_extension=None, arguments_file=None, env_var=None, separator=None, debug=False,
-                 no_search=False, yes_to_prompts=False):
+                 backup_inputs=True, file_extension=None, arguments_file=None, env_var=None,
+                 separator=None, debug=False, no_search=False, yes_to_prompts=False):
 
         self.config = Configuration.from_script(script_path)
         self.config.validate()
@@ -1063,6 +1080,7 @@ class ParallelTaskManager:
         self.file_extension = file_extension
         self.command_template = command_template
         self.dry_run = dry_run
+        self.backup_inputs = backup_inputs
         self.arguments_file = arguments_file
         self.env_var = env_var
         self.separator = separator
@@ -1095,9 +1113,14 @@ class ParallelTaskManager:
 
         self.logger = self._setup_logging()
 
-        self.summary_log_file = self.log_dir / f"parallelr_{self.process_id}_{self.timestamp}_summary.csv"
+        self.results_file = self.log_dir / f"parallelr_{self.process_id}_{self.timestamp}_results.jsonl"
+        self.session_id = f"{self.process_id}_{self.timestamp}"
         self._log_lock = threading.Lock()
-        self._init_summary_log()
+        self._init_results_file()
+
+        # Create backup of input files if enabled
+        if self.backup_inputs and not self.dry_run:
+            self._create_input_backup()
 
         self.log_task_output = log_task_output
         self.task_results_file = self.log_dir / f"parallelr_{self.process_id}_{self.timestamp}_output.txt"
@@ -1132,20 +1155,104 @@ class ParallelTaskManager:
         
         return logger
 
-    def _init_summary_log(self):
-        """Initialize the summary CSV log file."""
+    def _init_results_file(self):
+        """Initialize the JSONL results file with session metadata."""
         if not self.dry_run:
             try:
+                import socket
+                import getpass
+
+                session_metadata = {
+                    "type": "session",
+                    "session_id": self.session_id,
+                    "start_time": datetime.now().isoformat(),
+                    "hostname": socket.gethostname(),
+                    "user": getpass.getuser(),
+                    "command_template": self.command_template,
+                    "task_directories": [str(p) for p in self.tasks_paths] if self.tasks_paths else [],
+                    "arguments_file": str(self.arguments_file) if self.arguments_file else None,
+                    "env_var": self.env_var,
+                    "file_extension": self.file_extension,
+                    "separator": self.separator,
+                    "config": {
+                        "max_workers": self.max_workers,
+                        "timeout_seconds": self.timeout,
+                        "task_start_delay": self.task_start_delay,
+                        "max_output_capture": self.config.limits.max_output_capture,
+                        "workspace_isolation": self.config.execution.workspace_isolation,
+                        "stop_limits_enabled": self.config.limits.stop_limits_enabled
+                    }
+                }
+
                 with self._log_lock:
-                    with open(str(self.summary_log_file), 'w', newline='', encoding='utf-8') as f:
-                        writer = csv.writer(f, delimiter=';')
-                        writer.writerow([
-                            'start_time', 'end_time', 'status', 'process_id', 'worker_id',
-                            'task_file', 'command', 'exit_code', 'duration_seconds',
-                            'memory_mb', 'cpu_percent', 'error_message'
-                        ])
+                    with open(str(self.results_file), 'w', encoding='utf-8') as f:
+                        f.write(json.dumps(session_metadata, ensure_ascii=False) + '\n')
             except Exception as e:
-                raise ParallelTaskExecutorError(f"Failed to init summary log: {e}") from e
+                raise ParallelTaskExecutorError(f"Failed to init results file: {e}") from e
+
+    def _create_input_backup(self):
+        """Create backup of input files for reproducibility."""
+        import shutil
+
+        try:
+            # Create backup directory
+            backup_root = Path.home() / 'parallelr' / 'backups'
+            backup_dir = backup_root / f"parallelr_{self.process_id}_{self.timestamp}"
+            backup_dir.mkdir(parents=True, exist_ok=True)
+
+            # Backup task directories if specified
+            if self.tasks_paths:
+                tasks_backup = backup_dir / 'tasks'
+                tasks_backup.mkdir(exist_ok=True)
+
+                for task_path in self.tasks_paths:
+                    task_path = Path(task_path)
+                    if task_path.exists():
+                        if task_path.is_dir():
+                            # Copy entire directory
+                            dest = tasks_backup / task_path.name
+                            if dest.exists():
+                                shutil.rmtree(dest)
+                            shutil.copytree(task_path, dest)
+                            self.logger.info(f"Backed up task directory: {task_path} -> {dest}")
+                        else:
+                            # Copy single file
+                            shutil.copy2(task_path, tasks_backup / task_path.name)
+                            self.logger.info(f"Backed up task file: {task_path}")
+
+            # Backup arguments file if specified
+            if self.arguments_file:
+                arg_file = Path(self.arguments_file)
+                if arg_file.exists():
+                    shutil.copy2(arg_file, backup_dir / 'arguments.txt')
+                    self.logger.info(f"Backed up arguments file: {arg_file}")
+
+            # Save session metadata to backup
+            session_meta_file = backup_dir / 'session.json'
+            with open(str(session_meta_file), 'w', encoding='utf-8') as f:
+                import socket
+                import getpass
+
+                metadata = {
+                    "session_id": self.session_id,
+                    "timestamp": self.timestamp,
+                    "hostname": socket.gethostname(),
+                    "user": getpass.getuser(),
+                    "command_template": self.command_template,
+                    "task_directories": [str(p) for p in self.tasks_paths] if self.tasks_paths else [],
+                    "arguments_file": str(self.arguments_file) if self.arguments_file else None,
+                    "env_var": self.env_var,
+                    "separator": self.separator,
+                    "file_extension": self.file_extension
+                }
+                json.dump(metadata, f, indent=2, ensure_ascii=False)
+                self.logger.info(f"Saved session metadata to: {session_meta_file}")
+
+            self.logger.info(f"Input backup created at: {backup_dir}")
+
+        except Exception as e:
+            # Don't fail execution if backup fails, just log warning
+            self.logger.warning(f"Failed to create input backup: {e}")
 
     def _validate_argument_placeholders(self, num_args):
         """Validate that command template placeholders match available arguments."""
@@ -1626,19 +1733,17 @@ class ParallelTaskManager:
                 del self.futures[future]
 
     def _log_task_result(self, result):
-        """Log task result to summary file."""
+        """Log task result to JSONL results file."""
         if not self.dry_run:
             try:
                 with self._log_lock:
-                    with open(str(self.summary_log_file), 'a', newline='', encoding='utf-8') as f:
-                        f.write(result.to_log_line() + '\n')
+                    with open(str(self.results_file), 'a', encoding='utf-8') as f:
+                        f.write(result.to_jsonl(self.session_id) + '\n')
             except Exception as e:
                 self.logger.exception("Log write failed")
 
         if self.log_task_output and not self.dry_run:
             try:
-                timestamp = self.config.get_custom_timestamp()
-                #task_results_file = self.log_dir / f"TaskResults_{self.process_id}_{timestamp}.txt"
                 with self._log_lock:
                     with open(str(self.task_results_file), 'a', encoding='utf-8') as f:
                         f.write(f"\n{'='*80}\n")
@@ -1864,7 +1969,7 @@ Auto-Stop Protection:
 
 Log Files:
 - Main Log: {self.log_dir / f'parallelr_{self.process_id}_{self.timestamp}.log'}
-- Summary: {self.summary_log_file}
+- Results: {self.results_file}
 - Output: {self.task_results_file}
 
 Process Info:
@@ -1974,7 +2079,7 @@ def list_workers(script_path):
 
     print(f"Found {len(running_pids)} running {script_name} process(es):")
     print()
-    print(f"{'PID':<8} {'Status':<10} {'Start Time':<20} {'Log File':<30} {'Summary File'}")
+    print(f"{'PID':<8} {'Status':<10} {'Start Time':<20} {'Log File':<30} {'Results File'}")
     print("-" * 100)
     
     for pid in running_pids:
@@ -2006,15 +2111,15 @@ def list_workers(script_path):
             else:
                 log_file = "no log found"
 
-            # Find most recent summary file for this PID
-            summary_pattern = f"parallelr_{pid}_*_summary.csv"
-            summary_files = list(log_dir.glob(summary_pattern))
-            if summary_files:
-                summary_file = max(summary_files, key=lambda f: f.stat().st_mtime).name
+            # Find most recent results file for this PID
+            results_pattern = f"parallelr_{pid}_*_results.jsonl"
+            results_files = list(log_dir.glob(results_pattern))
+            if results_files:
+                results_file = max(results_files, key=lambda f: f.stat().st_mtime).name
             else:
-                summary_file = "no summary found"
+                results_file = "no results found"
 
-            print(f"{pid:<8} {status:<10} {start_time:<20} {log_file:<30} {summary_file}")
+            print(f"{pid:<8} {status:<10} {start_time:<20} {log_file:<30} {results_file}")
             
         except Exception as e:
             print(f"{pid:<8} {'error':<10} {'unknown':<20} {'error reading info':<30} {str(e)}")
@@ -2022,7 +2127,7 @@ def list_workers(script_path):
     print()
     print("Commands:")
     print(f"  View logs:        tail -f {config.get_log_directory()}/parallelr_<PID>_*.log")
-    print(f"  View progress:    tail -f {config.get_log_directory()}/parallelr_<PID>_*_summary.csv")
+    print(f"  View results:     tail -f {config.get_log_directory()}/parallelr_<PID>_*_results.jsonl")
     print(f"  Kill specific:    python {script_name} -k <PID>")
     print(f"  Kill all:         python {script_name} -k")
 
@@ -2255,6 +2360,9 @@ Examples:
 
     parser.add_argument('--no-task-output-log', action='store_true',
                        help='Disable detailed task output logging to output file')
+
+    parser.add_argument('--no-backup-inputs', action='store_true',
+                       help='Disable automatic backup of input files (tasks, arguments, config)')
 
     parser.add_argument('--no-search', '--no-fallback', action='store_true',
                        dest='no_search',
@@ -2591,6 +2699,7 @@ def main():
             dry_run=not args.run,
             enable_stop_limits=args.enable_stop_limits,
             log_task_output=not args.no_task_output_log,
+            backup_inputs=not args.no_backup_inputs,
             file_extension=args.file_extension,
             arguments_file=args.arguments_file,
             env_var=args.env_var,

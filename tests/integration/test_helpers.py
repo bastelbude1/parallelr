@@ -2,13 +2,13 @@
 Test helper functions for integration tests.
 
 Provides utilities for:
-- CSV summary parsing and validation
+- JSONL results parsing and validation
 - Output log file reading
-- Summary statistics extraction
+- Results statistics extraction
 - Common assertion patterns
 """
 
-import csv
+import json
 import re
 import os
 import time
@@ -16,24 +16,25 @@ from pathlib import Path
 from typing import Dict, List, Optional, Any
 
 
-def extract_log_path_from_stdout(stdout: str, log_type: str = 'summary') -> Optional[str]:
+def extract_log_path_from_stdout(stdout: str, log_type: str = 'results') -> Optional[str]:
     """
     Extract log file path from command stdout.
 
     Args:
         stdout: Command stdout output
-        log_type: Type of log to extract ('summary', 'output', or 'main')
+        log_type: Type of log to extract ('results', 'output', or 'main')
 
     Returns:
         Path to log file or None if not found
 
     Example:
-        >>> stdout = "- Summary: /path/to/summary.csv"
-        >>> extract_log_path_from_stdout(stdout, 'summary')
-        '/path/to/summary.csv'
+        >>> stdout = "- Results: /path/to/results.jsonl"
+        >>> extract_log_path_from_stdout(stdout, 'results')
+        '/path/to/results.jsonl'
     """
     patterns = {
-        'summary': r'- Summary:\s+(.+\.csv)',
+        'results': r'- Results:\s+(.+\.jsonl)',
+        'summary': r'- Results:\s+(.+\.jsonl)',  # Backwards compatibility alias
         'output': r'- Output:\s+(.+\.txt)',
         'main': r'- Main Log:\s+(.+\.log)'
     }
@@ -65,45 +66,63 @@ def wait_for_file(file_path: str, timeout: float = 2.0, interval: float = 0.1) -
     return os.path.exists(file_path)
 
 
-def parse_csv_summary(csv_path: str, wait_for_file_flag: bool = True) -> List[Dict[str, Any]]:
+def parse_jsonl_results(jsonl_path: str, wait_for_file_flag: bool = True) -> List[Dict[str, Any]]:
     """
-    Parse CSV summary file and return list of task records.
+    Parse JSONL results file and return session metadata and task records.
 
     Args:
-        csv_path: Path to CSV summary file
+        jsonl_path: Path to JSONL results file
         wait_for_file_flag: If True, wait for file to exist (default: True)
 
     Returns:
         List of dictionaries, each representing a task record with fields:
         - start_time, end_time, status, process_id, worker_id, task_file,
-          command, exit_code, duration_seconds, memory_mb, cpu_percent, error_message
+          command_executed, exit_code, duration_seconds, memory_mb, cpu_percent,
+          error_message, env_vars (dict), arguments (list)
 
     Raises:
-        FileNotFoundError: If CSV file doesn't exist
-        ValueError: If CSV format is invalid
+        FileNotFoundError: If JSONL file doesn't exist
+        ValueError: If JSONL format is invalid
     """
     if wait_for_file_flag:
-        if not wait_for_file(csv_path):
-            raise FileNotFoundError(f"CSV summary file not found: {csv_path}")
+        if not wait_for_file(jsonl_path):
+            raise FileNotFoundError(f"JSONL results file not found: {jsonl_path}")
 
-    with open(csv_path, 'r', encoding='utf-8') as f:
-        reader = csv.DictReader(f, delimiter=';')
-        records = list(reader)
+    tasks = []
+    with open(jsonl_path, 'r', encoding='utf-8') as f:
+        for line in f:
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                data = json.loads(line)
+                # Skip session metadata line, only collect task records
+                if data.get('type') == 'task':
+                    tasks.append(data)
+            except json.JSONDecodeError as e:
+                raise ValueError(f"Invalid JSON in results file: {e}")
 
-    # Convert numeric fields
-    for record in records:
-        if 'exit_code' in record and record['exit_code']:
-            record['exit_code'] = int(record['exit_code'])
-        if 'duration_seconds' in record and record['duration_seconds']:
-            record['duration_seconds'] = float(record['duration_seconds'])
-        if 'memory_mb' in record and record['memory_mb']:
-            record['memory_mb'] = float(record['memory_mb'])
-        if 'cpu_percent' in record and record['cpu_percent']:
-            record['cpu_percent'] = float(record['cpu_percent'])
-        if 'worker_id' in record and record['worker_id']:
-            record['worker_id'] = int(record['worker_id'])
+    return tasks
 
-    return records
+
+def parse_csv_summary(csv_path: str, wait_for_file_flag: bool = True) -> List[Dict[str, Any]]:
+    """
+    Backwards compatibility wrapper for parse_jsonl_results.
+
+    DEPRECATED: Use parse_jsonl_results() instead.
+
+    Args:
+        csv_path: Path to JSONL results file (despite the name)
+        wait_for_file_flag: If True, wait for file to exist (default: True)
+
+    Returns:
+        List of task record dictionaries
+
+    Raises:
+        FileNotFoundError: If file doesn't exist
+        ValueError: If format is invalid
+    """
+    return parse_jsonl_results(csv_path, wait_for_file_flag)
 
 
 def verify_csv_row(row: Dict[str, Any], expected: Dict[str, Any],
@@ -253,12 +272,12 @@ def parse_execution_message(stdout: str) -> Dict[str, int]:
     }
 
 
-def verify_csv_completeness(csv_records: List[Dict], expected_count: int) -> bool:
+def verify_results_completeness(results_records: List[Dict], expected_count: int) -> bool:
     """
-    Verify CSV has the expected number of complete records.
+    Verify JSONL results have the expected number of complete records.
 
     Args:
-        csv_records: List of CSV record dictionaries
+        results_records: List of task record dictionaries from JSONL
         expected_count: Expected number of records
 
     Returns:
@@ -267,29 +286,41 @@ def verify_csv_completeness(csv_records: List[Dict], expected_count: int) -> boo
     Raises:
         AssertionError: If count doesn't match or records are incomplete
     """
-    if len(csv_records) != expected_count:
+    if len(results_records) != expected_count:
         raise AssertionError(
-            f"CSV record count mismatch: expected {expected_count}, "
-            f"got {len(csv_records)}"
+            f"Results record count mismatch: expected {expected_count}, "
+            f"got {len(results_records)}"
         )
 
     required_fields = [
         'start_time', 'end_time', 'status', 'process_id', 'worker_id',
-        'command', 'exit_code', 'duration_seconds'
+        'command_executed', 'exit_code', 'duration_seconds'
     ]
 
-    for i, record in enumerate(csv_records):
+    for i, record in enumerate(results_records):
         for field in required_fields:
             if field not in record:
                 raise AssertionError(
-                    f"CSV record {i} missing required field: {field}"
+                    f"Results record {i} missing required field: {field}"
                 )
-            if record[field] == '' and field not in ['error_message', 'task_file']:
-                raise AssertionError(
-                    f"CSV record {i} has empty value for required field: {field}"
-                )
+            # Allow None for task_file, error_message (optional fields)
+            if record[field] is None and field not in ['task_file', 'error_message']:
+                # Some fields can be None in certain cases
+                if field not in ['end_time']:  # end_time can be None if task is still running
+                    raise AssertionError(
+                        f"Results record {i} has None value for required field: {field}"
+                    )
 
     return True
+
+
+def verify_csv_completeness(csv_records: List[Dict], expected_count: int) -> bool:
+    """
+    DEPRECATED: Use verify_results_completeness() instead.
+
+    Backwards compatibility wrapper for verify_results_completeness.
+    """
+    return verify_results_completeness(csv_records, expected_count)
 
 
 def verify_all_tasks_succeeded(csv_records: List[Dict]) -> bool:
