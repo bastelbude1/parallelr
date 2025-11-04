@@ -181,7 +181,8 @@ class Configuration:
     """Configuration manager with script defaults and optional user overrides."""
 
     # Alphabet for unique ID generation (32 chars, no ambiguous: 0/O, 1/l, i/I)
-    UNIQUE_ID_ALPHABET = 'abcdefghjkmnpqrstuvwxyz23456789'
+    # Lowercase 'o' is acceptable (distinguishable from '0' in most fonts)
+    UNIQUE_ID_ALPHABET = 'abcdefghjkmnopqrstuvwxyz23456789'
 
     def __init__(self, script_path):
         self.script_name = Path(script_path).stem
