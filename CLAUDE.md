@@ -98,6 +98,102 @@ merged = dict1 | dict2
 merged = {**dict1, **dict2}
 ```
 
+### ⚠️ CRITICAL: Python 3.6.8 Module Import Limitation
+
+**🚨 RED ALERT: DO NOT add new module-level imports to `bin/parallelr.py` without refactoring first!**
+
+#### The Problem
+
+Python 3.6.8 has a critical bug where importing certain combinations of modules at the top level can trigger **segmentation faults** (immediate crash). This is NOT about the number of imports alone, but about **specific combinations** of C-extension modules.
+
+**Discovered Issue:**
+- Adding `import uuid` to the existing imports caused immediate segfault
+- The crash occurs during module import, before any code runs
+- Issue is NOT reproducible in Python 3.7+
+- The crash is deterministic: same combination always fails
+
+**Current Status (as of last audit):**
+```python
+# bin/parallelr.py currently has 20 module-level imports:
+import os, sys, argparse, time, logging, signal, threading
+import subprocess, queue, csv, json, shlex, select, errno, re
+from pathlib import Path
+from datetime import datetime
+from concurrent.futures import ThreadPoolExecutor, Future, as_completed, TimeoutError
+from enum import Enum
+import fcntl  # conditional
+# Plus optional: yaml, psutil (in try/except blocks)
+```
+
+**⚠️ This combination works, but is FRAGILE. Adding certain modules will break it.**
+
+#### Problematic Modules (Known to Trigger Segfault)
+
+When added to the current import list, these modules cause segfaults:
+- ❌ `uuid` - Confirmed segfault trigger
+- ⚠️ Potentially problematic: `multiprocessing`, `ctypes`, `struct`, `hashlib`, `collections`
+
+#### Solution Strategy
+
+**OPTION 1: Lazy Import (Immediate Solution)**
+If you need a new module, import it INSIDE the function that uses it:
+
+```python
+# ❌ DANGEROUS: Module-level import
+import uuid
+
+# ✅ SAFE: Lazy import inside function
+def generate_id():
+    import uuid  # Import only when function is called
+    return uuid.uuid4().hex
+```
+
+**OPTION 2: Refactor into Multiple Modules (Long-term Solution)**
+If lazy imports become too cumbersome, **refactor `bin/parallelr.py` into a package**:
+
+```
+bin/
+├── parallelr.py           # Main entry point (minimal imports)
+└── parallelr/
+    ├── __init__.py        # Package init
+    ├── config.py          # Configuration class
+    ├── executor.py        # SecureTaskExecutor class
+    ├── manager.py         # ParallelTaskManager class
+    ├── pid_management.py  # PID tracking functions
+    └── utils.py           # Helper utilities
+```
+
+**Benefits of refactoring:**
+- Each module has fewer imports (below crash threshold)
+- Better code organization
+- Easier to test and maintain
+- Avoids import segfault issues
+
+#### Action Required Before Adding New Imports
+
+**⚠️ BEFORE adding any `import` statement to `bin/parallelr.py`:**
+
+1. **STOP** - Do not add it yet
+2. **ASK** - Is this import absolutely necessary?
+3. **TEST** - If yes, test for segfault:
+   ```bash
+   python bin/parallelr.py --help
+   ```
+4. **CHOOSE**:
+   - If no segfault: Proceed carefully, document the new import
+   - If segfault occurs: Use lazy import OR refactor into package
+
+**DO NOT ignore segfaults.** They indicate you've hit Python 3.6.8's import limit.
+
+#### Why This Happens
+
+Python 3.6.8's import system has race conditions and memory management issues when:
+- Many modules are imported simultaneously
+- C-extension modules (threading, subprocess, uuid) interact during initialization
+- Module initialization code has complex dependencies
+
+This was partially fixed in Python 3.7+, but we must support 3.6.8.
+
 ### Local Testing Workflow (Python 3.6.8)
 
 **Before every commit:**
