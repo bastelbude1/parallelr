@@ -497,7 +497,7 @@ The tool provides detailed logging at execution time, matching the format and de
 - Exit code, duration, and memory usage on completion
 
 **Example Log Output:**
-```
+```text
 [1/3]: SERVER=ukfr TASK_ID=1 bash /path/to/template.sh ukfr 1
 [2/3]: SERVER=ukfr TASK_ID=2 bash /path/to/template.sh ukfr 2
 [3/3]: SERVER=usny TASK_ID=3 bash /path/to/template.sh usny 3
