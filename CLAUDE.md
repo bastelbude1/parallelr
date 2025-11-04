@@ -479,6 +479,35 @@ Process termination follows a graceful pattern (parallelr.py:656-666):
 ### Output Capture
 Uses non-blocking I/O with `fcntl` and `select` to capture stdout/stderr in real-time without blocking on subprocess I/O (parallelr.py:543-595). This prevents buffer overflow issues.
 
+### Enhanced Logging
+The tool provides detailed logging at execution time, matching the level of detail shown in dry run mode:
+
+**Session Start Logging:**
+- Command template being used
+- Task directories or arguments file
+- Environment variables configuration
+- Workers, timeout, and workspace settings
+- Auto-stop limits (if enabled)
+
+**Task Execution Logging (per task):**
+- Worker ID and progress tracking `[X/N]`
+- Task file path
+- Environment variables with values (e.g., `SERVER=ukfr TASK_ID=1`)
+- Full command being executed
+- Exit code, duration, and memory usage on completion
+
+**Example Log Output:**
+```
+Worker 1 [1/3]: Starting task
+  Task file: /path/to/template.sh
+  Environment: SERVER=ukfr TASK_ID=1
+  Command: bash /path/to/template.sh ukfr 1
+Worker 1 [1/3]: Task completed successfully
+  Exit code: 0, Duration: 0.51s, Memory: 3.2MB
+```
+
+This enhanced logging ensures all execution details are available in the log file for debugging and audit purposes, making it easy to reproduce exact task execution conditions.
+
 ### Security Validation
 - Task files are validated for size (max 1MB by default)
 - Command arguments are parsed with `shlex.split()` to prevent injection
