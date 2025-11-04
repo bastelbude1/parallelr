@@ -5,6 +5,7 @@ Tests that the tool properly sanitizes and validates inputs to prevent
 command injection attacks.
 """
 
+import re
 import subprocess
 from pathlib import Path
 import pytest
