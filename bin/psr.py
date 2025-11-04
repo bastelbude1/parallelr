@@ -83,11 +83,11 @@ def filter_tasks(tasks, filter_expr):
 
 def generate_csv(tasks, columns, output_file=None):
     """Generate CSV output with specified columns."""
-    # Default columns (backwards compatible with old CSV format)
+    # Default columns
     if not columns:
         columns = [
             'start_time', 'end_time', 'status', 'process_id', 'worker_id',
-            'task_file', 'command_executed', 'exit_code', 'duration_seconds',
+            'command_executed', 'exit_code', 'duration_seconds',
             'memory_mb', 'cpu_percent', 'error_message'
         ]
     else:
