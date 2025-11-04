@@ -380,7 +380,9 @@ def test_pid_cleanup_on_invalid_command_template(temp_dir, isolated_env):
         timeout=30
     )
 
-    # Execution completes (parallelr handles task failures gracefully)
+    # parallelr completes even with failing tasks
+    assert result.returncode == 0, f"parallelr should complete gracefully: {result.stderr}"
+
     # PID should be cleaned up
     pid_file = isolated_env['pid_file']
     if pid_file.exists():
