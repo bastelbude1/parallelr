@@ -60,7 +60,7 @@ def test_csv_summary_all_required_fields(sample_task_dir, isolated_env):
     # Define required fields
     required_fields = [
         'start_time', 'end_time', 'status', 'process_id', 'worker_id',
-        'task_file', 'command', 'exit_code', 'duration_seconds',
+        'task_file', 'command_executed', 'exit_code', 'duration_seconds',
         'memory_mb', 'cpu_percent', 'error_message'
     ]
 
@@ -115,8 +115,8 @@ def test_csv_summary_field_data_types(sample_task_dir, isolated_env):
         # String fields
         assert isinstance(record['status'], str), \
             f"Record {i}: status should be str, got {type(record['status'])}"
-        assert isinstance(record['command'], str), \
-            f"Record {i}: command should be str, got {type(record['command'])}"
+        assert isinstance(record['command_executed'], str), \
+            f"Record {i}: command_executed should be str, got {type(record['command_executed'])}"
 
 @pytest.mark.integration
 def test_csv_summary_timestamp_format(sample_task_dir, isolated_env):
