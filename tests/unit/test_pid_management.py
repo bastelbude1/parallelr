@@ -14,10 +14,7 @@ from pathlib import Path
 import tempfile
 import pytest
 
-# Add parent directory to path for imports
-sys.path.insert(0, str(Path(__file__).parent.parent.parent / 'bin'))
-
-# Import after path is set
+# Import parallelr module (path set up in conftest.py)
 import parallelr
 from parallelr import Configuration
 

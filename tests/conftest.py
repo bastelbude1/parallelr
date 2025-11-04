@@ -15,6 +15,12 @@ import pytest
 PROJECT_ROOT = Path(__file__).parent.parent
 PARALLELR_BIN = PROJECT_ROOT / 'bin' / 'parallelr.py'
 
+# Add bin directory to sys.path for direct imports of parallelr module in unit tests
+# This is done once at conftest level to avoid per-test-file path manipulation
+BIN_DIR = PROJECT_ROOT / 'bin'
+if str(BIN_DIR) not in sys.path:
+    sys.path.insert(0, str(BIN_DIR))
+
 
 def get_python_for_parallelr():
     """
