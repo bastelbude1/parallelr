@@ -2,7 +2,7 @@
 """
 Parallelr Summary Report (PSR) - Standalone JSONL to CSV reporting tool
 
-Reads parallelr results files in JSONL format and generates CSV reports
+Reads parallelr results files in JSONL format and generates tab-delimited CSV reports
 with customizable columns and filtering.
 """
 
@@ -82,7 +82,7 @@ def filter_tasks(tasks, filter_expr):
 
 
 def generate_csv(tasks, columns, output_file=None):
-    """Generate CSV output with specified columns."""
+    """Generate tab-delimited CSV output with specified columns."""
     # Default columns
     if not columns:
         columns = [
@@ -97,7 +97,7 @@ def generate_csv(tasks, columns, output_file=None):
     output = sys.stdout if output_file is None else open(output_file, 'w', newline='', encoding='utf-8')
 
     try:
-        writer = csv.writer(output)
+        writer = csv.writer(output, delimiter='\t')
 
         # Write header
         writer.writerow(columns)
@@ -160,7 +160,7 @@ def print_statistics(session, tasks):
 
 def main():
     parser = argparse.ArgumentParser(
-        description='Parallelr Summary Report - Generate CSV reports from JSONL results',
+        description='Parallelr Summary Report - Generate tab-delimited CSV reports from JSONL results',
         epilog='Examples:\n'
                '  %(prog)s results.jsonl\n'
                '  %(prog)s results.jsonl --columns start_time,status,env_vars.TASK_ID,exit_code\n'
