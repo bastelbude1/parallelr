@@ -1805,17 +1805,53 @@ class ParallelTaskManager:
                         f.write(f"Task: {result.task_file}\n")
                         f.write(f"Worker: {result.worker_id}\n")
                         f.write(f"Command: {result.command}\n")
-                        f.write(f"Status: {result.status.value}\n")
-                        f.write(f"Exit Code: {result.exit_code}\n")
-                        f.write(f"Duration: {result.duration:.2f}s\n")
-                        f.write(f"Memory: {result.memory_usage:.2f}MB\n")
-                        f.write(f"CPU: {result.cpu_usage:.1f}%\n")
-                        f.write(f"Start: {result.start_time}\n")
-                        f.write(f"End: {result.end_time}\n")
+
+                        # Add command-line parameters section
+                        f.write(f"\nCommand-Line Parameters:\n")
+                        f.write(f"  -C (Command template): {self.command_template}\n")
+                        if self.tasks_paths:
+                            f.write(f"  -T (Task paths): {', '.join(str(p) for p in self.tasks_paths)}\n")
+                        if self.arguments_file:
+                            f.write(f"  -A (Arguments file): {self.arguments_file}\n")
+                        if self.env_var:
+                            f.write(f"  -E (Environment vars): {self.env_var}\n")
+
+                        f.write(f"\nExecution Results:\n")
+                        f.write(f"  Status: {result.status.value}\n")
+                        f.write(f"  Exit Code: {result.exit_code}\n")
+                        f.write(f"  Duration: {result.duration:.2f}s\n")
+                        f.write(f"  Memory: {result.memory_usage:.2f}MB\n")
+                        f.write(f"  CPU: {result.cpu_usage:.1f}%\n")
+                        f.write(f"  Start: {result.start_time}\n")
+                        f.write(f"  End: {result.end_time}\n")
+
+                        # Improved stdout/stderr with truncation info
+                        max_capture = self.config.limits.max_output_capture
+
+                        f.write(f"\nSTDOUT")
                         if result.stdout:
-                            f.write(f"\nSTDOUT:\n{result.stdout}\n")
+                            # Check if output was truncated
+                            stdout_len = len(result.stdout)
+                            if stdout_len >= max_capture:
+                                f.write(f" (showing last {max_capture} characters):\n")
+                            else:
+                                f.write(f" ({stdout_len} characters):\n")
+                            f.write(f"{result.stdout}\n")
+                        else:
+                            f.write(f" (no output)\n")
+
+                        f.write(f"\nSTDERR")
                         if result.stderr:
-                            f.write(f"\nSTDERR:\n{result.stderr}\n")
+                            # Check if output was truncated
+                            stderr_len = len(result.stderr)
+                            if stderr_len >= max_capture:
+                                f.write(f" (showing last {max_capture} characters):\n")
+                            else:
+                                f.write(f" ({stderr_len} characters):\n")
+                            f.write(f"{result.stderr}\n")
+                        else:
+                            f.write(f" (no output)\n")
+
                         if result.error_message:
                             f.write(f"\nERROR: {result.error_message}\n")
             except Exception as e:
