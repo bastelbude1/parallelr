@@ -34,7 +34,6 @@ import signal
 import threading
 import subprocess
 import queue
-import csv
 import json
 import shlex
 import select
