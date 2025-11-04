@@ -2,14 +2,13 @@
 """
 Parallelr Summary Report (PSR) - Standalone JSONL to CSV reporting tool
 
-Reads parallelr results files in JSONL format and generates tab-delimited CSV reports
+Reads parallelr results files in JSONL format and generates aligned column reports
 with customizable columns and filtering.
 """
 
 import sys
 import json
 import argparse
-import csv
 from pathlib import Path
 
 
@@ -82,7 +81,7 @@ def filter_tasks(tasks, filter_expr):
 
 
 def generate_csv(tasks, columns, output_file=None):
-    """Generate tab-delimited CSV output with specified columns."""
+    """Generate aligned column output with specified columns."""
     # Default columns
     if not columns:
         columns = [
@@ -93,28 +92,46 @@ def generate_csv(tasks, columns, output_file=None):
     else:
         columns = [c.strip() for c in columns.split(',')]
 
+    # Collect all data rows first
+    data_rows = []
+    for task in tasks:
+        row = []
+        for col in columns:
+            value = get_nested_value(task, col)
+            # Convert None to empty string, handle special types
+            if value is None:
+                row.append('')
+            elif isinstance(value, (dict, list)):
+                row.append(json.dumps(value))
+            else:
+                row.append(str(value))
+        data_rows.append(row)
+
+    # Calculate maximum width for each column (header and data)
+    col_widths = []
+    for i, col_name in enumerate(columns):
+        max_width = len(col_name)  # Start with header width
+        for row in data_rows:
+            if i < len(row):
+                max_width = max(max_width, len(row[i]))
+        col_widths.append(max_width)
+
     # Prepare output
-    output = sys.stdout if output_file is None else open(output_file, 'w', newline='', encoding='utf-8')
+    output = sys.stdout if output_file is None else open(output_file, 'w', encoding='utf-8')
 
     try:
-        writer = csv.writer(output, delimiter='\t')
+        # Write header with aligned columns
+        header_parts = []
+        for i, col_name in enumerate(columns):
+            header_parts.append(col_name.ljust(col_widths[i]))
+        output.write('  '.join(header_parts) + '\n')
 
-        # Write header
-        writer.writerow(columns)
-
-        # Write data rows
-        for task in tasks:
-            row = []
-            for col in columns:
-                value = get_nested_value(task, col)
-                # Convert None to empty string, handle special types
-                if value is None:
-                    row.append('')
-                elif isinstance(value, (dict, list)):
-                    row.append(json.dumps(value))
-                else:
-                    row.append(str(value))
-            writer.writerow(row)
+        # Write data rows with aligned columns
+        for row in data_rows:
+            row_parts = []
+            for i, value in enumerate(row):
+                row_parts.append(value.ljust(col_widths[i]))
+            output.write('  '.join(row_parts) + '\n')
     finally:
         if output_file:
             output.close()
@@ -160,7 +177,7 @@ def print_statistics(session, tasks):
 
 def main():
     parser = argparse.ArgumentParser(
-        description='Parallelr Summary Report - Generate tab-delimited CSV reports from JSONL results',
+        description='Parallelr Summary Report - Generate aligned column reports from JSONL results',
         epilog='Examples:\n'
                '  %(prog)s results.jsonl\n'
                '  %(prog)s results.jsonl --columns start_time,status,env_vars.TASK_ID,exit_code\n'
