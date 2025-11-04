@@ -1669,8 +1669,6 @@ class ParallelTaskManager:
 
         if self.log_task_output and not self.dry_run:
             try:
-                timestamp = self.config.get_custom_timestamp()
-                #task_results_file = self.log_dir / f"TaskResults_{self.process_id}_{timestamp}.txt"
                 with self._log_lock:
                     with open(str(self.task_results_file), 'a', encoding='utf-8') as f:
                         f.write(f"\n{'='*80}\n")
