@@ -981,7 +981,15 @@ class SecureTaskExecutor:
         
         finally:
             result.end_time = datetime.now()
-            result.duration = (result.end_time - result.start_time).total_seconds()
+            calculated_duration = (result.end_time - result.start_time).total_seconds()
+            # Protect against clock adjustments (e.g., WSL clock sync, NTP) that could cause negative duration
+            # If clock went backwards, keep the previously calculated duration
+            if calculated_duration >= 0:
+                result.duration = calculated_duration
+            else:
+                # Clock went backwards - log warning and keep previous duration
+                self.logger.warning(f"System clock adjustment detected (end time before start time). "
+                                    f"Using previously calculated duration: {result.duration:.2f}s")
             self._process = None
         
         return result
