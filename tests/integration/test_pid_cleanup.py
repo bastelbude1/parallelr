@@ -400,12 +400,12 @@ def test_pid_cleanup_on_sigterm(temp_dir, isolated_env):
     task_file.write_text('#!/bin/bash\nsleep 60\n')
     task_file.chmod(0o755)
 
-    # Start daemon with long-running task (disable backup for speed)
+    # Start daemon with long-running task
     result = subprocess.run(
         [PYTHON_FOR_PARALLELR, str(PARALLELR_BIN),
          '-T', str(task_file),
          '-C', 'bash @TASK@',
-         '-r', '-D', '--no-backup-inputs'],
+         '-r', '-D'],
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
         universal_newlines=True,
@@ -450,12 +450,12 @@ def test_pid_cleanup_on_sigint(temp_dir, isolated_env):
     task_file.write_text('#!/bin/bash\nsleep 60\n')
     task_file.chmod(0o755)
 
-    # Start daemon with long-running task (disable backup for speed)
+    # Start daemon with long-running task
     result = subprocess.run(
         [PYTHON_FOR_PARALLELR, str(PARALLELR_BIN),
          '-T', str(task_file),
          '-C', 'bash @TASK@',
-         '-r', '-D', '--no-backup-inputs'],
+         '-r', '-D'],
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
         universal_newlines=True,

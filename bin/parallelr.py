@@ -1112,12 +1112,17 @@ class ParallelTaskManager:
 
         self.logger = self._setup_logging()
 
+        # Set up signal handlers BEFORE any potentially long operations (like backup)
+        # This ensures graceful shutdown works even if interrupted during initialization
+        self._setup_signal_handlers()
+
         self.results_file = self.log_dir / f"parallelr_{self.process_id}_{self.timestamp}_results.jsonl"
         self.session_id = f"{self.process_id}_{self.timestamp}"
         self._log_lock = threading.Lock()
         self._init_results_file()
 
         # Create backup of input files if enabled
+        # Signal handlers are already set up, so Ctrl+C during backup will work properly
         if self.backup_inputs and not self.dry_run:
             self._create_input_backup()
 
@@ -1194,6 +1199,11 @@ class ParallelTaskManager:
         import shutil
 
         try:
+            # Check if shutdown was requested before starting backup
+            if self.shutdown_requested:
+                self.logger.info("Shutdown requested, skipping input backup")
+                return
+
             # Create backup directory
             backup_root = Path.home() / 'parallelr' / 'backups'
             backup_dir = backup_root / f"parallelr_{self.process_id}_{self.timestamp}"
@@ -1205,6 +1215,10 @@ class ParallelTaskManager:
                 tasks_backup.mkdir(exist_ok=True)
 
                 for task_path in self.tasks_paths:
+                    # Check for shutdown during backup loop
+                    if self.shutdown_requested:
+                        self.logger.info("Shutdown requested during backup, stopping early")
+                        return
                     task_path = Path(task_path)
                     if task_path.exists():
                         if task_path.is_dir():
@@ -1776,6 +1790,11 @@ class ParallelTaskManager:
 
     def execute_tasks(self):
         """Execute all tasks."""
+        # Check if shutdown was requested during initialization (e.g., Ctrl+C during backup)
+        if self.shutdown_requested:
+            self.logger.info("Shutdown requested before execution started, exiting gracefully")
+            return {'total': 0, 'completed': 0, 'failed': 0, 'cancelled': 0}
+
         self.logger.info("Starting parallel execution")
 
         try:
@@ -2724,8 +2743,8 @@ def main():
             manager.logger.info(f"Command template: {args.Command}")
             manager.logger.info(f"Workers: {manager.max_workers}, Timeout: {manager.timeout}s")
             manager.logger.info(f"Stop limits: {'enabled' if args.enable_stop_limits else 'disabled'}")
-        
-        manager._setup_signal_handlers()
+
+        # Signal handlers already set up in __init__, no need to call again
         stats = manager.execute_tasks()
         
         summary = manager.get_summary_report()
