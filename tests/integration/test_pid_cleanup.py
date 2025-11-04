@@ -9,11 +9,10 @@ import subprocess
 import time
 import os
 import signal
+import sys
 from pathlib import Path
 import pytest
 
-import sys
-from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 from conftest import PARALLELR_BIN, PYTHON_FOR_PARALLELR
 
