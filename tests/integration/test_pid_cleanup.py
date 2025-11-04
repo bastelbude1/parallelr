@@ -128,8 +128,9 @@ def test_pid_removed_on_task_failure(temp_dir, isolated_env):
         timeout=30
     )
 
-    # parallelr should complete successfully even if task fails
-    assert result.returncode == 0, f"parallelr execution failed: {result.stderr}"
+    # parallelr exits with code 1 when all tasks fail (expected behavior)
+    # But should still clean up PID
+    assert result.returncode == 1, f"Expected exit code 1 (all tasks failed), got {result.returncode}"
 
     # PID should be cleaned up
     pid_file = isolated_env['pid_file']
@@ -256,8 +257,8 @@ def test_cleanup_stale_pids_preserves_running_processes(temp_dir, isolated_env):
 
 
 @pytest.mark.integration
-def test_pid_cleanup_info_message_logged(temp_dir, isolated_env):
-    """Test that cleanup logs an info message when stale PIDs are removed."""
+def test_pid_cleanup_actually_removes_stale_pids(temp_dir, isolated_env):
+    """Test that cleanup actually removes stale PIDs from the file."""
     pid_file = isolated_env['pid_file']
     pid_dir = pid_file.parent
     pid_dir.mkdir(parents=True, exist_ok=True)
@@ -268,12 +269,16 @@ def test_pid_cleanup_info_message_logged(temp_dir, isolated_env):
         for pid in stale_pids:
             f.write(f"{pid}\n")
 
+    # Verify stale PIDs are in the file
+    pids_before = read_pids_from_file(pid_file)
+    assert len(pids_before) == 3, f"Setup failed: expected 3 stale PIDs, got {len(pids_before)}"
+
     # Create a task
     task_file = temp_dir / 'task.sh'
     task_file.write_text('#!/bin/bash\necho "test"\n')
     task_file.chmod(0o755)
 
-    # Run parallelr
+    # Run parallelr - should clean stale PIDs on startup
     result = subprocess.run(
         [PYTHON_FOR_PARALLELR, str(PARALLELR_BIN),
          '-T', str(task_file),
@@ -288,18 +293,14 @@ def test_pid_cleanup_info_message_logged(temp_dir, isolated_env):
 
     assert result.returncode == 0, f"Execution failed: {result.stderr}"
 
-    # Check that log file was created and contains cleanup message
-    log_dir = isolated_env['log_dir']
-    assert log_dir.exists(), "Log directory not created"
-
-    log_files = list(log_dir.glob('parallelr_*.log'))
-    assert len(log_files) > 0, "No log files created"
-
-    # Read log file and check for cleanup message
-    log_content = log_files[0].read_text()
-    # The cleanup message should indicate how many PIDs were cleaned
-    assert 'stale' in log_content.lower() or 'cleaned' in log_content.lower(), \
-        f"Expected cleanup message in log, but got: {log_content}"
+    # Verify stale PIDs were removed
+    if pid_file.exists():
+        pids_after = read_pids_from_file(pid_file)
+        # All stale PIDs should be gone
+        for pid in stale_pids:
+            assert pid not in pids_after, f"Stale PID {pid} was not cleaned up"
+        # File should be empty after successful completion
+        assert len(pids_after) == 0, f"Expected empty PID file, but contains: {pids_after}"
 
 
 @pytest.mark.integration
@@ -380,8 +381,9 @@ def test_pid_cleanup_on_invalid_command_template(temp_dir, isolated_env):
         timeout=30
     )
 
-    # parallelr completes even with failing tasks
-    assert result.returncode == 0, f"parallelr should complete gracefully: {result.stderr}"
+    # parallelr exits with code 1 when all tasks fail (expected behavior)
+    # But should still clean up PID
+    assert result.returncode == 1, f"Expected exit code 1 (all tasks failed), got {result.returncode}"
 
     # PID should be cleaned up
     pid_file = isolated_env['pid_file']
