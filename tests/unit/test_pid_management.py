@@ -395,3 +395,151 @@ def test_get_running_processes_includes_other_users_pids(config_with_temp_home):
     assert current_pid in running, f"Current PID should be included, got: {running}"
     assert stale_pid not in running, f"Stale PID should not be included, got: {running}"
     assert len(running) == 2, f"Expected 2 running PIDs, got {len(running)}: {running}"
+
+
+@pytest.mark.unit
+def test_cleanup_handles_file_read_errors_gracefully(config_with_temp_home, monkeypatch):
+    """Test that cleanup handles file read errors without crashing."""
+    config = config_with_temp_home
+    pid_file = config.get_pidfile_path()
+    pid_file.parent.mkdir(parents=True, exist_ok=True)
+
+    # Create a valid PID file
+    with open(str(pid_file), 'w') as f:
+        f.write("12345\n")
+
+    # Mock the file open to raise an exception
+    original_open = open
+    def mock_open_that_fails(*args, **kwargs):
+        # Let the first open succeed (exists check), fail on actual read
+        if 'r' in str(args) or 'r' in str(kwargs.get('mode', '')):
+            raise IOError("Mock file read error")
+        return original_open(*args, **kwargs)
+
+    monkeypatch.setattr('builtins.open', mock_open_that_fails)
+
+    # Should return 0 and log warning, not crash
+    result = config.cleanup_stale_pids()
+    assert result == 0, "Should return 0 when file read fails"
+
+
+@pytest.mark.unit
+def test_get_running_processes_handles_file_errors(config_with_temp_home, monkeypatch):
+    """Test that get_running_processes handles file errors gracefully."""
+    config = config_with_temp_home
+    pid_file = config.get_pidfile_path()
+    pid_file.parent.mkdir(parents=True, exist_ok=True)
+
+    # Create a PID file
+    with open(str(pid_file), 'w') as f:
+        f.write("12345\n")
+
+    # Mock open to fail
+    def mock_open_that_fails(*args, **kwargs):
+        raise IOError("Mock file error")
+
+    monkeypatch.setattr('builtins.open', mock_open_that_fails)
+
+    # Should return empty list, not crash
+    result = config.get_running_processes()
+    assert result == [], "Should return empty list when file read fails"
+
+
+@pytest.mark.unit
+def test_cleanup_with_oserror_eperm_fallback(config_with_temp_home, monkeypatch):
+    """Test OSError with errno.EPERM fallback path in cleanup_stale_pids."""
+    import errno as errno_module
+
+    config = config_with_temp_home
+    pid_file = config.get_pidfile_path()
+    pid_file.parent.mkdir(parents=True, exist_ok=True)
+
+    # Use a PID that will trigger os.kill
+    test_pid = 999999
+    with open(str(pid_file), 'w') as f:
+        f.write(f"{test_pid}\n")
+
+    # Mock os.kill to raise OSError with EPERM (not PermissionError)
+    original_kill = os.kill
+    def mock_kill_oserror_eperm(pid, sig):
+        if pid == test_pid and sig == 0:
+            # Raise generic OSError with EPERM errno (not PermissionError)
+            err = OSError("Operation not permitted")
+            err.errno = errno_module.EPERM
+            raise err
+        return original_kill(pid, sig)
+
+    monkeypatch.setattr('os.kill', mock_kill_oserror_eperm)
+
+    # Should treat as running (EPERM = exists)
+    result = config.cleanup_stale_pids()
+
+    # Should not clean any PIDs (EPERM means it exists)
+    assert result == 0, "Should not clean PID with EPERM error"
+
+    # PID should still be in file
+    pids = []
+    with open(str(pid_file), 'r') as f:
+        for line in f:
+            if line.strip().isdigit():
+                pids.append(int(line.strip()))
+    assert test_pid in pids, "PID with EPERM should be preserved"
+
+
+@pytest.mark.unit
+def test_get_running_with_oserror_eperm_fallback(config_with_temp_home, monkeypatch):
+    """Test OSError with errno.EPERM fallback in get_running_processes."""
+    import errno as errno_module
+
+    config = config_with_temp_home
+    pid_file = config.get_pidfile_path()
+    pid_file.parent.mkdir(parents=True, exist_ok=True)
+
+    test_pid = 999999
+    with open(str(pid_file), 'w') as f:
+        f.write(f"{test_pid}\n")
+
+    # Mock os.kill to raise OSError with EPERM
+    def mock_kill_oserror_eperm(pid, sig):
+        if pid == test_pid and sig == 0:
+            err = OSError("Operation not permitted")
+            err.errno = errno_module.EPERM
+            raise err
+        return os.kill(pid, sig)
+
+    monkeypatch.setattr('os.kill', mock_kill_oserror_eperm)
+
+    # Should include PID (EPERM = running)
+    running = config.get_running_processes()
+    assert test_pid in running, f"PID with EPERM should be included, got: {running}"
+
+
+@pytest.mark.unit
+def test_cleanup_with_oserror_non_eperm(config_with_temp_home, monkeypatch):
+    """Test OSError with non-EPERM errno is treated as stale."""
+    import errno as errno_module
+
+    config = config_with_temp_home
+    pid_file = config.get_pidfile_path()
+    pid_file.parent.mkdir(parents=True, exist_ok=True)
+
+    test_pid = 999999
+    with open(str(pid_file), 'w') as f:
+        f.write(f"{test_pid}\n")
+
+    # Mock os.kill to raise OSError with ESRCH
+    def mock_kill_oserror_esrch(pid, sig):
+        if pid == test_pid and sig == 0:
+            err = OSError("No such process")
+            err.errno = errno_module.ESRCH
+            raise err
+        return os.kill(pid, sig)
+
+    monkeypatch.setattr('os.kill', mock_kill_oserror_esrch)
+
+    # Should clean the PID (ESRCH = dead)
+    result = config.cleanup_stale_pids()
+    assert result == 1, "Should clean PID with ESRCH error"
+
+    # File should be removed (no running PIDs)
+    assert not pid_file.exists(), "PID file should be removed after cleaning last PID"
