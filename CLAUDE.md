@@ -507,6 +507,64 @@ Worker 2 [2/3]: Task completed successfully
 
 This enhanced logging ensures all execution details are available in the log file for debugging and audit purposes, making it easy to reproduce exact task execution conditions. The one-line format matches dry run output exactly, providing consistency across modes.
 
+### Task Output Log Format
+
+The task output log file (`parallelr_{PID}_{timestamp}_output.txt`) provides comprehensive per-task execution details. Each task entry includes:
+
+**Command-Line Parameters Section:**
+- `-C` (Command template): The command template used
+- `-T` (Task paths): Task files or directories (if defined)
+- `-A` (Arguments file): Arguments file path (if defined)
+- `-E` (Environment vars): Environment variables (if defined)
+
+**Execution Results Section:**
+- Status (SUCCESS, FAILED, TIMEOUT, etc.)
+- Exit code
+- Duration in seconds
+- Memory usage (peak)
+- CPU usage (peak)
+- Start and end timestamps
+
+**Output Capture:**
+- **STDOUT**: Captures last `max_output_capture` characters (default: 1000)
+  - Shows character count when output is present
+  - Shows "(showing last N characters)" when truncated
+  - Shows "(no output)" when empty
+- **STDERR**: Captured separately with same behavior as stdout
+  - Independent truncation from stdout
+  - Same character count and truncation indicators
+
+**Example Output Log Entry:**
+```text
+================================================================================
+Task: /tmp/test/template.sh
+Worker: 1
+Command: bash /tmp/test/template.sh ukfr 1
+
+Command-Line Parameters:
+  -C (Command template): bash @TASK@ @ARG_1@ @ARG_2@
+  -T (Task paths): template.sh
+  -A (Arguments file): args.txt
+  -E (Environment vars): SERVER,TASK_ID
+
+Execution Results:
+  Status: SUCCESS
+  Exit Code: 0
+  Duration: 0.51s
+  Memory: 3.25MB
+  CPU: 0.0%
+  Start: 2025-11-05 00:19:13.460160
+  End: 2025-11-05 00:19:13.970884
+
+STDOUT (62 characters):
+Processing task with SERVER=ukfr and TASK_ID=1
+Task completed
+
+STDERR (no output)
+```
+
+This format ensures all execution context is preserved for troubleshooting and audit purposes, making it easy to reproduce exact task execution conditions.
+
 ### Security Validation
 - Task files are validated for size (max 1MB by default)
 - Command arguments are parsed with `shlex.split()` to prevent injection

@@ -76,7 +76,8 @@ class TaskResult:
     """Data class for task execution results."""
     def __init__(self, task_file, command, start_time, end_time=None, status=None,
                  exit_code=None, stdout="", stderr="", error_message="", duration=0.0,
-                 worker_id=0, memory_usage=0.0, cpu_usage=0.0, env_vars=None, arguments=None):
+                 worker_id=0, memory_usage=0.0, cpu_usage=0.0, env_vars=None, arguments=None,
+                 stdout_truncated=False, stderr_truncated=False):
         self.task_file = task_file
         self.command = command
         self.start_time = start_time
@@ -92,6 +93,8 @@ class TaskResult:
         self.cpu_usage = cpu_usage
         self.env_vars = env_vars if env_vars is not None else {}
         self.arguments = arguments if arguments is not None else []
+        self.stdout_truncated = stdout_truncated
+        self.stderr_truncated = stderr_truncated
 
     def to_jsonl(self, session_id, process_id=None):
         """Convert task result to JSONL format.
@@ -939,8 +942,19 @@ class SecureTaskExecutor:
                 stdout = ''.join(stdout_lines)
                 stderr = ''.join(stderr_lines)
                 max_capture = self.config.limits.max_output_capture
-                result.stdout = stdout[-max_capture:] if stdout else ""
-                result.stderr = stderr[-max_capture:] if stderr else ""
+
+                # Track truncation for accurate reporting
+                if stdout and len(stdout) > max_capture:
+                    result.stdout_truncated = True
+                    result.stdout = stdout[-max_capture:]
+                else:
+                    result.stdout = stdout
+
+                if stderr and len(stderr) > max_capture:
+                    result.stderr_truncated = True
+                    result.stderr = stderr[-max_capture:]
+                else:
+                    result.stderr = stderr
 
                 # Update final metrics before logging
                 result.duration = (datetime.now() - result.start_time).total_seconds()
@@ -968,8 +982,20 @@ class SecureTaskExecutor:
                 stdout = ''.join(stdout_lines)
                 stderr = ''.join(stderr_lines)
                 max_capture = self.config.limits.max_output_capture
-                result.stdout = stdout[-max_capture:] if stdout else ""
-                result.stderr = stderr[-max_capture:] if stderr else ""
+
+                # Track truncation for accurate reporting
+                if stdout and len(stdout) > max_capture:
+                    result.stdout_truncated = True
+                    result.stdout = stdout[-max_capture:]
+                else:
+                    result.stdout = stdout
+
+                if stderr and len(stderr) > max_capture:
+                    result.stderr_truncated = True
+                    result.stderr = stderr[-max_capture:]
+                else:
+                    result.stderr = stderr
+
                 self._terminate_process()
         
         except SecurityError as e:
@@ -1805,17 +1831,53 @@ class ParallelTaskManager:
                         f.write(f"Task: {result.task_file}\n")
                         f.write(f"Worker: {result.worker_id}\n")
                         f.write(f"Command: {result.command}\n")
-                        f.write(f"Status: {result.status.value}\n")
-                        f.write(f"Exit Code: {result.exit_code}\n")
-                        f.write(f"Duration: {result.duration:.2f}s\n")
-                        f.write(f"Memory: {result.memory_usage:.2f}MB\n")
-                        f.write(f"CPU: {result.cpu_usage:.1f}%\n")
-                        f.write(f"Start: {result.start_time}\n")
-                        f.write(f"End: {result.end_time}\n")
+
+                        # Add command-line parameters section
+                        f.write("\nCommand-Line Parameters:\n")
+                        f.write(f"  -C (Command template): {self.command_template}\n")
+                        if self.tasks_paths:
+                            f.write(f"  -T (Task paths): {', '.join(str(p) for p in self.tasks_paths)}\n")
+                        if self.arguments_file:
+                            f.write(f"  -A (Arguments file): {self.arguments_file}\n")
+                        if self.env_var:
+                            f.write(f"  -E (Environment vars): {self.env_var}\n")
+
+                        f.write("\nExecution Results:\n")
+                        f.write(f"  Status: {result.status.value}\n")
+                        f.write(f"  Exit Code: {result.exit_code}\n")
+                        f.write(f"  Duration: {result.duration:.2f}s\n")
+                        f.write(f"  Memory: {result.memory_usage:.2f}MB\n")
+                        f.write(f"  CPU: {result.cpu_usage:.1f}%\n")
+                        f.write(f"  Start: {result.start_time}\n")
+                        f.write(f"  End: {result.end_time}\n")
+
+                        # Improved stdout/stderr with truncation info
+                        max_capture = self.config.limits.max_output_capture
+
+                        f.write("\nSTDOUT")
                         if result.stdout:
-                            f.write(f"\nSTDOUT:\n{result.stdout}\n")
+                            # Use precise truncation flag
+                            stdout_len = len(result.stdout)
+                            if result.stdout_truncated:
+                                f.write(f" (showing last {max_capture} characters):\n")
+                            else:
+                                f.write(f" ({stdout_len} characters):\n")
+                            f.write(f"{result.stdout}\n")
+                        else:
+                            f.write(" (no output)\n")
+
+                        f.write("\nSTDERR")
                         if result.stderr:
-                            f.write(f"\nSTDERR:\n{result.stderr}\n")
+                            # Use precise truncation flag
+                            stderr_len = len(result.stderr)
+                            if result.stderr_truncated:
+                                f.write(f" (showing last {max_capture} characters):\n")
+                            else:
+                                f.write(f" ({stderr_len} characters):\n")
+                            f.write(f"{result.stderr}\n")
+                        else:
+                            f.write(" (no output)\n")
+
                         if result.error_message:
                             f.write(f"\nERROR: {result.error_message}\n")
             except Exception as e:
