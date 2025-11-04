@@ -8,6 +8,7 @@ and guaranteed cleanup via try-finally.
 import subprocess
 import time
 import os
+import signal
 from pathlib import Path
 import pytest
 
@@ -331,3 +332,203 @@ def test_empty_pid_file_after_all_processes_complete(temp_dir, isolated_env):
     if pid_file.exists():
         content = pid_file.read_text().strip()
         assert content == '', f"PID file should be empty or removed, but contains: {content}"
+
+
+@pytest.mark.integration
+def test_pid_cleanup_on_invalid_task_directory(isolated_env):
+    """Test that PID is cleaned up when execution fails due to invalid task directory."""
+    # Try to run with non-existent task directory (will cause error)
+    result = subprocess.run(
+        [PYTHON_FOR_PARALLELR, str(PARALLELR_BIN),
+         '-T', '/nonexistent/directory/that/does/not/exist',
+         '-C', 'bash @TASK@',
+         '-r'],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        universal_newlines=True,
+        env=isolated_env['env'],
+        timeout=30
+    )
+
+    # Should fail with non-zero exit code
+    assert result.returncode != 0, f"Expected failure but got success: {result.stdout}"
+
+    # PID should still be cleaned up despite the error
+    pid_file = isolated_env['pid_file']
+    if pid_file.exists():
+        pids = read_pids_from_file(pid_file)
+        assert len(pids) == 0, f"PID file should be empty after error, but contains: {pids}"
+
+
+@pytest.mark.integration
+def test_pid_cleanup_on_invalid_command_template(temp_dir, isolated_env):
+    """Test that PID is cleaned up when execution fails due to invalid command."""
+    # Create a task file
+    task_file = temp_dir / 'task.sh'
+    task_file.write_text('#!/bin/bash\necho "test"\n')
+    task_file.chmod(0o755)
+
+    # Try to run with invalid command (missing @TASK@ placeholder will cause issues)
+    result = subprocess.run(
+        [PYTHON_FOR_PARALLELR, str(PARALLELR_BIN),
+         '-T', str(task_file),
+         '-C', '/nonexistent/command/that/does/not/exist @TASK@',
+         '-r'],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        universal_newlines=True,
+        env=isolated_env['env'],
+        timeout=30
+    )
+
+    # Execution completes (parallelr handles task failures gracefully)
+    # PID should be cleaned up
+    pid_file = isolated_env['pid_file']
+    if pid_file.exists():
+        pids = read_pids_from_file(pid_file)
+        assert len(pids) == 0, f"PID file should be empty after completion, but contains: {pids}"
+
+
+@pytest.mark.integration
+def test_pid_cleanup_on_sigterm(temp_dir, isolated_env):
+    """Test that PID is cleaned up when process receives SIGTERM signal."""
+    # Create a long-running task
+    task_file = temp_dir / 'long_task.sh'
+    task_file.write_text('#!/bin/bash\nsleep 60\n')
+    task_file.chmod(0o755)
+
+    # Start daemon with long-running task
+    result = subprocess.run(
+        [PYTHON_FOR_PARALLELR, str(PARALLELR_BIN),
+         '-T', str(task_file),
+         '-C', 'bash @TASK@',
+         '-r', '-D'],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        universal_newlines=True,
+        env=isolated_env['env'],
+        timeout=15
+    )
+
+    assert result.returncode == 0, f"Daemon start failed: {result.stderr}"
+
+    # Wait for PID file creation
+    pid_file = isolated_env['pid_file']
+    assert poll_until(lambda: pid_file.exists(), timeout=5), "PID file not created"
+
+    # Get the daemon PID
+    pids_before = read_pids_from_file(pid_file)
+    assert len(pids_before) > 0, "No PIDs registered"
+    daemon_pid = pids_before[0]
+
+    # Send SIGTERM to the daemon process
+    try:
+        os.kill(daemon_pid, signal.SIGTERM)
+    except ProcessLookupError:
+        pytest.skip("Process already terminated")
+
+    # Wait for graceful shutdown and PID cleanup
+    assert poll_until(
+        lambda: not pid_file.exists() or daemon_pid not in read_pids_from_file(pid_file),
+        timeout=10
+    ), f"PID {daemon_pid} was not cleaned up after SIGTERM"
+
+    # Final cleanup of any remaining processes
+    subprocess.run([PYTHON_FOR_PARALLELR, str(PARALLELR_BIN), '-k'],
+                   input='yes\n', stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                   env=isolated_env['env'], universal_newlines=True, timeout=10)
+
+
+@pytest.mark.integration
+def test_pid_cleanup_on_sigint(temp_dir, isolated_env):
+    """Test that PID is cleaned up when process receives SIGINT (Ctrl+C) signal."""
+    # Create a long-running task
+    task_file = temp_dir / 'long_task.sh'
+    task_file.write_text('#!/bin/bash\nsleep 60\n')
+    task_file.chmod(0o755)
+
+    # Start daemon with long-running task
+    result = subprocess.run(
+        [PYTHON_FOR_PARALLELR, str(PARALLELR_BIN),
+         '-T', str(task_file),
+         '-C', 'bash @TASK@',
+         '-r', '-D'],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        universal_newlines=True,
+        env=isolated_env['env'],
+        timeout=15
+    )
+
+    assert result.returncode == 0, f"Daemon start failed: {result.stderr}"
+
+    # Wait for PID file creation
+    pid_file = isolated_env['pid_file']
+    assert poll_until(lambda: pid_file.exists(), timeout=5), "PID file not created"
+
+    # Get the daemon PID
+    pids_before = read_pids_from_file(pid_file)
+    assert len(pids_before) > 0, "No PIDs registered"
+    daemon_pid = pids_before[0]
+
+    # Send SIGINT to the daemon process
+    try:
+        os.kill(daemon_pid, signal.SIGINT)
+    except ProcessLookupError:
+        pytest.skip("Process already terminated")
+
+    # Wait for graceful shutdown and PID cleanup
+    assert poll_until(
+        lambda: not pid_file.exists() or daemon_pid not in read_pids_from_file(pid_file),
+        timeout=10
+    ), f"PID {daemon_pid} was not cleaned up after SIGINT"
+
+    # Final cleanup of any remaining processes
+    subprocess.run([PYTHON_FOR_PARALLELR, str(PARALLELR_BIN), '-k'],
+                   input='yes\n', stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                   env=isolated_env['env'], universal_newlines=True, timeout=10)
+
+
+@pytest.mark.integration
+def test_multiple_stale_pids_from_different_crashes(temp_dir, isolated_env):
+    """Test cleanup of multiple stale PIDs accumulated from various failure scenarios."""
+    pid_file = isolated_env['pid_file']
+    pid_dir = pid_file.parent
+    pid_dir.mkdir(parents=True, exist_ok=True)
+
+    # Simulate multiple crashed processes with fake PIDs
+    stale_pids = [999999991, 999999992, 999999993, 999999994, 999999995]
+    with open(str(pid_file), 'w') as f:
+        for pid in stale_pids:
+            f.write(f"{pid}\n")
+
+    initial_count = len(read_pids_from_file(pid_file))
+    assert initial_count == 5, "Setup failed: not all stale PIDs written"
+
+    # Create a quick task
+    task_file = temp_dir / 'quick_task.sh'
+    task_file.write_text('#!/bin/bash\necho "test"\n')
+    task_file.chmod(0o755)
+
+    # Run parallelr - should clean all stale PIDs
+    result = subprocess.run(
+        [PYTHON_FOR_PARALLELR, str(PARALLELR_BIN),
+         '-T', str(task_file),
+         '-C', 'bash @TASK@',
+         '-r'],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        universal_newlines=True,
+        env=isolated_env['env'],
+        timeout=30
+    )
+
+    assert result.returncode == 0, f"Execution failed: {result.stderr}"
+
+    # All stale PIDs should be gone
+    if pid_file.exists():
+        final_pids = read_pids_from_file(pid_file)
+        for pid in stale_pids:
+            assert pid not in final_pids, f"Stale PID {pid} was not cleaned up"
+        # File should be empty after cleanup
+        assert len(final_pids) == 0, f"Expected empty PID file, but found: {final_pids}"
