@@ -89,13 +89,17 @@ def test_get_custom_timestamp_date_part(temp_config_home):
     config = temp_config_home
     from datetime import datetime
 
+    # Capture datetime BEFORE calling get_custom_timestamp to avoid race condition
+    # at midnight (if we call datetime.now() twice, date might change between calls)
+    now = datetime.now()
+    expected_date = now.strftime("%d%b%y")
+
     timestamp = config.get_custom_timestamp()
 
     # Extract date part (before underscore)
     date_part = timestamp.split('_')[0]
 
-    # Should match current date in DDmmmYY format
-    expected_date = datetime.now().strftime("%d%b%y")
+    # Should match precomputed date from captured instant
     assert date_part == expected_date, \
         f"Date part '{date_part}' doesn't match expected '{expected_date}'"
 
