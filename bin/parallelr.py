@@ -1807,7 +1807,7 @@ class ParallelTaskManager:
                         f.write(f"Command: {result.command}\n")
 
                         # Add command-line parameters section
-                        f.write(f"\nCommand-Line Parameters:\n")
+                        f.write("\nCommand-Line Parameters:\n")
                         f.write(f"  -C (Command template): {self.command_template}\n")
                         if self.tasks_paths:
                             f.write(f"  -T (Task paths): {', '.join(str(p) for p in self.tasks_paths)}\n")
@@ -1816,7 +1816,7 @@ class ParallelTaskManager:
                         if self.env_var:
                             f.write(f"  -E (Environment vars): {self.env_var}\n")
 
-                        f.write(f"\nExecution Results:\n")
+                        f.write("\nExecution Results:\n")
                         f.write(f"  Status: {result.status.value}\n")
                         f.write(f"  Exit Code: {result.exit_code}\n")
                         f.write(f"  Duration: {result.duration:.2f}s\n")
@@ -1828,7 +1828,7 @@ class ParallelTaskManager:
                         # Improved stdout/stderr with truncation info
                         max_capture = self.config.limits.max_output_capture
 
-                        f.write(f"\nSTDOUT")
+                        f.write("\nSTDOUT")
                         if result.stdout:
                             # Check if output was truncated
                             stdout_len = len(result.stdout)
@@ -1838,9 +1838,9 @@ class ParallelTaskManager:
                                 f.write(f" ({stdout_len} characters):\n")
                             f.write(f"{result.stdout}\n")
                         else:
-                            f.write(f" (no output)\n")
+                            f.write(" (no output)\n")
 
-                        f.write(f"\nSTDERR")
+                        f.write("\nSTDERR")
                         if result.stderr:
                             # Check if output was truncated
                             stderr_len = len(result.stderr)
@@ -1850,7 +1850,7 @@ class ParallelTaskManager:
                                 f.write(f" ({stderr_len} characters):\n")
                             f.write(f"{result.stderr}\n")
                         else:
-                            f.write(f" (no output)\n")
+                            f.write(" (no output)\n")
 
                         if result.error_message:
                             f.write(f"\nERROR: {result.error_message}\n")
