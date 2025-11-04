@@ -318,3 +318,80 @@ def test_pid_file_sorted_after_operations(config_with_temp_home):
     # Should be sorted
     assert pids_in_file == sorted(pids_in_file)
     assert pids_in_file == sorted(pids_to_register)
+
+
+@pytest.mark.unit
+@pytest.mark.skipif(os.getuid() == 0, reason="Test requires non-root user")
+def test_cleanup_preserves_pids_owned_by_other_users(config_with_temp_home):
+    """Test that cleanup doesn't remove PIDs of processes owned by other users (PermissionError).
+
+    Uses PID 1 (init/systemd) which is owned by root. When run as non-root,
+    os.kill(1, 0) raises PermissionError, which should be treated as "process exists".
+    """
+    config = config_with_temp_home
+    pid_file = config.get_pidfile_path()
+    pid_file.parent.mkdir(parents=True, exist_ok=True)
+
+    # PID 1 is always running (init/systemd) and owned by root
+    # If we're not root, we'll get PermissionError when checking it
+    root_pid = 1
+
+    # Also add a stale PID for comparison
+    stale_pid = 999999999
+
+    with open(str(pid_file), 'w') as f:
+        f.write(f"{root_pid}\n")
+        f.write(f"{stale_pid}\n")
+
+    # Run cleanup
+    result = config.cleanup_stale_pids()
+
+    # Should only clean the stale PID, not the root-owned process
+    assert result == 1, "Should have cleaned only the stale PID, not root's process"
+
+    # PID file should still exist
+    assert pid_file.exists(), "PID file should not be removed (root process still tracked)"
+
+    # Should contain only PID 1
+    pids = []
+    with open(str(pid_file), 'r') as f:
+        for line in f:
+            pid = line.strip()
+            if pid.isdigit():
+                pids.append(int(pid))
+
+    assert len(pids) == 1, f"Expected 1 PID (root process), got {len(pids)}: {pids}"
+    assert pids[0] == root_pid, f"Expected PID 1 (root), got {pids[0]}"
+    assert stale_pid not in pids, "Stale PID should have been removed"
+
+
+@pytest.mark.unit
+@pytest.mark.skipif(os.getuid() == 0, reason="Test requires non-root user")
+def test_get_running_processes_includes_other_users_pids(config_with_temp_home):
+    """Test that get_running_processes() includes PIDs owned by other users.
+
+    Uses PID 1 (init/systemd) which is owned by root. When run as non-root,
+    os.kill(1, 0) raises PermissionError, but PID should still be returned.
+    """
+    config = config_with_temp_home
+    pid_file = config.get_pidfile_path()
+    pid_file.parent.mkdir(parents=True, exist_ok=True)
+
+    # PID 1 is always running (init/systemd) and owned by root
+    root_pid = 1
+    current_pid = os.getpid()
+    stale_pid = 999999999
+
+    with open(str(pid_file), 'w') as f:
+        f.write(f"{root_pid}\n")
+        f.write(f"{current_pid}\n")
+        f.write(f"{stale_pid}\n")
+
+    # Get running processes
+    running = config.get_running_processes()
+
+    # Should include both root's PID and our PID, but not the stale one
+    assert root_pid in running, f"PID 1 (root process) should be included, got: {running}"
+    assert current_pid in running, f"Current PID should be included, got: {running}"
+    assert stale_pid not in running, f"Stale PID should not be included, got: {running}"
+    assert len(running) == 2, f"Expected 2 running PIDs, got {len(running)}: {running}"

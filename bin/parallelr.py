@@ -483,8 +483,18 @@ class Configuration:
                             else:
                                 os.kill(int(pid), 0)
                                 pids.append(int(pid))
-                        except (OSError, ProcessLookupError):
+                        except PermissionError:
+                            # Process exists but owned by another user (EPERM)
+                            # Treat as running
+                            pids.append(int(pid))
+                        except ProcessLookupError:
+                            # Process doesn't exist (ESRCH) - skip
                             pass
+                        except OSError as e:
+                            # Fallback for other OSError types
+                            if hasattr(e, 'errno') and e.errno == errno.EPERM:
+                                pids.append(int(pid))
+                            # Otherwise treat as non-existent
             return pids
         except Exception:
             return []
@@ -524,8 +534,19 @@ class Configuration:
                     else:
                         os.kill(pid, 0)  # Signal 0 checks existence
                         running_pids.add(pid)
-                except (OSError, ProcessLookupError):
-                    pass  # PID is stale/dead
+                except PermissionError:
+                    # Process exists but owned by another user (EPERM)
+                    # Treat as running - don't remove from PID file
+                    running_pids.add(pid)
+                except ProcessLookupError:
+                    # Process doesn't exist (ESRCH) - stale PID
+                    pass
+                except OSError as e:
+                    # Fallback for other OSError types
+                    # Check if it's EPERM (process exists, no permission)
+                    if hasattr(e, 'errno') and e.errno == errno.EPERM:
+                        running_pids.add(pid)
+                    # Otherwise (ESRCH or other), treat as stale
 
             stale_count = len(existing_pids) - len(running_pids)
 
