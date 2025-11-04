@@ -603,7 +603,7 @@ class Configuration:
         Example: 04Nov25_k8m2p5
         """
         date_part = datetime.now().strftime(self.logging.custom_date_format)
-        unique_id = self.generate_unique_id()
+        unique_id = Configuration.generate_unique_id()
         return f"{date_part}_{unique_id}"
 
     def get_process_log_prefix(self, process_id):
