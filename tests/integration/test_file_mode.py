@@ -115,8 +115,8 @@ def test_file_mode_specific_files(sample_task_dir, isolated_env):
     )
 
     assert result.returncode == 0
-    # Should only execute 2 tasks (robust text check with regex)
-    assert re.search(r'(?i)\bexecut(?:e|ing)\b.*\b2\b.*\btasks?\b', result.stdout)
+    # Should only discover 2 tasks (updated for new logging format)
+    assert re.search(r'(?i)\bdiscover(?:ed)?\b.*\b2\b.*\btasks?\b', result.stdout)
 
 @pytest.mark.integration
 def test_file_mode_glob_patterns(sample_task_dir, isolated_env):

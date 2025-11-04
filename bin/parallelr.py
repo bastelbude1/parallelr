@@ -678,7 +678,7 @@ class SecureTaskExecutor:
     """Simplified task executor with basic security validation."""
 
     def __init__(self, task_file, command_template, timeout, worker_id, logger, config,
-                 extra_env=None, task_arguments=None):
+                 extra_env=None, task_arguments=None, task_number=None, total_tasks=None, env_var=None):
         self.task_file = task_file
         self.command_template = command_template
         self.timeout = timeout
@@ -691,6 +691,9 @@ class SecureTaskExecutor:
             self.task_arguments = task_arguments if isinstance(task_arguments, list) else [task_arguments]
         else:
             self.task_arguments = None
+        self.task_number = task_number
+        self.total_tasks = total_tasks
+        self.env_var = env_var  # For building display string
         self._process = None
         self._cancelled = False
 
@@ -776,6 +779,12 @@ class SecureTaskExecutor:
             # Unexpected error - log at debug level only
             return 0.0, 0.0
 
+    def _get_progress_str(self):
+        """Get progress string for logging."""
+        if self.task_number and self.total_tasks:
+            return f"[{self.task_number}/{self.total_tasks}]"
+        return ""
+
     def execute(self):
         """Execute task with basic security and monitoring."""
         start_time = datetime.now()
@@ -806,8 +815,16 @@ class SecureTaskExecutor:
             self._validate_task_file_security(self.task_file)
             command_args = self._build_secure_command(self.task_file)
             result.command = ' '.join(command_args)
-            
-            self.logger.info(f"Worker {self.worker_id}: Starting task {self.task_file}")
+
+            # Log command in one-line format matching dry run mode
+            # Build env prefix if we have environment variables
+            env_prefix = build_env_prefix(self.env_var, self.task_arguments) if self.env_var and self.task_arguments else ""
+
+            # Format: [X/N]: ENV_VAR=value command
+            progress_str = self._get_progress_str()
+            command_with_env = f"{env_prefix}{result.command}"
+            self.logger.info(f"{progress_str}: {command_with_env}")
+
             result.status = TaskStatus.RUNNING
             
             if self._cancelled:
@@ -924,12 +941,24 @@ class SecureTaskExecutor:
                 max_capture = self.config.limits.max_output_capture
                 result.stdout = stdout[-max_capture:] if stdout else ""
                 result.stderr = stderr[-max_capture:] if stderr else ""
+
+                # Update final metrics before logging
+                result.duration = (datetime.now() - result.start_time).total_seconds()
+                memory_mb, _ = self._monitor_process()
+                if memory_mb > result.memory_usage:
+                    result.memory_usage = memory_mb
+
+                progress_str = self._get_progress_str()
+
                 if result.exit_code == 0:
                     result.status = TaskStatus.SUCCESS
-                    self.logger.info("Worker {}: Task completed successfully".format(self.worker_id))
+                    self.logger.info(f"Worker {self.worker_id} {progress_str}: Task completed successfully")
+                    self.logger.info(f"  Exit code: {result.exit_code}, Duration: {result.duration:.2f}s, Memory: {result.memory_usage:.1f}MB, CPU: {result.cpu_usage:.1f}%")
                 else:
                     result.status = TaskStatus.FAILED
                     result.error_message = "Exit code {}".format(result.exit_code)
+                    self.logger.info(f"Worker {self.worker_id} {progress_str}: Task failed")
+                    self.logger.info(f"  Exit code: {result.exit_code}, Duration: {result.duration:.2f}s, Memory: {result.memory_usage:.1f}MB, CPU: {result.cpu_usage:.1f}%")
 
             except subprocess.TimeoutExpired:
                 result.status = TaskStatus.TIMEOUT
@@ -958,7 +987,15 @@ class SecureTaskExecutor:
         
         finally:
             result.end_time = datetime.now()
-            result.duration = (result.end_time - result.start_time).total_seconds()
+            calculated_duration = (result.end_time - result.start_time).total_seconds()
+            # Protect against clock adjustments (e.g., WSL clock sync, NTP) that could cause negative duration
+            # If clock went backwards, keep the previously calculated duration
+            if calculated_duration >= 0:
+                result.duration = calculated_duration
+            else:
+                # Clock went backwards - log warning and keep previous duration
+                self.logger.warning(f"System clock adjustment detected (end time before start time). "
+                                    f"Using previously calculated duration: {result.duration:.2f}s")
             self._process = None
         
         return result
@@ -1772,6 +1809,7 @@ class ParallelTaskManager:
                         f.write(f"Exit Code: {result.exit_code}\n")
                         f.write(f"Duration: {result.duration:.2f}s\n")
                         f.write(f"Memory: {result.memory_usage:.2f}MB\n")
+                        f.write(f"CPU: {result.cpu_usage:.1f}%\n")
                         f.write(f"Start: {result.start_time}\n")
                         f.write(f"End: {result.end_time}\n")
                         if result.stdout:
@@ -1801,6 +1839,29 @@ class ParallelTaskManager:
             return {'total': 0, 'completed': 0, 'failed': 0, 'cancelled': 0}
 
         self.logger.info("Starting parallel execution")
+        self.logger.info("="*60)
+
+        # Log configuration details
+        self.logger.info(f"Command template: {self.command_template}")
+
+        if self.tasks_paths:
+            self.logger.info(f"Task directories: {', '.join(str(p) for p in self.tasks_paths)}")
+        if self.arguments_file:
+            self.logger.info(f"Arguments file: {self.arguments_file}")
+        if self.env_var:
+            self.logger.info(f"Environment variables: {self.env_var}")
+
+        self.logger.info(f"Workers: {self.max_workers}, Timeout: {self.timeout}s")
+
+        if self.config.execution.workspace_isolation:
+            self.logger.info("Workspace isolation: enabled (per-worker directories)")
+        else:
+            self.logger.info(f"Workspace: {self.config.get_working_directory()}")
+
+        if self.config.limits.stop_limits_enabled:
+            self.logger.info(f"Auto-stop limits: enabled (max_consecutive_failures={self.config.limits.max_consecutive_failures}, max_failure_rate={self.config.limits.max_failure_rate})")
+
+        self.logger.info("="*60)
 
         try:
             self.task_entries = self._discover_tasks()
@@ -1809,7 +1870,7 @@ class ParallelTaskManager:
             # For backward compatibility, also populate task_files if in file mode
             self.task_files = [entry.get('file', entry.get('template')) for entry in self.task_entries]
 
-            self.logger.info(f"Executing {total_tasks} tasks with {self.max_workers} workers")
+            self.logger.info(f"Discovered {total_tasks} tasks")
             if self.task_start_delay > 0:
                 self.logger.info(f"Task start delay: {self.task_start_delay} seconds between new tasks")
 
@@ -1888,7 +1949,9 @@ class ParallelTaskManager:
                         task_executor = SecureTaskExecutor(
                             task_file, self.command_template, self.timeout,
                             worker_counter, self.logger, self.config,
-                            extra_env=extra_env, task_arguments=task_arguments
+                            extra_env=extra_env, task_arguments=task_arguments,
+                            task_number=tasks_started, total_tasks=total_tasks,
+                            env_var=self.env_var
                         )
 
                         future = executor.submit(task_executor.execute)
