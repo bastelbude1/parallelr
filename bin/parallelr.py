@@ -2391,8 +2391,9 @@ Examples:
   # List running workers
   %(prog)s --list-workers
 
-Note: In ptasker mode, command is automatically set to:
-      tasker @TASK@ -p <project_name> -r
+Note: In ptasker mode:
+      - Command is automatically set to: tasker @TASK@ -p <project_name> -r
+      - The -T option is REQUIRED to specify the template file for tasker
         """
     else:
         description = "Parallel Task Executor - Python 3.6.8 Compatible"
@@ -2449,11 +2450,16 @@ Examples:
     parser.add_argument('-s', '--sleep', type=float, default=None,
                        help='Delay between starting new tasks (0-60 seconds, default: 0). Use to throttle resource consumption')
 
+    if ptasker_mode:
+        task_help = '[REQUIRED in ptasker mode] Template file path for TASKER execution'
+    else:
+        task_help = ('[Optional with -A] Task directory, file paths, or template file. '
+                    'Without -A: directory of task files or specific files (can specify multiple). '
+                    'With -A: single template file where @TASK@ is replaced with template path. '
+                    'Omit -T with -A to execute commands directly with arguments (no template)')
+
     parser.add_argument('-T', '--TasksDir', nargs='+', action='append',
-                       help='[Optional with -A] Task directory, file paths, or template file. '
-                            'Without -A: directory of task files or specific files (can specify multiple). '
-                            'With -A: single template file where @TASK@ is replaced with template path. '
-                            'Omit -T with -A to execute commands directly with arguments (no template)')
+                       help=task_help)
 
     parser.add_argument('--file-extension',
                        help='Filter task files by extension(s), e.g., "txt" or "txt,log,dat"')
@@ -2574,6 +2580,11 @@ Examples:
         if not args.arguments_file and not args.TasksDir:
             # Neither arguments file nor task dir provided - need at least one
             parser.error("Error: Either --TasksDir (-T) or --arguments-file (-A) is required")
+
+        # ptasker mode always requires -T because tasker command needs a template file
+        if ptasker_mode and not args.TasksDir:
+            parser.error("Error: ptasker mode requires --TasksDir (-T) to specify the template file for tasker.\n"
+                       "The auto-generated command 'tasker @TASK@ -p <project> -r' needs a template file path.")
 
         if not args.Command:
             if ptasker_mode:
