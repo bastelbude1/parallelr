@@ -1,0 +1,196 @@
+"""
+Unit tests for reporting and summary statistics.
+
+Tests the memory statistics formatting and reporting functionality.
+"""
+
+import sys
+from pathlib import Path
+from unittest.mock import MagicMock, patch
+import pytest
+
+# Add project root to path for imports
+sys.path.insert(0, str(Path(__file__).parent.parent.parent))
+
+# Import after path setup
+from bin.parallelr import ParallelTaskManager, TaskResult, TaskStatus
+
+
+@pytest.mark.unit
+def test_memory_stats_per_task_formatting_with_psutil():
+    """
+    Test that memory statistics are correctly formatted with per-task labels.
+
+    Verifies:
+    - Memory stats show "(per task)" labels
+    - Worst-case total memory calculation is correct
+    - Worst-case label is present
+    """
+    # Create mock configuration
+    mock_config = MagicMock()
+    mock_config.limits.max_workers = 5
+    mock_config.limits.max_output_capture = 1000
+    mock_config.execution.workspace_isolation = False
+    mock_config.limits.stop_limits_enabled = False
+    mock_config.get_working_directory.return_value = "/test/workspace"
+
+    # Create mock task manager
+    manager = ParallelTaskManager(
+        tasks_paths=[Path("/test/tasks")],
+        command_template="bash @TASK@",
+        config=mock_config
+    )
+
+    # Override attributes for testing
+    manager.max_workers = 5
+    manager.log_dir = Path("/test/logs")
+    manager.process_id = 12345
+    manager.timestamp = "01Jan25_120000"
+
+    # Create completed tasks with memory usage
+    completed_tasks = []
+    for i in range(3):
+        task = TaskResult(
+            task_file=f"/test/task{i}.sh",
+            command=f"bash /test/task{i}.sh",
+            start_time="2025-01-01 12:00:00",
+            end_time="2025-01-01 12:00:01",
+            status=TaskStatus.SUCCESS,
+            exit_code=0,
+            duration=1.0,
+            memory_usage=10.0 + i,  # 10MB, 11MB, 12MB
+            cpu_usage=5.0,
+            worker_id=i+1
+        )
+        completed_tasks.append(task)
+
+    manager.completed_tasks = completed_tasks
+
+    # Mock HAS_PSUTIL to True
+    with patch('bin.parallelr.HAS_PSUTIL', True):
+        # Call _print_summary to generate the report
+        summary = manager._print_summary()
+
+    # Verify per-task labels are present
+    assert "(per task)" in summary, "Summary should contain '(per task)' label"
+    assert "Average Memory Usage (per task)" in summary
+    assert "Peak Memory Usage (per task)" in summary
+
+    # Verify worst-case label
+    assert "(worst-case)" in summary, "Summary should contain '(worst-case)' label"
+
+    # Verify total memory calculation
+    # Peak memory is 12.0MB, workers is 5, so total should be 60.0MB
+    assert "60.00MB (worst-case)" in summary, \
+        "Total memory should be 60.00MB (12.0MB * 5 workers)"
+
+    # Verify it says "5 workers" in the total line
+    assert "(5 workers)" in summary
+
+    # Verify average memory (10 + 11 + 12) / 3 = 11.0
+    assert "11.00MB" in summary
+
+
+@pytest.mark.unit
+def test_memory_stats_formatting_without_psutil():
+    """
+    Test that summary gracefully handles missing psutil.
+
+    Verifies:
+    - Fallback message is shown when psutil is not available
+    - No crash or error occurs
+    """
+    # Create mock configuration
+    mock_config = MagicMock()
+    mock_config.limits.max_workers = 5
+    mock_config.limits.max_output_capture = 1000
+    mock_config.execution.workspace_isolation = False
+    mock_config.limits.stop_limits_enabled = False
+    mock_config.get_working_directory.return_value = "/test/workspace"
+
+    # Create mock task manager
+    manager = ParallelTaskManager(
+        tasks_paths=[Path("/test/tasks")],
+        command_template="bash @TASK@",
+        config=mock_config
+    )
+
+    # Override attributes
+    manager.max_workers = 5
+    manager.log_dir = Path("/test/logs")
+    manager.process_id = 12345
+    manager.timestamp = "01Jan25_120000"
+    manager.completed_tasks = []
+
+    # Mock HAS_PSUTIL to False
+    with patch('bin.parallelr.HAS_PSUTIL', False):
+        summary = manager._print_summary()
+
+    # Verify fallback message
+    assert "Memory/CPU monitoring: Not available" in summary
+
+    # Verify per-task labels are NOT present (since psutil is unavailable)
+    assert "(per task)" not in summary
+
+
+@pytest.mark.unit
+def test_worst_case_memory_calculation_scaling():
+    """
+    Test that worst-case memory calculation scales correctly with worker count.
+
+    Verifies:
+    - Formula: total = peak_per_task * num_workers
+    - Different worker counts produce proportional results
+    """
+    worker_counts = [2, 5, 10]
+    peak_memory = 15.0  # 15MB peak per task
+
+    for workers in worker_counts:
+        # Create mock configuration
+        mock_config = MagicMock()
+        mock_config.limits.max_workers = workers
+        mock_config.limits.max_output_capture = 1000
+        mock_config.execution.workspace_isolation = False
+        mock_config.limits.stop_limits_enabled = False
+        mock_config.get_working_directory.return_value = "/test/workspace"
+
+        # Create manager
+        manager = ParallelTaskManager(
+            tasks_paths=[Path("/test/tasks")],
+            command_template="bash @TASK@",
+            config=mock_config
+        )
+
+        manager.max_workers = workers
+        manager.log_dir = Path("/test/logs")
+        manager.process_id = 12345
+        manager.timestamp = "01Jan25_120000"
+
+        # Create task with peak memory
+        task = TaskResult(
+            task_file="/test/task.sh",
+            command="bash /test/task.sh",
+            start_time="2025-01-01 12:00:00",
+            end_time="2025-01-01 12:00:01",
+            status=TaskStatus.SUCCESS,
+            exit_code=0,
+            duration=1.0,
+            memory_usage=peak_memory,
+            cpu_usage=5.0,
+            worker_id=1
+        )
+        manager.completed_tasks = [task]
+
+        # Generate summary
+        with patch('bin.parallelr.HAS_PSUTIL', True):
+            summary = manager._print_summary()
+
+        # Verify calculation
+        expected_total = peak_memory * workers
+        expected_str = f"{expected_total:.2f}MB (worst-case)"
+
+        assert expected_str in summary, \
+            f"For {workers} workers: expected {expected_str} in summary"
+
+        # Verify worker count is shown
+        assert f"({workers} workers)" in summary
