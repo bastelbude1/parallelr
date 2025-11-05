@@ -40,7 +40,11 @@ def test_memory_stats_per_task_formatting_with_psutil(tmp_path):
     mock_config.limits.stop_limits_enabled = False
     mock_config.execution.workspace_isolation = False
     mock_config.logging.level = 'INFO'
+    mock_config.logging.max_log_size_mb = 10
+    mock_config.logging.backup_count = 5
     mock_config.get_working_directory.return_value = str(tmp_path / "workspace")
+    mock_config.get_log_directory.return_value = tmp_path / "logs"
+    mock_config.get_custom_timestamp.return_value = "01Jan25_120000"
     mock_config.validate.return_value = None
 
     # Patch Configuration.from_script to return our mock
@@ -127,7 +131,11 @@ def test_memory_stats_formatting_without_psutil(tmp_path):
     mock_config.limits.stop_limits_enabled = False
     mock_config.execution.workspace_isolation = False
     mock_config.logging.level = 'INFO'
+    mock_config.logging.max_log_size_mb = 10
+    mock_config.logging.backup_count = 5
     mock_config.get_working_directory.return_value = str(tmp_path / "workspace")
+    mock_config.get_log_directory.return_value = tmp_path / "logs"
+    mock_config.get_custom_timestamp.return_value = "01Jan25_120000"
     mock_config.validate.return_value = None
 
     # Patch Configuration.from_script
@@ -183,7 +191,11 @@ def test_worst_case_memory_calculation_scaling(tmp_path):
         mock_config.limits.stop_limits_enabled = False
         mock_config.execution.workspace_isolation = False
         mock_config.logging.level = 'INFO'
+        mock_config.logging.max_log_size_mb = 10
+        mock_config.logging.backup_count = 5
         mock_config.get_working_directory.return_value = str(tmp_path / "workspace")
+        mock_config.get_log_directory.return_value = tmp_path / "logs"
+        mock_config.get_custom_timestamp.return_value = "01Jan25_120000"
         mock_config.validate.return_value = None
 
         # Patch Configuration.from_script
