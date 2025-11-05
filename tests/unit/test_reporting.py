@@ -90,8 +90,8 @@ def test_memory_stats_per_task_formatting_with_psutil(tmp_path):
 
     # Mock HAS_PSUTIL to True
     with patch('bin.parallelr.HAS_PSUTIL', True):
-        # Call _print_summary to generate the report
-        summary = manager._print_summary()
+        # Call get_summary_report to generate the report
+        summary = manager.get_summary_report()
 
     # Verify per-task labels are present
     assert "(per task)" in summary, "Summary should contain '(per task)' label"
@@ -166,7 +166,7 @@ def test_memory_stats_formatting_without_psutil(tmp_path):
 
     # Mock HAS_PSUTIL to False
     with patch('bin.parallelr.HAS_PSUTIL', False):
-        summary = manager._print_summary()
+        summary = manager.get_summary_report()
 
     # Verify fallback message
     assert "Memory/CPU monitoring: Not available" in summary
@@ -244,7 +244,7 @@ def test_worst_case_memory_calculation_scaling(tmp_path):
 
         # Generate summary
         with patch('bin.parallelr.HAS_PSUTIL', True):
-            summary = manager._print_summary()
+            summary = manager.get_summary_report()
 
         # Verify calculation
         expected_total = peak_memory * workers
