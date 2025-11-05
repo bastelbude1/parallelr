@@ -68,6 +68,8 @@ def test_memory_stats_per_task_formatting_with_psutil(tmp_path):
     manager.log_dir = tmp_path / "logs"
     manager.process_id = 12345
     manager.timestamp = "01Jan25_120000"
+    manager.task_files = [tmp_path / f"task{i}.sh" for i in range(3)]
+    manager.failed_tasks = []
 
     # Create completed tasks with memory usage
     completed_tasks = []
@@ -162,7 +164,23 @@ def test_memory_stats_formatting_without_psutil(tmp_path):
     manager.log_dir = logs_dir
     manager.process_id = 12345
     manager.timestamp = "01Jan25_120000"
-    manager.completed_tasks = []
+    manager.task_files = [tmp_path / "task.sh"]
+    manager.failed_tasks = []
+
+    # Create a completed task (memory stats won't show without completed tasks)
+    task = TaskResult(
+        task_file=str(tmp_path / "task.sh"),
+        command=f"bash {tmp_path}/task.sh",
+        start_time=datetime(2025, 1, 1, 12, 0, 0),
+        end_time=datetime(2025, 1, 1, 12, 0, 1),
+        status=TaskStatus.SUCCESS,
+        exit_code=0,
+        duration=1.0,
+        memory_usage=10.0,
+        cpu_usage=5.0,
+        worker_id=1
+    )
+    manager.completed_tasks = [task]
 
     # Mock HAS_PSUTIL to False
     with patch('bin.parallelr.HAS_PSUTIL', False):
@@ -226,6 +244,8 @@ def test_worst_case_memory_calculation_scaling(tmp_path):
         manager.log_dir = logs_dir
         manager.process_id = 12345
         manager.timestamp = "01Jan25_120000"
+        manager.task_files = [tmp_path / "task.sh"]
+        manager.failed_tasks = []
 
         # Create task with peak memory
         task = TaskResult(
