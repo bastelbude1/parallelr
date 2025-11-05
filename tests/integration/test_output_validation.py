@@ -470,10 +470,11 @@ def test_memory_stats_per_worker_clarification(sample_task_dir, isolated_env):
     Test that memory statistics clearly indicate per-task values and worst-case total.
 
     Verifies:
-    - Memory stats are labeled as "(per task)"
+    - Memory stats are labeled as "(per task)" when psutil is available
     - Estimated Max Total Memory line is present with "(worst-case)" label
     - Total memory calculation is correct: peak_memory * num_workers
     - Worker count is shown in the total memory line
+    - Falls back gracefully when psutil is not available
     """
     worker_count = 3
     result = subprocess.run(
@@ -491,6 +492,10 @@ def test_memory_stats_per_worker_clarification(sample_task_dir, isolated_env):
     assert result.returncode == 0, f"Command failed: {result.stderr}"
 
     stdout = result.stdout
+
+    # Check if psutil is available in this environment
+    if 'Memory/CPU monitoring: Not available' in stdout:
+        pytest.skip("psutil not available - memory monitoring tests skipped")
 
     # Verify per-task labels are present
     assert '(per task)' in stdout, \
@@ -540,6 +545,7 @@ def test_memory_stats_scaling_different_worker_counts(temp_dir, isolated_env):
     - Total memory scales linearly with worker count
     - Per-task memory stays consistent regardless of worker count
     - Formula: total = peak_per_task * num_workers
+    - Falls back gracefully when psutil is not available
     """
     # Create simple test tasks
     for i in range(3):
@@ -564,6 +570,10 @@ def test_memory_stats_scaling_different_worker_counts(temp_dir, isolated_env):
         )
 
         assert result.returncode == 0, f"Command failed for {workers} workers: {result.stderr}"
+
+        # Check if psutil is available in this environment
+        if 'Memory/CPU monitoring: Not available' in result.stdout:
+            pytest.skip("psutil not available - memory scaling tests skipped")
 
         # Extract peak memory and total memory
         peak_match = re.search(r'Peak Memory Usage \(per task\):\s+([\d.]+)MB', result.stdout)
