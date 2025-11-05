@@ -208,6 +208,9 @@ parallelr -T ./tasks -C "python3 @TASK@" -r -D --enable-stop-limits
 # Execute without detailed output logging (logging is enabled by default)
 parallelr -T ./tasks -C "./process.sh @TASK@" -r --no-task-output-log
 
+# Show version
+parallelr --version
+
 # List running workers
 parallelr --list-workers
 
