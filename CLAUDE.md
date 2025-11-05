@@ -6,6 +6,28 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **parallelr** is a Python 3.6.8-compatible parallel task execution framework. It executes tasks from a directory in parallel using a configurable number of workers, with robust error handling, resource monitoring, and workspace management.
 
+## Versioning Convention
+
+This project follows **Semantic Versioning** for release management:
+
+**Format**: `MAJOR.MINOR.PATCH` (e.g., `1.0.0`)
+
+**Version Increment Rules**:
+- **PATCH (last digit)**: `1.0.0` → `1.0.1` - Minor fixes, bug fixes, documentation updates
+  - Examples: Fix typo in help text, fix edge case bug, update README
+- **MINOR (middle digit)**: `1.0.0` → `1.1.0` - New features, backward-compatible enhancements
+  - Examples: Add new command-line flag, add new functionality, enhance existing feature
+  - Reset PATCH to 0 when incrementing MINOR
+- **MAJOR (first digit)**: `1.0.0` → `2.0.0` - Breaking changes, major refactoring
+  - Examples: Remove deprecated features, change command-line interface, major architecture changes
+  - Reset MINOR and PATCH to 0 when incrementing MAJOR
+
+**Version Update Locations**:
+1. `bin/parallelr.py` - Update `__version__` variable (around line 9)
+2. `README.md` - Update version header (around line 3)
+
+**Current Version**: `1.0.0`
+
 ## ⚠️ CRITICAL: Python 3.6.8 Compatibility Requirement
 
 **MANDATORY**: All code, including tests, MUST be compatible with Python 3.6.8.
