@@ -465,7 +465,7 @@ def test_log_file_paths_in_stdout(sample_task_dir, isolated_env):
     assert os.path.exists(output_path), f"Output file doesn't exist: {output_path}"
 
 @pytest.mark.integration
-def test_memory_stats_per_worker_clarification(sample_task_dir, isolated_env):
+def test_memory_stats_per_task_clarification(sample_task_dir, isolated_env):
     """
     Test that memory statistics clearly indicate per-task values and worst-case total.
 
@@ -537,7 +537,7 @@ def test_memory_stats_per_worker_clarification(sample_task_dir, isolated_env):
         f"Total memory calculation incorrect: expected {expected_total:.2f}MB, got {total_memory:.2f}MB"
 
 @pytest.mark.integration
-def test_memory_stats_scaling_different_worker_counts(temp_dir, isolated_env):
+def test_memory_stats_per_task_scaling_with_workers(temp_dir, isolated_env):
     """
     Test that total memory estimate scales correctly with different worker counts.
 
