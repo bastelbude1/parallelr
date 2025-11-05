@@ -1,5 +1,7 @@
 # parallelr - Parallel Task Executor
 
+**Version 1.0.0**
+
 [![CI](https://github.com/bastelbude1/parallelr/actions/workflows/ci.yml/badge.svg)](https://github.com/bastelbude1/parallelr/actions/workflows/ci.yml)
 [![codecov](https://codecov.io/gh/bastelbude1/parallelr/branch/master/graph/badge.svg)](https://codecov.io/gh/bastelbude1/parallelr)
 
@@ -24,18 +26,22 @@ Perfect for batch processing, data pipelines, test suites, or any scenario where
 
 - ✓ **Parallel Execution**: Execute tasks concurrently with configurable worker pools (1-100 workers)
 - ✓ **Flexible Task Selection**: Support for directories, files, glob patterns, and multiple sources
-- ✓ **Arguments Mode**: Run same template with different arguments from file (NEW)
+- ✓ **Arguments Mode**: Run same template with different arguments from file with multi-argument support
+- ✓ **Environment Variables**: Set task-specific environment variables from arguments file
 - ✓ **File Type Filtering**: Filter tasks by extension(s) with `--file-extension`
 - ✓ **Flexible Configuration**: Two-tier YAML configuration system with user overrides
-- ✓ **Resource Monitoring**: Track memory and CPU usage per task (requires psutil)
+- ✓ **Resource Monitoring**: Track memory and CPU usage per task with per-task and worst-case total reporting
+- ✓ **JSONL Results**: Machine-readable results in JSON Lines format for analysis
+- ✓ **PSR Analysis Tool**: Standalone tool (psr.py) for filtering, reporting, and CSV export
 - ✓ **Workspace Management**: Shared or isolated workspace modes
 - ✓ **Auto-Stop Protection**: Automatic halt on consecutive failures or high error rates
 - ✓ **Daemon Mode**: Background execution with process tracking
+- ✓ **Enhanced Output Logging**: Detailed per-task output with command-line parameters and truncation tracking
 - ✓ **Comprehensive Logging**: Rotating logs with timestamp-based naming to prevent conflicts
 - ✓ **Timeout Management**: Per-task timeout with graceful termination
 - ✓ **Security Validation**: Input validation and argument length checking
 - ✓ **Graceful Shutdown**: Signal handling for clean termination
-- ✓ **Real-time Output Capture**: Non-blocking I/O for live output collection
+- ✓ **Real-time Output Capture**: Non-blocking I/O with precise truncation tracking
 - ✓ **TASKER Integration**: Simplified `ptasker` mode with auto-generated project IDs
 
 ## Quick Start on JumpHosts
@@ -1013,6 +1019,157 @@ Log Files:
 Process Info:
 - Process ID: 12345
 - Workers: 20
+```
+
+### JSONL Results Format
+
+Starting with version 1.0.0, parallelr generates results in **JSONL (JSON Lines)** format instead of CSV for better flexibility and data richness.
+
+**Location**: `~/parallelr/logs/parallelr_{PID}_{TIMESTAMP}_results.jsonl`
+
+**Format**: One JSON object per line
+- **Session metadata** (first line): Configuration, hostname, user
+- **Task results** (subsequent lines): Detailed execution data for each task
+
+**Example**:
+```jsonl
+{"type":"session","session_id":"parallelr_12345_29Sep25_143015","hostname":"server1","user":"username","command_template":"bash @TASK@","max_workers":5}
+{"type":"task","start_time":"2025-09-29T14:30:15","end_time":"2025-09-29T14:30:17","status":"SUCCESS","process_id":"12345","worker_id":1,"task_file":"./tasks/task1.sh","command_executed":"bash ./tasks/task1.sh","exit_code":0,"duration_seconds":2.75,"memory_mb":45.23,"cpu_percent":12.5,"error_message":""}
+```
+
+### PSR - Parallelr Summary Report Tool
+
+**psr.py** is a standalone tool for analyzing JSONL results and generating custom CSV reports with filtering and column selection.
+
+**Location**: `bin/psr.py`
+
+#### Basic Usage
+
+**1. Display all results as CSV** (default columns):
+```bash
+python bin/psr.py ~/parallelr/logs/parallelr_12345_29Sep25_143015_results.jsonl
+```
+
+**Default columns**:
+```
+START_TIME, END_TIME, STATUS, PROCESS_ID, WORKER_ID, COMMAND_EXECUTED, EXIT_CODE, DURATION_SECONDS, MEMORY_MB, CPU_PERCENT, ERROR_MESSAGE
+```
+
+**2. Custom columns** (including nested fields):
+```bash
+# Basic columns
+python bin/psr.py results.jsonl --columns start_time,status,exit_code,duration_seconds
+
+# Access nested fields (e.g., environment variables)
+python bin/psr.py results.jsonl --columns start_time,env_vars.HOSTNAME,env_vars.TASK_ID,status
+```
+
+**3. Filter results**:
+```bash
+# Show only failed tasks
+python bin/psr.py results.jsonl --filter status=FAILED
+
+# Show successful tasks
+python bin/psr.py results.jsonl --filter status=SUCCESS
+
+# Exclude successful tasks
+python bin/psr.py results.jsonl --filter status!=SUCCESS
+```
+
+**4. Save to CSV file**:
+```bash
+python bin/psr.py results.jsonl --output report.csv
+```
+
+**5. Show execution statistics**:
+```bash
+python bin/psr.py results.jsonl --stats
+```
+
+**Example output**:
+```text
+============================================================
+EXECUTION STATISTICS
+============================================================
+
+Session ID: parallelr_12345_29Sep25_143015
+Hostname: server1
+User: username
+Command Template: bash @TASK@
+
+Total Tasks: 100
+
+By Status:
+  FAILED: 5 (5.0%)
+  SUCCESS: 92 (92.0%)
+  TIMEOUT: 3 (3.0%)
+
+Total Duration: 1534.50s
+Average Duration: 15.35s per task
+============================================================
+```
+
+#### Advanced Examples
+
+**Combine filtering and custom columns**:
+```bash
+# Failed tasks with specific details
+python bin/psr.py results.jsonl \
+  --filter status=FAILED \
+  --columns task_file,exit_code,duration_seconds,error_message \
+  --output failed_tasks.csv
+```
+
+**Extract environment variable data**:
+```bash
+# Tasks with specific environment variables
+python bin/psr.py results.jsonl \
+  --columns start_time,env_vars.HOSTNAME,env_vars.PORT,env_vars.ENV,status \
+  --output deployment_report.csv
+```
+
+**Performance analysis**:
+```bash
+# Top memory consumers
+python bin/psr.py results.jsonl \
+  --columns task_file,memory_mb,duration_seconds,cpu_percent \
+  | sort -t',' -k2 -nr \
+  | head -20
+```
+
+#### Nested Field Access
+
+Use dot notation to access nested JSON fields:
+
+**Available nested fields**:
+- `env_vars.VARIABLE_NAME` - Environment variables set for the task
+- `arguments.0`, `arguments.1`, etc. - Individual arguments (if using -A mode)
+
+**Example**:
+```bash
+# Show tasks with their environment variables
+python bin/psr.py results.jsonl \
+  --columns worker_id,env_vars.SERVER,env_vars.TASK_ID,status,duration_seconds
+```
+
+#### Integration with Analysis Tools
+
+**Import into Excel/Google Sheets**:
+```bash
+python bin/psr.py results.jsonl --output report.csv
+# Open report.csv in Excel/Google Sheets
+```
+
+**Import into pandas (Python)**:
+```python
+import pandas as pd
+df = pd.read_csv('report.csv')
+```
+
+**Import into R**:
+```r
+library(readr)
+data <- read_csv('report.csv')
 ```
 
 ## Task File Format

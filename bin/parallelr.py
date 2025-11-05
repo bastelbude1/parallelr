@@ -6,6 +6,8 @@ A robust parallel task execution framework with simplified configuration
 and practical security measures.
 """
 
+__version__ = "1.0.0"
+
 import os
 import sys
 from pathlib import Path
