@@ -467,11 +467,11 @@ def test_log_file_paths_in_stdout(sample_task_dir, isolated_env):
 @pytest.mark.integration
 def test_memory_stats_per_worker_clarification(sample_task_dir, isolated_env):
     """
-    Test that memory statistics clearly indicate per-worker values and total estimate.
+    Test that memory statistics clearly indicate per-task values and worst-case total.
 
     Verifies:
-    - Memory stats are labeled as "(per worker)"
-    - Estimated Max Total Memory line is present
+    - Memory stats are labeled as "(per task)"
+    - Estimated Max Total Memory line is present with "(worst-case)" label
     - Total memory calculation is correct: peak_memory * num_workers
     - Worker count is shown in the total memory line
     """
@@ -492,31 +492,31 @@ def test_memory_stats_per_worker_clarification(sample_task_dir, isolated_env):
 
     stdout = result.stdout
 
-    # Verify per-worker labels are present
-    assert '(per worker)' in stdout, \
-        "Memory statistics should be labeled as '(per worker)'"
+    # Verify per-task labels are present
+    assert '(per task)' in stdout, \
+        "Memory statistics should be labeled as '(per task)'"
 
-    # Verify "Average Memory Usage (per worker)" line exists
-    avg_memory_match = re.search(r'Average Memory Usage \(per worker\):\s+([\d.]+)MB', stdout)
+    # Verify "Average Memory Usage (per task)" line exists
+    avg_memory_match = re.search(r'Average Memory Usage \(per task\):\s+([\d.]+)MB', stdout)
     assert avg_memory_match, \
-        "Could not find 'Average Memory Usage (per worker)' line in output"
+        "Could not find 'Average Memory Usage (per task)' line in output"
 
-    # Verify "Peak Memory Usage (per worker)" line exists
-    peak_memory_match = re.search(r'Peak Memory Usage \(per worker\):\s+([\d.]+)MB', stdout)
+    # Verify "Peak Memory Usage (per task)" line exists
+    peak_memory_match = re.search(r'Peak Memory Usage \(per task\):\s+([\d.]+)MB', stdout)
     assert peak_memory_match, \
-        "Could not find 'Peak Memory Usage (per worker)' line in output"
+        "Could not find 'Peak Memory Usage (per task)' line in output"
 
     # Extract peak memory value
     peak_memory = float(peak_memory_match.group(1))
     assert peak_memory > 0, "Peak memory should be positive"
 
-    # Verify "Estimated Max Total Memory" line exists with worker count
+    # Verify "Estimated Max Total Memory" line exists with worker count and worst-case label
     total_memory_match = re.search(
-        r'Estimated Max Total Memory \((\d+) workers\):\s+([\d.]+)MB',
+        r'Estimated Max Total Memory \((\d+) workers\):\s+([\d.]+)MB \(worst-case\)',
         stdout
     )
     assert total_memory_match, \
-        "Could not find 'Estimated Max Total Memory' line with worker count in output"
+        "Could not find 'Estimated Max Total Memory' line with worker count and '(worst-case)' label in output"
 
     # Verify worker count matches configuration
     reported_workers = int(total_memory_match.group(1))
@@ -538,8 +538,8 @@ def test_memory_stats_scaling_different_worker_counts(temp_dir, isolated_env):
 
     Verifies:
     - Total memory scales linearly with worker count
-    - Per-worker memory stays consistent regardless of worker count
-    - Formula: total = peak_per_worker * num_workers
+    - Per-task memory stays consistent regardless of worker count
+    - Formula: total = peak_per_task * num_workers
     """
     # Create simple test tasks
     for i in range(3):
@@ -566,7 +566,7 @@ def test_memory_stats_scaling_different_worker_counts(temp_dir, isolated_env):
         assert result.returncode == 0, f"Command failed for {workers} workers: {result.stderr}"
 
         # Extract peak memory and total memory
-        peak_match = re.search(r'Peak Memory Usage \(per worker\):\s+([\d.]+)MB', result.stdout)
+        peak_match = re.search(r'Peak Memory Usage \(per task\):\s+([\d.]+)MB', result.stdout)
         total_match = re.search(r'Estimated Max Total Memory \(\d+ workers\):\s+([\d.]+)MB', result.stdout)
 
         assert peak_match, f"Could not find peak memory for {workers} workers"
@@ -586,6 +586,6 @@ def test_memory_stats_scaling_different_worker_counts(temp_dir, isolated_env):
     # Total memory should increase proportionally with worker count
     ratio_2_to_5 = results[5]['total'] / results[2]['total']
     expected_ratio = 5.0 / 2.0  # 2.5
-    # Allow 10% tolerance for slight per-worker variations
+    # Allow 10% tolerance for slight per-task variations
     assert abs(ratio_2_to_5 - expected_ratio) / expected_ratio < 0.1, \
         f"Memory scaling incorrect: 5 workers / 2 workers = {ratio_2_to_5:.2f}, expected ~{expected_ratio:.2f}"
