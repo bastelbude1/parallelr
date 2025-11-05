@@ -17,8 +17,34 @@ sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 from bin.parallelr import ParallelTaskManager, TaskResult, TaskStatus
 
 
+@pytest.fixture
+def mock_config_factory(tmp_path):
+    """Factory fixture for creating mock configurations with custom worker counts."""
+    def _create_mock(workers=5):
+        logs_dir = tmp_path / "logs"
+        logs_dir.mkdir(parents=True, exist_ok=True)
+
+        mock_config = MagicMock()
+        mock_config.limits.max_workers = workers
+        mock_config.limits.timeout_seconds = 600
+        mock_config.limits.task_start_delay = 0.1
+        mock_config.limits.wait_time = 1.0
+        mock_config.limits.max_output_capture = 1000
+        mock_config.limits.stop_limits_enabled = False
+        mock_config.execution.workspace_isolation = False
+        mock_config.logging.level = 'INFO'
+        mock_config.logging.max_log_size_mb = 10
+        mock_config.logging.backup_count = 5
+        mock_config.get_working_directory.return_value = str(tmp_path / "workspace")
+        mock_config.get_log_directory.return_value = logs_dir
+        mock_config.get_custom_timestamp.return_value = "01Jan25_120000"
+        mock_config.validate.return_value = None
+        return mock_config, logs_dir
+    return _create_mock
+
+
 @pytest.mark.unit
-def test_memory_stats_per_task_formatting_with_psutil(tmp_path):
+def test_memory_stats_per_task_formatting_with_psutil(tmp_path, mock_config_factory):
     """
     Test that memory statistics are correctly formatted with per-task labels.
 
@@ -30,26 +56,8 @@ def test_memory_stats_per_task_formatting_with_psutil(tmp_path):
     # Create a temporary script path (doesn't need to exist, will be mocked)
     script_path = tmp_path / "parallelr.py"
 
-    # Create logs directory
-    logs_dir = tmp_path / "logs"
-    logs_dir.mkdir(parents=True, exist_ok=True)
-
-    # Create mock configuration that Configuration.from_script will return
-    mock_config = MagicMock()
-    mock_config.limits.max_workers = 5
-    mock_config.limits.timeout_seconds = 600
-    mock_config.limits.task_start_delay = 0.1
-    mock_config.limits.wait_time = 1.0
-    mock_config.limits.max_output_capture = 1000
-    mock_config.limits.stop_limits_enabled = False
-    mock_config.execution.workspace_isolation = False
-    mock_config.logging.level = 'INFO'
-    mock_config.logging.max_log_size_mb = 10
-    mock_config.logging.backup_count = 5
-    mock_config.get_working_directory.return_value = str(tmp_path / "workspace")
-    mock_config.get_log_directory.return_value = logs_dir
-    mock_config.get_custom_timestamp.return_value = "01Jan25_120000"
-    mock_config.validate.return_value = None
+    # Create mock configuration using fixture
+    mock_config, logs_dir = mock_config_factory(workers=5)
 
     # Patch Configuration.from_script to return our mock
     with patch('bin.parallelr.Configuration.from_script', return_value=mock_config):
@@ -112,11 +120,11 @@ def test_memory_stats_per_task_formatting_with_psutil(tmp_path):
     assert "(5 workers)" in summary
 
     # Verify average memory (10 + 11 + 12) / 3 = 11.0
-    assert "11.00MB" in summary
+    assert "Average Memory Usage (per task): 11.00MB" in summary
 
 
 @pytest.mark.unit
-def test_memory_stats_formatting_without_psutil(tmp_path):
+def test_memory_stats_formatting_without_psutil(tmp_path, mock_config_factory):
     """
     Test that summary gracefully handles missing psutil.
 
@@ -127,26 +135,8 @@ def test_memory_stats_formatting_without_psutil(tmp_path):
     # Create temporary script path
     script_path = tmp_path / "parallelr.py"
 
-    # Create logs directory
-    logs_dir = tmp_path / "logs"
-    logs_dir.mkdir(parents=True, exist_ok=True)
-
-    # Create mock configuration
-    mock_config = MagicMock()
-    mock_config.limits.max_workers = 5
-    mock_config.limits.timeout_seconds = 600
-    mock_config.limits.task_start_delay = 0.1
-    mock_config.limits.wait_time = 1.0
-    mock_config.limits.max_output_capture = 1000
-    mock_config.limits.stop_limits_enabled = False
-    mock_config.execution.workspace_isolation = False
-    mock_config.logging.level = 'INFO'
-    mock_config.logging.max_log_size_mb = 10
-    mock_config.logging.backup_count = 5
-    mock_config.get_working_directory.return_value = str(tmp_path / "workspace")
-    mock_config.get_log_directory.return_value = logs_dir
-    mock_config.get_custom_timestamp.return_value = "01Jan25_120000"
-    mock_config.validate.return_value = None
+    # Create mock configuration using fixture
+    mock_config, logs_dir = mock_config_factory(workers=5)
 
     # Patch Configuration.from_script
     with patch('bin.parallelr.Configuration.from_script', return_value=mock_config):
@@ -194,7 +184,7 @@ def test_memory_stats_formatting_without_psutil(tmp_path):
 
 
 @pytest.mark.unit
-def test_worst_case_memory_calculation_scaling(tmp_path):
+def test_worst_case_memory_calculation_scaling(tmp_path, mock_config_factory):
     """
     Test that worst-case memory calculation scales correctly with worker count.
 
@@ -206,27 +196,9 @@ def test_worst_case_memory_calculation_scaling(tmp_path):
     peak_memory = 15.0  # 15MB peak per task
     script_path = tmp_path / "parallelr.py"
 
-    # Create logs directory
-    logs_dir = tmp_path / "logs"
-    logs_dir.mkdir(parents=True, exist_ok=True)
-
     for workers in worker_counts:
-        # Create mock configuration
-        mock_config = MagicMock()
-        mock_config.limits.max_workers = workers
-        mock_config.limits.timeout_seconds = 600
-        mock_config.limits.task_start_delay = 0.1
-        mock_config.limits.wait_time = 1.0
-        mock_config.limits.max_output_capture = 1000
-        mock_config.limits.stop_limits_enabled = False
-        mock_config.execution.workspace_isolation = False
-        mock_config.logging.level = 'INFO'
-        mock_config.logging.max_log_size_mb = 10
-        mock_config.logging.backup_count = 5
-        mock_config.get_working_directory.return_value = str(tmp_path / "workspace")
-        mock_config.get_log_directory.return_value = logs_dir
-        mock_config.get_custom_timestamp.return_value = "01Jan25_120000"
-        mock_config.validate.return_value = None
+        # Create mock configuration using fixture
+        mock_config, logs_dir = mock_config_factory(workers=workers)
 
         # Patch Configuration.from_script
         with patch('bin.parallelr.Configuration.from_script', return_value=mock_config):
