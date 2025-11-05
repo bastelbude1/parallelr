@@ -30,6 +30,10 @@ def test_memory_stats_per_task_formatting_with_psutil(tmp_path):
     # Create a temporary script path (doesn't need to exist, will be mocked)
     script_path = tmp_path / "parallelr.py"
 
+    # Create logs directory
+    logs_dir = tmp_path / "logs"
+    logs_dir.mkdir(parents=True, exist_ok=True)
+
     # Create mock configuration that Configuration.from_script will return
     mock_config = MagicMock()
     mock_config.limits.max_workers = 5
@@ -43,7 +47,7 @@ def test_memory_stats_per_task_formatting_with_psutil(tmp_path):
     mock_config.logging.max_log_size_mb = 10
     mock_config.logging.backup_count = 5
     mock_config.get_working_directory.return_value = str(tmp_path / "workspace")
-    mock_config.get_log_directory.return_value = tmp_path / "logs"
+    mock_config.get_log_directory.return_value = logs_dir
     mock_config.get_custom_timestamp.return_value = "01Jan25_120000"
     mock_config.validate.return_value = None
 
@@ -121,6 +125,10 @@ def test_memory_stats_formatting_without_psutil(tmp_path):
     # Create temporary script path
     script_path = tmp_path / "parallelr.py"
 
+    # Create logs directory
+    logs_dir = tmp_path / "logs"
+    logs_dir.mkdir(parents=True, exist_ok=True)
+
     # Create mock configuration
     mock_config = MagicMock()
     mock_config.limits.max_workers = 5
@@ -134,7 +142,7 @@ def test_memory_stats_formatting_without_psutil(tmp_path):
     mock_config.logging.max_log_size_mb = 10
     mock_config.logging.backup_count = 5
     mock_config.get_working_directory.return_value = str(tmp_path / "workspace")
-    mock_config.get_log_directory.return_value = tmp_path / "logs"
+    mock_config.get_log_directory.return_value = logs_dir
     mock_config.get_custom_timestamp.return_value = "01Jan25_120000"
     mock_config.validate.return_value = None
 
@@ -151,7 +159,7 @@ def test_memory_stats_formatting_without_psutil(tmp_path):
         )
 
     # Override attributes
-    manager.log_dir = tmp_path / "logs"
+    manager.log_dir = logs_dir
     manager.process_id = 12345
     manager.timestamp = "01Jan25_120000"
     manager.completed_tasks = []
@@ -180,6 +188,10 @@ def test_worst_case_memory_calculation_scaling(tmp_path):
     peak_memory = 15.0  # 15MB peak per task
     script_path = tmp_path / "parallelr.py"
 
+    # Create logs directory
+    logs_dir = tmp_path / "logs"
+    logs_dir.mkdir(parents=True, exist_ok=True)
+
     for workers in worker_counts:
         # Create mock configuration
         mock_config = MagicMock()
@@ -194,7 +206,7 @@ def test_worst_case_memory_calculation_scaling(tmp_path):
         mock_config.logging.max_log_size_mb = 10
         mock_config.logging.backup_count = 5
         mock_config.get_working_directory.return_value = str(tmp_path / "workspace")
-        mock_config.get_log_directory.return_value = tmp_path / "logs"
+        mock_config.get_log_directory.return_value = logs_dir
         mock_config.get_custom_timestamp.return_value = "01Jan25_120000"
         mock_config.validate.return_value = None
 
@@ -211,7 +223,7 @@ def test_worst_case_memory_calculation_scaling(tmp_path):
             )
 
         # Override attributes
-        manager.log_dir = tmp_path / "logs"
+        manager.log_dir = logs_dir
         manager.process_id = 12345
         manager.timestamp = "01Jan25_120000"
 
