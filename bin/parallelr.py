@@ -2437,7 +2437,9 @@ Examples:
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog=epilog
     )
-    
+
+    parser.add_argument('--version', action='version', version=f'%(prog)s {__version__}')
+
     parser.add_argument('-m', '--max', type=int, default=None,
                        help='Maximum parallel tasks (overrides config)')
     
