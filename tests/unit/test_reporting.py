@@ -73,7 +73,7 @@ def test_memory_stats_per_task_formatting_with_psutil(tmp_path, mock_config_fact
         )
 
     # Override attributes needed for testing
-    manager.log_dir = tmp_path / "logs"
+    manager.log_dir = logs_dir
     manager.process_id = 12345
     manager.timestamp = "01Jan25_120000"
     manager.task_files = [tmp_path / f"task{i}.sh" for i in range(3)]
