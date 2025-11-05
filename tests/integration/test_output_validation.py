@@ -463,3 +463,139 @@ def test_log_file_paths_in_stdout(sample_task_dir, isolated_env):
     # Verify files exist
     assert os.path.exists(summary_path), f"Summary file doesn't exist: {summary_path}"
     assert os.path.exists(output_path), f"Output file doesn't exist: {output_path}"
+
+@pytest.mark.integration
+def test_memory_stats_per_task_clarification(sample_task_dir, isolated_env):
+    """
+    Test that memory statistics clearly indicate per-task values and worst-case total.
+
+    Verifies:
+    - Memory stats are labeled as "(per task)" when psutil is available
+    - Estimated Max Total Memory line is present with "(worst-case)" label
+    - Total memory calculation is correct: peak_memory * num_workers
+    - Worker count is shown in the total memory line
+    - Falls back gracefully when psutil is not available
+    """
+    worker_count = 3
+    result = subprocess.run(
+        [PYTHON_FOR_PARALLELR, str(PARALLELR_BIN),
+         '-T', str(sample_task_dir),
+         '-C', 'bash @TASK@',
+         '-r', '-m', str(worker_count)],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        universal_newlines=True,
+        env=isolated_env['env'],
+        timeout=30
+    )
+
+    assert result.returncode == 0, f"Command failed: {result.stderr}"
+
+    stdout = result.stdout
+
+    # Check if psutil is available in this environment
+    if 'Memory/CPU monitoring: Not available' in stdout:
+        pytest.skip("psutil not available - memory monitoring tests skipped")
+
+    # Verify per-task labels are present
+    assert '(per task)' in stdout, \
+        "Memory statistics should be labeled as '(per task)'"
+
+    # Verify "Average Memory Usage (per task)" line exists
+    avg_memory_match = re.search(r'Average Memory Usage \(per task\):\s+([\d.]+)MB', stdout)
+    assert avg_memory_match, \
+        "Could not find 'Average Memory Usage (per task)' line in output"
+
+    # Verify "Peak Memory Usage (per task)" line exists
+    peak_memory_match = re.search(r'Peak Memory Usage \(per task\):\s+([\d.]+)MB', stdout)
+    assert peak_memory_match, \
+        "Could not find 'Peak Memory Usage (per task)' line in output"
+
+    # Extract peak memory value
+    peak_memory = float(peak_memory_match.group(1))
+    assert peak_memory > 0, "Peak memory should be positive"
+
+    # Verify "Estimated Max Total Memory" line exists with worker count and worst-case label
+    total_memory_match = re.search(
+        r'Estimated Max Total Memory \((\d+) workers\):\s+([\d.]+)MB \(worst-case\)',
+        stdout
+    )
+    assert total_memory_match, \
+        "Could not find 'Estimated Max Total Memory' line with worker count and '(worst-case)' label in output"
+
+    # Verify worker count matches configuration
+    reported_workers = int(total_memory_match.group(1))
+    assert reported_workers == worker_count, \
+        f"Worker count mismatch: expected {worker_count}, got {reported_workers}"
+
+    # Verify total memory calculation is correct
+    total_memory = float(total_memory_match.group(2))
+    expected_total = peak_memory * worker_count
+
+    # Allow small floating point tolerance (0.1 MB)
+    assert abs(total_memory - expected_total) < 0.1, \
+        f"Total memory calculation incorrect: expected {expected_total:.2f}MB, got {total_memory:.2f}MB"
+
+@pytest.mark.integration
+def test_memory_stats_per_task_scaling_with_workers(temp_dir, isolated_env):
+    """
+    Test that total memory estimate scales correctly with different worker counts.
+
+    Verifies:
+    - Total memory scales linearly with worker count
+    - Per-task memory stays consistent regardless of worker count
+    - Formula: total = peak_per_task * num_workers
+    - Falls back gracefully when psutil is not available
+    """
+    # Create simple test tasks
+    for i in range(3):
+        task = temp_dir / f'task_{i}.sh'
+        task.write_text('#!/bin/bash\necho "Task output"\n')
+        task.chmod(0o755)
+
+    worker_counts = [2, 5, 10]
+    results = {}
+
+    for workers in worker_counts:
+        result = subprocess.run(
+            [PYTHON_FOR_PARALLELR, str(PARALLELR_BIN),
+             '-T', str(temp_dir),
+             '-C', 'bash @TASK@',
+             '-r', '-m', str(workers)],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            universal_newlines=True,
+            env=isolated_env['env'],
+            timeout=30
+        )
+
+        assert result.returncode == 0, f"Command failed for {workers} workers: {result.stderr}"
+
+        # Check if psutil is available in this environment
+        if 'Memory/CPU monitoring: Not available' in result.stdout:
+            pytest.skip("psutil not available - memory scaling tests skipped")
+
+        # Extract peak memory and total memory
+        peak_match = re.search(r'Peak Memory Usage \(per task\):\s+([\d.]+)MB', result.stdout)
+        total_match = re.search(r'Estimated Max Total Memory \(\d+ workers\):\s+([\d.]+)MB', result.stdout)
+
+        assert peak_match, f"Could not find peak memory for {workers} workers"
+        assert total_match, f"Could not find total memory for {workers} workers"
+
+        peak_memory = float(peak_match.group(1))
+        total_memory = float(total_match.group(1))
+
+        results[workers] = {'peak': peak_memory, 'total': total_memory}
+
+        # Verify calculation for this worker count
+        expected_total = peak_memory * workers
+        assert abs(total_memory - expected_total) < 0.1, \
+            f"For {workers} workers: expected total {expected_total:.2f}MB, got {total_memory:.2f}MB"
+
+    # Verify scaling relationship
+    # Total memory should increase proportionally with worker count
+    ratio_2_to_5 = results[5]['total'] / results[2]['total']
+    expected_ratio = 5.0 / 2.0  # 2.5
+    # Allow 10% tolerance for slight per-task variations
+    assert abs(ratio_2_to_5 - expected_ratio) / expected_ratio < 0.1, \
+        f"Memory scaling incorrect: 5 workers / 2 workers = {ratio_2_to_5:.2f}, expected ~{expected_ratio:.2f}"

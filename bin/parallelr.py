@@ -6,6 +6,8 @@ A robust parallel task execution framework with simplified configuration
 and practical security measures.
 """
 
+__version__ = "1.0.0"
+
 import os
 import sys
 from pathlib import Path
@@ -2087,8 +2089,11 @@ class ParallelTaskManager:
         # Resource monitoring info
         resource_info = ""
         if HAS_PSUTIL:
-            resource_info = f"""- Average Memory Usage: {avg_memory:.2f}MB
-- Peak Memory Usage: {max_memory:.2f}MB"""
+            # Calculate worst-case total memory (all workers running peak task concurrently)
+            estimated_max_total_memory = max_memory * self.max_workers
+            resource_info = f"""- Average Memory Usage (per task): {avg_memory:.2f}MB
+- Peak Memory Usage (per task): {max_memory:.2f}MB
+- Estimated Max Total Memory ({self.max_workers} workers): {estimated_max_total_memory:.2f}MB (worst-case)"""
         else:
             resource_info = "- Memory/CPU monitoring: Not available (psutil not installed)"
 
@@ -2432,7 +2437,9 @@ Examples:
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog=epilog
     )
-    
+
+    parser.add_argument('--version', action='version', version=f'%(prog)s {__version__}')
+
     parser.add_argument('-m', '--max', type=int, default=None,
                        help='Maximum parallel tasks (overrides config)')
     
