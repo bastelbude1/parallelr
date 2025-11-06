@@ -2,8 +2,12 @@
 Integration tests for ptasker mode behavior.
 
 Tests the ptasker symlink functionality and validation requirements.
+
+Note: Tests that create symlinks require admin rights or developer mode on Windows.
+      Set ENABLE_SYMLINKS=1 environment variable to run these tests on Windows.
 """
 
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -18,8 +22,16 @@ PARALLELR_BIN = Path(__file__).parent.parent.parent / 'bin' / 'parallelr.py'
 
 
 @pytest.mark.integration
+@pytest.mark.skipif(
+    os.name == 'nt' and not os.getenv('ENABLE_SYMLINKS'),
+    reason="Requires admin rights or developer mode on Windows. Set ENABLE_SYMLINKS=1 to run."
+)
 def test_ptasker_requires_template_with_arguments(tmp_path):
-    """Test that ptasker mode requires -T even when using -A."""
+    """
+    Test that ptasker mode requires -T even when using -A.
+
+    Note: Requires symlink support (admin/developer mode on Windows).
+    """
     # Create a ptasker symlink
     ptasker_link = tmp_path / "ptasker"
     ptasker_link.symlink_to(PARALLELR_BIN)
@@ -51,8 +63,16 @@ def test_ptasker_requires_template_with_arguments(tmp_path):
 
 
 @pytest.mark.integration
+@pytest.mark.skipif(
+    os.name == 'nt' and not os.getenv('ENABLE_SYMLINKS'),
+    reason="Requires admin rights or developer mode on Windows. Set ENABLE_SYMLINKS=1 to run."
+)
 def test_ptasker_works_with_template(tmp_path):
-    """Test that ptasker mode works when -T is provided."""
+    """
+    Test that ptasker mode works when -T is provided.
+
+    Note: Requires symlink support (admin/developer mode on Windows).
+    """
     # Create a ptasker symlink
     ptasker_link = tmp_path / "ptasker"
     ptasker_link.symlink_to(PARALLELR_BIN)
@@ -117,8 +137,16 @@ def test_regular_parallelr_allows_arguments_without_template(tmp_path):
 
 
 @pytest.mark.integration
+@pytest.mark.skipif(
+    os.name == 'nt' and not os.getenv('ENABLE_SYMLINKS'),
+    reason="Requires admin rights or developer mode on Windows. Set ENABLE_SYMLINKS=1 to run."
+)
 def test_ptasker_help_shows_required_flag(tmp_path):
-    """Test that ptasker help text shows -T as required."""
+    """
+    Test that ptasker help text shows -T as required.
+
+    Note: Requires symlink support (admin/developer mode on Windows).
+    """
     # Create a ptasker symlink
     ptasker_link = tmp_path / "ptasker"
     ptasker_link.symlink_to(PARALLELR_BIN)
