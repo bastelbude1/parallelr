@@ -35,7 +35,8 @@ def test_ptasker_requires_template_with_arguments(tmp_path):
          '-p', 'test_project'],
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
-        universal_newlines=True
+        universal_newlines=True,
+        timeout=10
     )
 
     # Should exit with error
@@ -73,7 +74,8 @@ def test_ptasker_works_with_template(tmp_path):
          '-p', 'test_project'],
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
-        universal_newlines=True
+        universal_newlines=True,
+        timeout=10
     )
 
     # Should succeed in dry run mode
@@ -126,7 +128,8 @@ def test_ptasker_help_shows_required_flag(tmp_path):
         [PYTHON_FOR_PARALLELR, str(ptasker_link), '-h'],
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
-        universal_newlines=True
+        universal_newlines=True,
+        timeout=10
     )
 
     # Check help text mentions -T is required
@@ -145,7 +148,8 @@ def test_regular_parallelr_help_shows_optional_flag():
         [PYTHON_FOR_PARALLELR, str(PARALLELR_BIN), '-h'],
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
-        universal_newlines=True
+        universal_newlines=True,
+        timeout=10
     )
 
     # Check help text mentions -T is optional with -A
