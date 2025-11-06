@@ -30,7 +30,6 @@ def _find_project_root():
 
 
 PROJECT_ROOT = _find_project_root()
-sys.path.insert(0, str(PROJECT_ROOT))
 
 # Use same Python version for subprocess as current process
 PYTHON_FOR_PARALLELR = sys.executable
