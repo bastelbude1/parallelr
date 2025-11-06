@@ -13,12 +13,28 @@ import sys
 from pathlib import Path
 import pytest
 
-# Add project root to path for imports
-sys.path.insert(0, str(Path(__file__).parent.parent.parent))
+# Locate project root by finding marker files
+def _find_project_root():
+    """
+    Locate project root by finding pyproject.toml or .git directory.
+
+    This is more robust than parent.parent.parent as it adapts to directory
+    structure changes.
+    """
+    current = Path(__file__).resolve()
+    for parent in current.parents:
+        if (parent / 'pyproject.toml').exists() or (parent / '.git').exists():
+            return parent
+    # Fallback to relative path if markers not found
+    return Path(__file__).parent.parent.parent
+
+
+PROJECT_ROOT = _find_project_root()
+sys.path.insert(0, str(PROJECT_ROOT))
 
 # Use same Python version for subprocess as current process
 PYTHON_FOR_PARALLELR = sys.executable
-PARALLELR_BIN = Path(__file__).parent.parent.parent / 'bin' / 'parallelr.py'
+PARALLELR_BIN = PROJECT_ROOT / 'bin' / 'parallelr.py'
 
 
 @pytest.mark.integration
