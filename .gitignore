@@ -37,6 +37,7 @@ lib/
 logs/
 pids/
 workspace/
+backups/
 
 # OS
 .DS_Store
