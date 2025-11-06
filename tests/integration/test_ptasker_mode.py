@@ -142,7 +142,12 @@ def test_regular_parallelr_allows_arguments_without_template(tmp_path):
         timeout=10
     )
 
-    # Should start execution (may fail on args file not found, but shouldn't reject for missing -T)
+    # Verify command succeeded before checking output
+    assert result.returncode == 0, \
+        f"parallelr should succeed with -A without -T. Exit code: {result.returncode}\n" \
+        f"Output: {result.stdout}\nErrors: {result.stderr}"
+
+    # Verify correct behavior (no ptasker validation error)
     combined_output = result.stdout + result.stderr
     assert "ptasker mode requires" not in combined_output, \
         "Regular parallelr should not show ptasker validation error"
