@@ -29,7 +29,7 @@ def test_ptasker_requires_template_with_arguments(tmp_path):
     args_file.write_text("arg1\narg2\n")
 
     # Try to run ptasker with -A but without -T (should fail)
-    result = subprocess.run(
+    result = subprocess.run(  # noqa: S603  # Controlled test execution of project binary
         [PYTHON_FOR_PARALLELR, str(ptasker_link),
          '-A', str(args_file),
          '-p', 'test_project'],
@@ -67,7 +67,7 @@ def test_ptasker_works_with_template(tmp_path):
     args_file.write_text("arg1\n")
 
     # Run ptasker with both -T and -A (dry run)
-    result = subprocess.run(
+    result = subprocess.run(  # noqa: S603  # Controlled test execution of project binary
         [PYTHON_FOR_PARALLELR, str(ptasker_link),
          '-T', str(template_file),
          '-A', str(args_file),
@@ -97,7 +97,7 @@ def test_regular_parallelr_allows_arguments_without_template(tmp_path):
     args_file.write_text("test_arg\n")
 
     # Run parallelr directly with -A but no -T (dry run with direct command)
-    result = subprocess.run(
+    result = subprocess.run(  # noqa: S603  # Controlled test execution of project binary
         [PYTHON_FOR_PARALLELR, str(PARALLELR_BIN),
          '-C', 'echo @ARG@',
          '-A', str(args_file)],
@@ -124,7 +124,7 @@ def test_ptasker_help_shows_required_flag(tmp_path):
     ptasker_link.symlink_to(PARALLELR_BIN)
 
     # Get help text
-    result = subprocess.run(
+    result = subprocess.run(  # noqa: S603  # Controlled test execution of project binary
         [PYTHON_FOR_PARALLELR, str(ptasker_link), '-h'],
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
@@ -144,7 +144,7 @@ def test_ptasker_help_shows_required_flag(tmp_path):
 def test_regular_parallelr_help_shows_optional_flag():
     """Test that regular parallelr help text shows -T as optional with -A."""
     # Get help text from regular parallelr
-    result = subprocess.run(
+    result = subprocess.run(  # noqa: S603  # Controlled test execution of project binary
         [PYTHON_FOR_PARALLELR, str(PARALLELR_BIN), '-h'],
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
