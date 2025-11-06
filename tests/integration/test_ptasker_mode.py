@@ -138,7 +138,7 @@ def test_ptasker_help_shows_required_flag(tmp_path):
 
 
 @pytest.mark.integration
-def test_regular_parallelr_help_shows_optional_flag(tmp_path):
+def test_regular_parallelr_help_shows_optional_flag():
     """Test that regular parallelr help text shows -T as optional with -A."""
     # Get help text from regular parallelr
     result = subprocess.run(
