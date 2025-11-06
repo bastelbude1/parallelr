@@ -132,7 +132,8 @@ def test_ptasker_help_shows_required_flag(tmp_path):
     # Check help text mentions -T is required
     assert "[REQUIRED in ptasker mode]" in result.stdout, \
         "Help text should indicate -T is required in ptasker mode"
-    assert "Template file path for TASKER execution" in result.stdout, \
+    # Help text may wrap across lines, so check for key components
+    assert "Template file path" in result.stdout and "TASKER execution" in result.stdout, \
         "Help text should explain -T purpose for ptasker"
 
 
