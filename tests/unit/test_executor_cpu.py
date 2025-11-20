@@ -67,7 +67,7 @@ def test_cpu_priming_with_psutil_available(tmp_path):
     with (
         patch('bin.parallelr.subprocess.Popen', return_value=mock_process),
         patch('bin.parallelr.HAS_PSUTIL', True),
-        patch('bin.parallelr.psutil.Process', return_value=mock_psutil_process),
+        patch('psutil.Process', return_value=mock_psutil_process),
         patch('bin.parallelr.HAS_FCNTL', False)
     ):
         result = executor.execute()
@@ -130,7 +130,7 @@ def test_cpu_priming_handles_process_not_found(tmp_path):
     with (
         patch('bin.parallelr.subprocess.Popen', return_value=mock_process),
         patch('bin.parallelr.HAS_PSUTIL', True),
-        patch('bin.parallelr.psutil.Process', side_effect=no_such_process_exc),
+        patch('psutil.Process', side_effect=no_such_process_exc),
         patch('bin.parallelr.HAS_FCNTL', False)
     ):
         # Should not crash, should handle exception gracefully
@@ -250,6 +250,7 @@ def test_windows_process_group_creation(tmp_path):
     with (
         patch('bin.parallelr.subprocess.Popen', popen_mock),
         patch('bin.parallelr.os.name', 'nt'),  # Mock Windows OS
+        patch('bin.parallelr.subprocess.CREATE_NEW_PROCESS_GROUP', 0x00000200, create=True),
         patch('bin.parallelr.HAS_PSUTIL', False),
         patch('bin.parallelr.HAS_FCNTL', False)
     ):
@@ -262,8 +263,8 @@ def test_windows_process_group_creation(tmp_path):
     # On Windows with use_process_groups, should have creationflags
     assert 'creationflags' in call_kwargs, \
         "Windows should have creationflags in Popen kwargs"
-    assert call_kwargs['creationflags'] == subprocess.CREATE_NEW_PROCESS_GROUP, \
-        "creationflags should be CREATE_NEW_PROCESS_GROUP"
+    assert call_kwargs['creationflags'] == 0x00000200, \
+        "creationflags should be CREATE_NEW_PROCESS_GROUP (0x00000200)"
 
     assert result.status == TaskStatus.SUCCESS
 
