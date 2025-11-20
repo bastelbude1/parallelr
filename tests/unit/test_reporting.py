@@ -357,6 +357,8 @@ def test_cpu_stats_not_in_summary_without_psutil(tmp_path, mock_config_factory):
 
     # Verify fallback message is shown
     assert "Memory/CPU monitoring: Not available" in summary
+    # Explicitly verify CPU stats are not shown
+    assert "CPU Usage" not in summary
 
 
 @pytest.mark.unit
