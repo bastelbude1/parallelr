@@ -1094,12 +1094,12 @@ class ParallelTaskManager:
     """Main parallel task execution manager."""
 
     # Standard TASKER fallback directories (relative to home directory)
-    _FALLBACK_BASE_DIRS = [
+    _FALLBACK_BASE_DIRS = (
         'tasker/test_cases',
         'TASKER/test_cases',
         'tasker/test_cases/functional',
         'TASKER/test_cases/functional',
-    ]
+    )
 
     # Error message templates for consistent error handling
     _TEMPLATE_DIR_ERROR = (
