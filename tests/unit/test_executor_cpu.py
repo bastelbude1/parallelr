@@ -242,7 +242,7 @@ def test_windows_process_group_creation(tmp_path):
     popen_mock = MagicMock(return_value=mock_process)
 
     with patch('bin.parallelr.subprocess.Popen', popen_mock), \
-         patch('bin.parallelr.os.name', 'nt'),  # Mock Windows OS \
+         patch('bin.parallelr.os.name', 'nt'), \
          patch('bin.parallelr.HAS_PSUTIL', False), \
          patch('bin.parallelr.HAS_FCNTL', False):
 
@@ -305,7 +305,7 @@ def test_posix_process_group_with_setsid(tmp_path):
     popen_mock = MagicMock(return_value=mock_process)
 
     with patch('bin.parallelr.subprocess.Popen', popen_mock), \
-         patch('bin.parallelr.os.name', 'posix'),  # Mock POSIX OS \
+         patch('bin.parallelr.os.name', 'posix'), \
          patch('bin.parallelr.HAS_PSUTIL', False), \
          patch('bin.parallelr.HAS_FCNTL', False):
 
