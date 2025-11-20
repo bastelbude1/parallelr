@@ -60,7 +60,11 @@ def get_nested_value(obj, path):
 
 
 def filter_tasks(tasks, filter_expr):
-    """Filter tasks based on filter expression (e.g., 'status=FAILED')."""
+    """
+    Filter tasks based on filter expression (e.g., 'status=FAILED').
+
+    Field names are case-insensitive (e.g., 'EXIT_CODE', 'exit_code', 'Exit_Code' all work).
+    """
     if not filter_expr:
         return tasks
 
@@ -69,12 +73,16 @@ def filter_tasks(tasks, filter_expr):
         # Parse filter: field=value or field!=value
         if '!=' in filter_expr:
             field, value = filter_expr.split('!=', 1)
-            task_value = str(get_nested_value(task, field.strip()))
+            # Normalize field name to lowercase for case-insensitive matching
+            field = field.strip().lower()
+            task_value = str(get_nested_value(task, field))
             if task_value != value.strip():
                 filtered.append(task)
         elif '=' in filter_expr:
             field, value = filter_expr.split('=', 1)
-            task_value = str(get_nested_value(task, field.strip()))
+            # Normalize field name to lowercase for case-insensitive matching
+            field = field.strip().lower()
+            task_value = str(get_nested_value(task, field))
             if task_value == value.strip():
                 filtered.append(task)
 
