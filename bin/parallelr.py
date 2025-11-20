@@ -6,7 +6,7 @@ A robust parallel task execution framework with simplified configuration
 and practical security measures.
 """
 
-__version__ = "1.0.2"
+__version__ = "1.0.3"
 
 import os
 import sys

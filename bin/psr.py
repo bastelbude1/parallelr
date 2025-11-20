@@ -59,8 +59,49 @@ def get_nested_value(obj, path):
     return value
 
 
+def _normalize_field_path(field_path):
+    """
+    Normalize field path for case-insensitive matching.
+
+    Only the top-level field name (JSONL structure key) is normalized to lowercase.
+    Nested keys (like environment variable names) preserve their original case.
+
+    Examples:
+        'EXIT_CODE' -> 'exit_code'
+        'env_vars.SERVER' -> 'env_vars.SERVER'
+        'ENV_VARS.HOSTNAME' -> 'env_vars.HOSTNAME'
+
+    Args:
+        field_path: Field path from filter expression
+
+    Returns:
+        str: Normalized field path
+    """
+    field_path = field_path.strip()
+
+    # Split on first dot to separate top-level field from nested path
+    if '.' in field_path:
+        parts = field_path.split('.', 1)
+        # Normalize only the top-level field (JSONL structure key)
+        return parts[0].lower() + '.' + parts[1]
+    else:
+        # Simple field, normalize entirely
+        return field_path.lower()
+
+
 def filter_tasks(tasks, filter_expr):
-    """Filter tasks based on filter expression (e.g., 'status=FAILED')."""
+    """
+    Filter tasks based on filter expression (e.g., 'status=FAILED').
+
+    Field names are case-insensitive (e.g., 'EXIT_CODE', 'exit_code', 'Exit_Code' all work).
+    For nested fields, only the top-level key is case-insensitive while nested keys
+    (like environment variable names) preserve their original case.
+
+    Examples:
+        'EXIT_CODE=0' -> matches 'exit_code' field
+        'env_vars.SERVER=ukfr' -> matches env_vars['SERVER'] (case-sensitive nested key)
+        'ENV_VARS.HOSTNAME=prod' -> matches env_vars['HOSTNAME'] (top-level normalized)
+    """
     if not filter_expr:
         return tasks
 
@@ -69,12 +110,16 @@ def filter_tasks(tasks, filter_expr):
         # Parse filter: field=value or field!=value
         if '!=' in filter_expr:
             field, value = filter_expr.split('!=', 1)
-            task_value = str(get_nested_value(task, field.strip()))
+            # Normalize field path (top-level only for nested fields)
+            field = _normalize_field_path(field)
+            task_value = str(get_nested_value(task, field))
             if task_value != value.strip():
                 filtered.append(task)
         elif '=' in filter_expr:
             field, value = filter_expr.split('=', 1)
-            task_value = str(get_nested_value(task, field.strip()))
+            # Normalize field path (top-level only for nested fields)
+            field = _normalize_field_path(field)
+            task_value = str(get_nested_value(task, field))
             if task_value == value.strip():
                 filtered.append(task)
 
