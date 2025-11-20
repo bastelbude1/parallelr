@@ -119,13 +119,9 @@ def test_cpu_priming_handles_process_not_found(tmp_path):
     mock_process.stdout.fileno.return_value = 100
     mock_process.stderr.fileno.return_value = 101
     
-    # Import psutil to get exception class
-    try:
-        import psutil
-        no_such_process_exc = psutil.NoSuchProcess(99999)
-    except ImportError:
-        # If psutil not available, use generic exception
-        no_such_process_exc = Exception("Process not found")
+    # Create a mock exception to simulate psutil.NoSuchProcess
+    # We don't import psutil here to avoid circular import issues with patches
+    no_such_process_exc = Exception("Process not found")
     
     with (
         patch('bin.parallelr.subprocess.Popen', return_value=mock_process),
@@ -247,10 +243,11 @@ def test_windows_process_group_creation(tmp_path):
     # Mock subprocess.Popen to capture kwargs
     popen_mock = MagicMock(return_value=mock_process)
 
+    # Mock Windows-specific constant first, before checking os.name
     with (
+        patch.object(subprocess, 'CREATE_NEW_PROCESS_GROUP', 0x00000200, create=True),
         patch('bin.parallelr.subprocess.Popen', popen_mock),
         patch('bin.parallelr.os.name', 'nt'),  # Mock Windows OS
-        patch('bin.parallelr.subprocess.CREATE_NEW_PROCESS_GROUP', 0x00000200, create=True),
         patch('bin.parallelr.HAS_PSUTIL', False),
         patch('bin.parallelr.HAS_FCNTL', False)
     ):
