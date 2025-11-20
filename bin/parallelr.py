@@ -6,7 +6,7 @@ A robust parallel task execution framework with simplified configuration
 and practical security measures.
 """
 
-__version__ = "1.0.1"
+__version__ = "1.0.2"
 
 import os
 import sys
@@ -1098,22 +1098,57 @@ class ParallelTaskManager:
         "Arguments mode requires a template FILE, not a directory: {path}. "
         "Omit -T to execute commands directly without a template."
     )
-    _TEMPLATE_NOT_FOUND_ERROR = (
-        "Template file not found: {filename}\n"
-        "Searched in current directory and standard TASKER locations:\n"
-        "  - ~/tasker/test_cases/\n"
-        "  - ~/TASKER/test_cases/\n"
-        "  - ~/tasker/test_cases/functional/\n"
-        "  - ~/TASKER/test_cases/functional/"
-    )
-    _ARGS_FILE_NOT_FOUND_ERROR = (
-        "Arguments file not found: {filename}\n"
-        "Searched in current directory and standard TASKER locations:\n"
-        "  - ~/tasker/test_cases/\n"
-        "  - ~/TASKER/test_cases/\n"
-        "  - ~/tasker/test_cases/functional/\n"
-        "  - ~/TASKER/test_cases/functional/"
-    )
+
+    def _get_existing_fallback_paths(self):
+        """
+        Get list of fallback paths that actually exist on this system.
+
+        Returns:
+            list: List of Path objects for existing fallback directories
+        """
+        home = Path.home()
+        base_dirs = [
+            home / 'tasker' / 'test_cases',
+            home / 'TASKER' / 'test_cases',
+            home / 'tasker' / 'test_cases' / 'functional',
+            home / 'TASKER' / 'test_cases' / 'functional',
+        ]
+        return [d for d in base_dirs if d.exists()]
+
+    def _generate_file_not_found_error(self, filename, file_type="Template"):
+        """
+        Generate context-aware error message for file not found.
+
+        Shows only fallback paths that actually exist on the system, making
+        error messages production-friendly.
+
+        Args:
+            filename: Name of file that was not found
+            file_type: Type of file ("Template" or "Arguments")
+
+        Returns:
+            str: Formatted error message
+        """
+        existing_paths = self._get_existing_fallback_paths()
+
+        if existing_paths:
+            # Show existing fallback paths
+            paths_list = "\n".join(f"  - {d}" for d in existing_paths)
+            return (
+                f"{file_type} file not found: {filename}\n"
+                f"Searched in current directory and existing fallback locations:\n"
+                f"{paths_list}\n"
+                f"\nTip: Use '--no-search' to disable fallback search."
+            )
+        else:
+            # No fallback paths exist - production environment
+            return (
+                f"{file_type} file not found: {filename}\n"
+                f"Searched in current directory.\n"
+                f"\n"
+                f"Standard fallback locations do not exist on this system.\n"
+                f"Tip: Use './{filename}' for relative paths or '--no-search' to disable fallback search."
+            )
 
     def __init__(self, max_workers, timeout, task_start_delay, tasks_paths, command_template,
                  script_path, dry_run=False, enable_stop_limits=False, log_task_output=True,
@@ -1521,7 +1556,7 @@ class ParallelTaskManager:
                         )
                     else:
                         raise ParallelTaskExecutorError(
-                            self._TEMPLATE_NOT_FOUND_ERROR.format(filename=self.tasks_paths[0])
+                            self._generate_file_not_found_error(self.tasks_paths[0], "Template")
                         )
 
                 # If fallback was used, show INFO message and prompt for confirmation
@@ -1564,7 +1599,7 @@ class ParallelTaskManager:
                     )
                 else:
                     raise ParallelTaskExecutorError(
-                        self._ARGS_FILE_NOT_FOUND_ERROR.format(filename=self.arguments_file)
+                        self._generate_file_not_found_error(self.arguments_file, "Arguments")
                     )
 
             # If fallback was used, show INFO message and prompt for confirmation
