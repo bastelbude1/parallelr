@@ -1093,6 +1093,14 @@ class SecureTaskExecutor:
 class ParallelTaskManager:
     """Main parallel task execution manager."""
 
+    # Standard TASKER fallback directories (relative to home directory)
+    _FALLBACK_BASE_DIRS = [
+        'tasker/test_cases',
+        'TASKER/test_cases',
+        'tasker/test_cases/functional',
+        'TASKER/test_cases/functional',
+    ]
+
     # Error message templates for consistent error handling
     _TEMPLATE_DIR_ERROR = (
         "Arguments mode requires a template FILE, not a directory: {path}. "
@@ -1107,12 +1115,7 @@ class ParallelTaskManager:
             list: List of Path objects for existing fallback directories
         """
         home = Path.home()
-        base_dirs = [
-            home / 'tasker' / 'test_cases',
-            home / 'TASKER' / 'test_cases',
-            home / 'tasker' / 'test_cases' / 'functional',
-            home / 'TASKER' / 'test_cases' / 'functional',
-        ]
+        base_dirs = [home / path for path in self._FALLBACK_BASE_DIRS]
         return [d for d in base_dirs if d.exists()]
 
     def _generate_file_not_found_error(self, filename, file_type="Template"):
@@ -1447,12 +1450,7 @@ class ParallelTaskManager:
 
         # If not found, search in standard TASKER test_cases locations
         home = Path.home()
-        base_dirs = [
-            home / 'tasker' / 'test_cases',
-            home / 'TASKER' / 'test_cases',
-            home / 'tasker' / 'test_cases' / 'functional',
-            home / 'TASKER' / 'test_cases' / 'functional',
-        ]
+        base_dirs = [home / path for path in self._FALLBACK_BASE_DIRS]
 
         for base_dir in base_dirs:
             candidate = base_dir / template_path_str
