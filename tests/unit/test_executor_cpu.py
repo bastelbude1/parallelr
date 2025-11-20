@@ -59,22 +59,24 @@ def test_cpu_priming_with_psutil_available(tmp_path):
     mock_process.stdout.fileno.return_value = 100
     mock_process.stderr.fileno.return_value = 101
     
-    # Mock psutil.Process
-    mock_psutil_process = MagicMock()
-    mock_psutil_process.cpu_percent.return_value = 15.5
-    mock_psutil_process.memory_info.return_value = MagicMock(rss=10485760)  # 10MB
-    
     with (
         patch('bin.parallelr.subprocess.Popen', return_value=mock_process),
         patch('bin.parallelr.HAS_PSUTIL', True),
-        patch('psutil.Process', return_value=mock_psutil_process),
         patch('bin.parallelr.HAS_FCNTL', False)
     ):
-        result = executor.execute()
-    
-    # Verify CPU monitoring was initialized (cpu_percent called)
-    assert mock_psutil_process.cpu_percent.called, \
-        "cpu_percent() should be called for CPU monitoring"
+        # Try to mock psutil.Process inside the context to avoid circular import
+        with patch('bin.parallelr.psutil') as mock_psutil:
+            mock_psutil_process = MagicMock()
+            mock_psutil_process.cpu_percent.return_value = 15.5
+            mock_psutil_process.memory_info.return_value = MagicMock(rss=10485760)  # 10MB
+            mock_psutil.Process.return_value = mock_psutil_process
+
+            result = executor.execute()
+
+            # Verify CPU monitoring was initialized (cpu_percent called)
+            assert mock_psutil_process.cpu_percent.called, \
+                "cpu_percent() should be called for CPU monitoring"
+
     assert result.status == TaskStatus.SUCCESS
     assert result.exit_code == 0
 
@@ -122,16 +124,21 @@ def test_cpu_priming_handles_process_not_found(tmp_path):
     # Create a mock exception to simulate psutil.NoSuchProcess
     # We don't import psutil here to avoid circular import issues with patches
     no_such_process_exc = Exception("Process not found")
-    
+
     with (
         patch('bin.parallelr.subprocess.Popen', return_value=mock_process),
         patch('bin.parallelr.HAS_PSUTIL', True),
-        patch('psutil.Process', side_effect=no_such_process_exc),
         patch('bin.parallelr.HAS_FCNTL', False)
     ):
-        # Should not crash, should handle exception gracefully
-        result = executor.execute()
-    
+        # Mock psutil.Process to raise an exception
+        with patch('bin.parallelr.psutil') as mock_psutil:
+            mock_psutil.Process.side_effect = no_such_process_exc
+            mock_psutil.NoSuchProcess = Exception
+            mock_psutil.AccessDenied = Exception
+
+            # Should not crash, should handle exception gracefully
+            result = executor.execute()
+
     assert result.status == TaskStatus.SUCCESS
     assert result.exit_code == 0
 
