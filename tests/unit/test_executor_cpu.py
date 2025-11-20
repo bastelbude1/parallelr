@@ -64,11 +64,12 @@ def test_cpu_priming_with_psutil_available(tmp_path):
     mock_psutil_process.cpu_percent.return_value = 15.5
     mock_psutil_process.memory_info.return_value = MagicMock(rss=10485760)  # 10MB
     
-    with patch('bin.parallelr.subprocess.Popen', return_value=mock_process), \
-         patch('bin.parallelr.HAS_PSUTIL', True), \
-         patch('bin.parallelr.psutil.Process', return_value=mock_psutil_process), \
-         patch('bin.parallelr.HAS_FCNTL', False):
-        
+    with (
+        patch('bin.parallelr.subprocess.Popen', return_value=mock_process),
+        patch('bin.parallelr.HAS_PSUTIL', True),
+        patch('bin.parallelr.psutil.Process', return_value=mock_psutil_process),
+        patch('bin.parallelr.HAS_FCNTL', False)
+    ):
         result = executor.execute()
     
     # Verify CPU monitoring was initialized (cpu_percent called)
@@ -126,11 +127,12 @@ def test_cpu_priming_handles_process_not_found(tmp_path):
         # If psutil not available, use generic exception
         no_such_process_exc = Exception("Process not found")
     
-    with patch('bin.parallelr.subprocess.Popen', return_value=mock_process), \
-         patch('bin.parallelr.HAS_PSUTIL', True), \
-         patch('bin.parallelr.psutil.Process', side_effect=no_such_process_exc), \
-         patch('bin.parallelr.HAS_FCNTL', False):
-        
+    with (
+        patch('bin.parallelr.subprocess.Popen', return_value=mock_process),
+        patch('bin.parallelr.HAS_PSUTIL', True),
+        patch('bin.parallelr.psutil.Process', side_effect=no_such_process_exc),
+        patch('bin.parallelr.HAS_FCNTL', False)
+    ):
         # Should not crash, should handle exception gracefully
         result = executor.execute()
     
@@ -180,10 +182,11 @@ def test_log_formatting_with_task_execution(tmp_path):
     mock_process.stdout.fileno.return_value = 100
     mock_process.stderr.fileno.return_value = 101
     
-    with patch('bin.parallelr.subprocess.Popen', return_value=mock_process), \
-         patch('bin.parallelr.HAS_PSUTIL', False), \
-         patch('bin.parallelr.HAS_FCNTL', False):
-        
+    with (
+        patch('bin.parallelr.subprocess.Popen', return_value=mock_process),
+        patch('bin.parallelr.HAS_PSUTIL', False),
+        patch('bin.parallelr.HAS_FCNTL', False)
+    ):
         result = executor.execute()
     
     # Find the exit code log message
@@ -241,11 +244,12 @@ def test_windows_process_group_creation(tmp_path):
     # Mock subprocess.Popen to capture kwargs
     popen_mock = MagicMock(return_value=mock_process)
 
-    with patch('bin.parallelr.subprocess.Popen', popen_mock), \
-         patch('bin.parallelr.os.name', 'nt'), \
-         patch('bin.parallelr.HAS_PSUTIL', False), \
-         patch('bin.parallelr.HAS_FCNTL', False):
-
+    with (
+        patch('bin.parallelr.subprocess.Popen', popen_mock),
+        patch('bin.parallelr.os.name', 'nt'),  # Mock Windows OS
+        patch('bin.parallelr.HAS_PSUTIL', False),
+        patch('bin.parallelr.HAS_FCNTL', False)
+    ):
         result = executor.execute()
 
     # Verify Popen was called with creationflags
@@ -304,11 +308,12 @@ def test_posix_process_group_with_setsid(tmp_path):
     # Mock subprocess.Popen to capture kwargs
     popen_mock = MagicMock(return_value=mock_process)
 
-    with patch('bin.parallelr.subprocess.Popen', popen_mock), \
-         patch('bin.parallelr.os.name', 'posix'), \
-         patch('bin.parallelr.HAS_PSUTIL', False), \
-         patch('bin.parallelr.HAS_FCNTL', False):
-
+    with (
+        patch('bin.parallelr.subprocess.Popen', popen_mock),
+        patch('bin.parallelr.os.name', 'posix'),  # Mock POSIX OS
+        patch('bin.parallelr.HAS_PSUTIL', False),
+        patch('bin.parallelr.HAS_FCNTL', False)
+    ):
         result = executor.execute()
 
     # Verify Popen was called with preexec_fn
