@@ -190,14 +190,17 @@ def test_log_formatting_with_task_execution(tmp_path):
         result = executor.execute()
     
     # Find the exit code log message
-    log_calls = [str(call) for call in mock_logger.info.call_args_list]
-    exit_code_logs = [log for log in log_calls if 'Exit code:' in log]
-    
+    exit_code_logs = []
+    for call in mock_logger.info.call_args_list:
+        args = call[0]
+        if args and 'Exit code:' in str(args[0]):
+            exit_code_logs.append(str(args[0]))
+
     assert len(exit_code_logs) > 0, "Should have logged exit code"
-    
+
     # Verify format has single space before "Exit code"
     exit_log = exit_code_logs[0]
-    assert "' Exit code:" in exit_log, \
+    assert " Exit code:" in exit_log and "  Exit code:" not in exit_log, \
         f"Log should have single space before 'Exit code', got: {exit_log}"
 
 
