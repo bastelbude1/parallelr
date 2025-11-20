@@ -196,3 +196,127 @@ def test_log_formatting_with_task_execution(tmp_path):
     exit_log = exit_code_logs[0]
     assert "' Exit code:" in exit_log, \
         f"Log should have single space before 'Exit code', got: {exit_log}"
+
+
+@pytest.mark.unit
+def test_windows_process_group_creation(tmp_path):
+    """
+    Test Windows-specific process group creation flag.
+
+    Verifies line 868: popen_kwargs['creationflags'] = subprocess.CREATE_NEW_PROCESS_GROUP
+    """
+    task_file = tmp_path / "test.sh"
+    task_file.write_text("#!/bin/bash\necho test\n")
+    task_file.chmod(0o755)
+
+    mock_logger = MagicMock()
+    mock_config = MagicMock()
+    mock_config.execution.workspace_isolation = False
+    mock_config.execution.use_process_groups = True  # Enable process groups
+    mock_config.security.max_argument_length = 10000
+    mock_config.advanced.max_file_size = 10000000
+    mock_config.get_working_directory.return_value = str(tmp_path)
+
+    executor = SecureTaskExecutor(
+        task_file=str(task_file),
+        command_template="echo @TASK@",
+        timeout=10,
+        worker_id=1,
+        logger=mock_logger,
+        config=mock_config
+    )
+
+    # Mock process
+    mock_process = MagicMock()
+    mock_process.pid = 99999
+    mock_process.returncode = 0
+    mock_process.poll.return_value = 0
+    mock_process.stdout = MagicMock()
+    mock_process.stderr = MagicMock()
+    mock_process.stdout.read.return_value = ""
+    mock_process.stderr.read.return_value = ""
+    mock_process.stdout.fileno.return_value = 100
+    mock_process.stderr.fileno.return_value = 101
+
+    # Mock subprocess.Popen to capture kwargs
+    popen_mock = MagicMock(return_value=mock_process)
+
+    with patch('bin.parallelr.subprocess.Popen', popen_mock), \
+         patch('bin.parallelr.os.name', 'nt'),  # Mock Windows OS \
+         patch('bin.parallelr.HAS_PSUTIL', False), \
+         patch('bin.parallelr.HAS_FCNTL', False):
+
+        result = executor.execute()
+
+    # Verify Popen was called with creationflags
+    assert popen_mock.called, "Popen should have been called"
+    call_kwargs = popen_mock.call_args[1]
+
+    # On Windows with use_process_groups, should have creationflags
+    assert 'creationflags' in call_kwargs, \
+        "Windows should have creationflags in Popen kwargs"
+    assert call_kwargs['creationflags'] == subprocess.CREATE_NEW_PROCESS_GROUP, \
+        "creationflags should be CREATE_NEW_PROCESS_GROUP"
+
+    assert result.status == TaskStatus.SUCCESS
+
+
+@pytest.mark.unit
+def test_posix_process_group_with_setsid(tmp_path):
+    """
+    Test POSIX-specific process group creation with setsid.
+
+    Verifies line 865: popen_kwargs['preexec_fn'] = os.setsid
+    """
+    task_file = tmp_path / "test.sh"
+    task_file.write_text("#!/bin/bash\necho test\n")
+    task_file.chmod(0o755)
+
+    mock_logger = MagicMock()
+    mock_config = MagicMock()
+    mock_config.execution.workspace_isolation = False
+    mock_config.execution.use_process_groups = True  # Enable process groups
+    mock_config.security.max_argument_length = 10000
+    mock_config.advanced.max_file_size = 10000000
+    mock_config.get_working_directory.return_value = str(tmp_path)
+
+    executor = SecureTaskExecutor(
+        task_file=str(task_file),
+        command_template="echo @TASK@",
+        timeout=10,
+        worker_id=1,
+        logger=mock_logger,
+        config=mock_config
+    )
+
+    # Mock process
+    mock_process = MagicMock()
+    mock_process.pid = 99999
+    mock_process.returncode = 0
+    mock_process.poll.return_value = 0
+    mock_process.stdout = MagicMock()
+    mock_process.stderr = MagicMock()
+    mock_process.stdout.read.return_value = ""
+    mock_process.stderr.read.return_value = ""
+    mock_process.stdout.fileno.return_value = 100
+    mock_process.stderr.fileno.return_value = 101
+
+    # Mock subprocess.Popen to capture kwargs
+    popen_mock = MagicMock(return_value=mock_process)
+
+    with patch('bin.parallelr.subprocess.Popen', popen_mock), \
+         patch('bin.parallelr.os.name', 'posix'),  # Mock POSIX OS \
+         patch('bin.parallelr.HAS_PSUTIL', False), \
+         patch('bin.parallelr.HAS_FCNTL', False):
+
+        result = executor.execute()
+
+    # Verify Popen was called with preexec_fn
+    assert popen_mock.called, "Popen should have been called"
+    call_kwargs = popen_mock.call_args[1]
+
+    # On POSIX with use_process_groups, should have preexec_fn
+    assert 'preexec_fn' in call_kwargs, \
+        "POSIX should have preexec_fn in Popen kwargs"
+
+    assert result.status == TaskStatus.SUCCESS
