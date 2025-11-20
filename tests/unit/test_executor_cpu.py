@@ -5,6 +5,7 @@ Tests the CPU monitoring initialization that happens during task execution.
 """
 
 import sys
+import os
 from pathlib import Path
 from datetime import datetime
 from unittest.mock import MagicMock, patch, PropertyMock
@@ -134,11 +135,18 @@ def test_windows_process_group_creation(tmp_path):
 
 
 @pytest.mark.unit
+@pytest.mark.skipif(
+    os.name != 'posix' or not hasattr(os, 'setsid'),
+    reason="requires POSIX setsid"
+)
 def test_posix_process_group_with_setsid(tmp_path):
     """
     Test POSIX-specific process group creation with setsid.
 
     Verifies line 865: popen_kwargs['preexec_fn'] = os.setsid
+
+    NOTE: This test only runs on actual POSIX systems where os.setsid exists.
+    It verifies the real POSIX code path without mocking os.name.
     """
     task_file = tmp_path / "test.sh"
     task_file.write_text("#!/bin/bash\necho test\n")
@@ -178,7 +186,6 @@ def test_posix_process_group_with_setsid(tmp_path):
 
     with (
         patch('bin.parallelr.subprocess.Popen', popen_mock),
-        patch('bin.parallelr.os.name', 'posix'),  # Mock POSIX OS
         patch('bin.parallelr.HAS_PSUTIL', False),
         patch('bin.parallelr.HAS_FCNTL', False)
     ):
@@ -188,8 +195,10 @@ def test_posix_process_group_with_setsid(tmp_path):
     assert popen_mock.called, "Popen should have been called"
     call_kwargs = popen_mock.call_args[1]
 
-    # On POSIX with use_process_groups, should have preexec_fn
+    # On POSIX with use_process_groups, should have preexec_fn set to os.setsid
     assert 'preexec_fn' in call_kwargs, \
         "POSIX should have preexec_fn in Popen kwargs"
+    assert call_kwargs['preexec_fn'] is os.setsid, \
+        "preexec_fn should be os.setsid (not just any callable)"
 
     assert result.status == TaskStatus.SUCCESS
