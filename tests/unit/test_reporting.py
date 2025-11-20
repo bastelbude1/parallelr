@@ -357,3 +357,41 @@ def test_cpu_stats_not_in_summary_without_psutil(tmp_path, mock_config_factory):
 
     # Verify fallback message is shown
     assert "Memory/CPU monitoring: Not available" in summary
+
+
+@pytest.mark.unit
+def test_cpu_stats_zero_when_no_completed_tasks(tmp_path, mock_config_factory):
+    """
+    Test CPU statistics default to zero when there are no completed tasks.
+
+    Verifies:
+    - avg_cpu = 0 when completed_tasks is empty
+    - max_cpu = 0 when completed_tasks is empty
+    - No division by zero errors
+    """
+    script_path = tmp_path / "parallelr.py"
+    mock_config, logs_dir = mock_config_factory(workers=5)
+
+    with patch('bin.parallelr.Configuration.from_script', return_value=mock_config):
+        manager = ParallelTaskManager(
+            max_workers=5,
+            timeout=600,
+            task_start_delay=0.1,
+            tasks_paths=[str(tmp_path / "tasks")],
+            command_template="bash @TASK@",
+            script_path=str(script_path),
+            dry_run=False
+        )
+
+    manager.log_dir = logs_dir
+    manager.process_id = 12345
+    manager.timestamp = "01Jan25_120000"
+    manager.task_files = [tmp_path / "task.sh"]
+    manager.failed_tasks = []
+    manager.completed_tasks = []  # Empty
+
+    with patch('bin.parallelr.HAS_PSUTIL', True):
+        summary = manager.get_summary_report()
+
+    # Should not crash and should show fallback message
+    assert "No tasks were executed" in summary
