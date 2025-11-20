@@ -355,7 +355,5 @@ def test_cpu_stats_not_in_summary_without_psutil(tmp_path, mock_config_factory):
     with patch('bin.parallelr.HAS_PSUTIL', False):
         summary = manager.get_summary_report()
 
-    # Verify CPU stats are NOT present
-    assert "CPU Usage" not in summary or "Not available" in summary, \
-        "CPU statistics should not be shown without psutil"
+    # Verify fallback message is shown
     assert "Memory/CPU monitoring: Not available" in summary
