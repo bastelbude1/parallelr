@@ -97,7 +97,11 @@ def test_log_formatting_with_task_execution(tmp_path):
         patch('bin.parallelr.HAS_FCNTL', False)
     ):
         result = executor.execute()
-    
+
+    # Verify execution succeeded
+    assert result.status == TaskStatus.SUCCESS
+    assert result.exit_code == 0
+
     # Find the exit code log message
     exit_code_logs = []
     for call in mock_logger.info.call_args_list:
