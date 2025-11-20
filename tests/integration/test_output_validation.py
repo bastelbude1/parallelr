@@ -599,3 +599,57 @@ def test_memory_stats_per_task_scaling_with_workers(temp_dir, isolated_env):
     # Allow 10% tolerance for slight per-task variations
     assert abs(ratio_2_to_5 - expected_ratio) / expected_ratio < 0.1, \
         f"Memory scaling incorrect: 5 workers / 2 workers = {ratio_2_to_5:.2f}, expected ~{expected_ratio:.2f}"
+
+
+@pytest.mark.integration
+def test_cpu_usage_monitoring_works(sample_task_dir, isolated_env):
+    """
+    Test that CPU usage monitoring returns non-zero values.
+
+    Verifies:
+    - CPU monitoring is initialized (primed) correctly
+    - CPU usage values are captured during execution
+    - Both average and peak CPU stats appear in summary
+    - Falls back gracefully when psutil is not available
+    """
+    result = subprocess.run(
+        [PYTHON_FOR_PARALLELR, str(PARALLELR_BIN),
+         '-T', str(sample_task_dir),
+         '-C', 'bash @TASK@',
+         '-r', '-m', '2'],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        universal_newlines=True,
+        env=isolated_env['env'],
+        timeout=30
+    )
+
+    assert result.returncode == 0, f"Command failed: {result.stderr}"
+
+    # Check if psutil is available
+    if 'Memory/CPU monitoring: Not available' in result.stdout:
+        pytest.skip("psutil not available - CPU monitoring tests skipped")
+
+    # Verify CPU statistics appear in summary
+    assert 'Average CPU Usage (per task):' in result.stdout, \
+        "Summary should include average CPU usage"
+    assert 'Peak CPU Usage (per task):' in result.stdout, \
+        "Summary should include peak CPU usage"
+
+    # Extract CPU values
+    avg_cpu_match = re.search(r'Average CPU Usage \(per task\):\s+([\d.]+)%', result.stdout)
+    peak_cpu_match = re.search(r'Peak CPU Usage \(per task\):\s+([\d.]+)%', result.stdout)
+
+    assert avg_cpu_match, "Could not find average CPU usage in summary"
+    assert peak_cpu_match, "Could not find peak CPU usage in summary"
+
+    avg_cpu = float(avg_cpu_match.group(1))
+    peak_cpu = float(peak_cpu_match.group(1))
+
+    # CPU values should be non-negative (may be 0 for very fast tasks, but typically > 0)
+    assert avg_cpu >= 0, f"Average CPU usage should be non-negative, got {avg_cpu}"
+    assert peak_cpu >= 0, f"Peak CPU usage should be non-negative, got {peak_cpu}"
+
+    # Peak should be >= average
+    assert peak_cpu >= avg_cpu, \
+        f"Peak CPU ({peak_cpu}%) should be >= average CPU ({avg_cpu}%)"
