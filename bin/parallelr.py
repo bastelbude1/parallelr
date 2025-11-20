@@ -6,7 +6,7 @@ A robust parallel task execution framework with simplified configuration
 and practical security measures.
 """
 
-__version__ = "1.0.3"
+__version__ = "1.0.4"
 
 import os
 import sys
@@ -868,7 +868,15 @@ class SecureTaskExecutor:
                     popen_kwargs['creationflags'] = subprocess.CREATE_NEW_PROCESS_GROUP
 
             self._process = subprocess.Popen(command_args, **popen_kwargs)
-            
+
+            # Prime CPU monitoring (first call returns 0, subsequent calls return actual %)
+            if HAS_PSUTIL:
+                try:
+                    process = psutil.Process(self._process.pid)
+                    process.cpu_percent()  # Initialize CPU monitoring
+                except (psutil.NoSuchProcess, psutil.AccessDenied):
+                    pass
+
             try:
                 # Real-time output capture with timeout handling
                 stdout_fd = self._process.stdout.fileno()
@@ -969,12 +977,12 @@ class SecureTaskExecutor:
                 if result.exit_code == 0:
                     result.status = TaskStatus.SUCCESS
                     self.logger.info(f"Worker {self.worker_id} {progress_str}: Task completed successfully")
-                    self.logger.info(f"  Exit code: {result.exit_code}, Duration: {result.duration:.2f}s, Memory: {result.memory_usage:.1f}MB, CPU: {result.cpu_usage:.1f}%")
+                    self.logger.info(f" Exit code: {result.exit_code}, Duration: {result.duration:.2f}s, Memory: {result.memory_usage:.1f}MB, CPU: {result.cpu_usage:.1f}%")
                 else:
                     result.status = TaskStatus.FAILED
                     result.error_message = "Exit code {}".format(result.exit_code)
                     self.logger.info(f"Worker {self.worker_id} {progress_str}: Task failed")
-                    self.logger.info(f"  Exit code: {result.exit_code}, Duration: {result.duration:.2f}s, Memory: {result.memory_usage:.1f}MB, CPU: {result.cpu_usage:.1f}%")
+                    self.logger.info(f" Exit code: {result.exit_code}, Duration: {result.duration:.2f}s, Memory: {result.memory_usage:.1f}MB, CPU: {result.cpu_usage:.1f}%")
 
             except subprocess.TimeoutExpired:
                 result.status = TaskStatus.TIMEOUT
@@ -1818,7 +1826,6 @@ class ParallelTaskManager:
             if result.status == TaskStatus.SUCCESS:
                 self.completed_tasks.append(result)
                 self.consecutive_failures = 0
-                self.logger.info(f"Task completed: {task_file}")
             else:
                 self.failed_tasks.append(result)
                 if self.config.limits.stop_limits_enabled:
@@ -2101,13 +2108,18 @@ class ParallelTaskManager:
             avg_duration = sum(durations) / len(durations)
             max_duration = max(durations)
             min_duration = min(durations)
-            
+
             memory_usage = [task.memory_usage for task in self.completed_tasks]
             avg_memory = sum(memory_usage) / len(memory_usage)
             max_memory = max(memory_usage)
+
+            cpu_usage = [task.cpu_usage for task in self.completed_tasks]
+            avg_cpu = sum(cpu_usage) / len(cpu_usage)
+            max_cpu = max(cpu_usage)
         else:
             avg_duration = max_duration = min_duration = 0
             avg_memory = max_memory = 0
+            avg_cpu = max_cpu = 0
         
         success_rate = (completed / total * 100) if total > 0 else 0
 
@@ -2126,7 +2138,9 @@ class ParallelTaskManager:
             estimated_max_total_memory = max_memory * self.max_workers
             resource_info = f"""- Average Memory Usage (per task): {avg_memory:.2f}MB
 - Peak Memory Usage (per task): {max_memory:.2f}MB
-- Estimated Max Total Memory ({self.max_workers} workers): {estimated_max_total_memory:.2f}MB (worst-case)"""
+- Estimated Max Total Memory ({self.max_workers} workers): {estimated_max_total_memory:.2f}MB (worst-case)
+- Average CPU Usage (per task): {avg_cpu:.1f}%
+- Peak CPU Usage (per task): {max_cpu:.1f}%"""
         else:
             resource_info = "- Memory/CPU monitoring: Not available (psutil not installed)"
 
