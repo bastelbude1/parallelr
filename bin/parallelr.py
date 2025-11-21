@@ -6,7 +6,7 @@ A robust parallel task execution framework with simplified configuration
 and practical security measures.
 """
 
-__version__ = "1.0.7"
+__version__ = "1.0.8"
 
 import os
 import sys
@@ -42,6 +42,7 @@ import select
 import errno
 import re
 from datetime import datetime
+from typing import List, Dict, Optional, Any, Union, Tuple, Set
 
 # POSIX-only import with fallback for Windows compatibility
 try:
@@ -76,10 +77,14 @@ class TaskStatus(Enum):
 
 class TaskResult:
     """Data class for task execution results."""
-    def __init__(self, task_file, command, start_time, end_time=None, status=None,
-                 exit_code=None, stdout="", stderr="", error_message="", duration=0.0,
-                 worker_id=0, memory_usage=0.0, cpu_usage=0.0, env_vars=None, arguments=None,
-                 stdout_truncated=False, stderr_truncated=False):
+    def __init__(self, task_file: Optional[str], command: str, start_time: datetime,
+                 end_time: Optional[datetime] = None, status: Optional[TaskStatus] = None,
+                 exit_code: Optional[int] = None, stdout: str = "", stderr: str = "",
+                 error_message: str = "", duration: float = 0.0, worker_id: int = 0,
+                 memory_usage: float = 0.0, cpu_usage: float = 0.0,
+                 env_vars: Optional[Dict[str, str]] = None,
+                 arguments: Optional[List[str]] = None,
+                 stdout_truncated: bool = False, stderr_truncated: bool = False):
         self.task_file = task_file
         self.command = command
         self.start_time = start_time
@@ -98,7 +103,7 @@ class TaskResult:
         self.stdout_truncated = stdout_truncated
         self.stderr_truncated = stderr_truncated
 
-    def to_jsonl(self, session_id, process_id=None):
+    def to_jsonl(self, session_id: str, process_id: Optional[int] = None) -> str:
         """Convert task result to JSONL format.
 
         Args:
@@ -682,8 +687,12 @@ def build_env_prefix(env_var, arguments):
 class SecureTaskExecutor:
     """Simplified task executor with basic security validation."""
 
-    def __init__(self, task_file, command_template, timeout, worker_id, logger, config,
-                 extra_env=None, task_arguments=None, task_number=None, total_tasks=None, env_var=None):
+    def __init__(self, task_file: Optional[str], command_template: str, timeout: int,
+                 worker_id: int, logger: logging.Logger, config: 'Configuration',
+                 extra_env: Optional[Dict[str, str]] = None,
+                 task_arguments: Optional[Union[List[str], str]] = None,
+                 task_number: Optional[int] = None, total_tasks: Optional[int] = None,
+                 env_var: Optional[str] = None):
         self.task_file = task_file
         self.command_template = command_template
         self.timeout = timeout
@@ -703,7 +712,7 @@ class SecureTaskExecutor:
         self._psutil_process = None  # Reusable psutil.Process for CPU monitoring
         self._cancelled = False
 
-    def _validate_task_file_security(self, task_file):
+    def _validate_task_file_security(self, task_file: Optional[str]) -> None:
         """Basic security validation for task file."""
         # Arguments-only mode: task_file can be None
         if task_file is None:
@@ -715,7 +724,7 @@ class SecureTaskExecutor:
         except OSError as e:
             raise SecurityError(f"Cannot access task file: {task_file}") from e
 
-    def _build_secure_command(self, task_file):
+    def _build_secure_command(self, task_file: Optional[str]) -> List[str]:
         """Build command arguments with basic security validation."""
         # Start with command template
         command_str = self.command_template
@@ -814,7 +823,7 @@ class SecureTaskExecutor:
         else:
             result.stderr = stderr
 
-    def execute(self):
+    def execute(self) -> TaskResult:
         """Execute task with basic security and monitoring."""
         start_time = datetime.now()
 
@@ -1152,10 +1161,14 @@ class ParallelTaskManager:
                 f"Tip: Use './{filename}' for relative paths or '--no-search' to disable fallback search."
             )
 
-    def __init__(self, max_workers, timeout, task_start_delay, tasks_paths, command_template,
-                 script_path, dry_run=False, enable_stop_limits=False, log_task_output=True,
-                 backup_inputs=True, file_extension=None, arguments_file=None, env_var=None,
-                 separator=None, debug=False, no_search=False, yes_to_prompts=False):
+    def __init__(self, max_workers: Optional[int], timeout: Optional[int],
+                 task_start_delay: Optional[float], tasks_paths: Optional[List[str]],
+                 command_template: str, script_path: str, dry_run: bool = False,
+                 enable_stop_limits: bool = False, log_task_output: bool = True,
+                 backup_inputs: bool = True, file_extension: Optional[str] = None,
+                 arguments_file: Optional[str] = None, env_var: Optional[str] = None,
+                 separator: Optional[str] = None, debug: bool = False,
+                 no_search: bool = False, yes_to_prompts: bool = False):
 
         self.config = Configuration.from_script(script_path)
         self.config.validate()
@@ -1926,7 +1939,7 @@ class ParallelTaskManager:
         signal.signal(signal.SIGINT, signal_handler)
         signal.signal(signal.SIGHUP, signal.SIG_IGN)
 
-    def execute_tasks(self):
+    def execute_tasks(self) -> Dict[str, int]:
         """Execute all tasks."""
         # Check if shutdown was requested during initialization (e.g., Ctrl+C during backup)
         if self.shutdown_requested:

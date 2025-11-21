@@ -92,11 +92,9 @@ def test_log_formatting_with_task_execution(tmp_path):
     mock_process.stdout.fileno.return_value = 100
     mock_process.stderr.fileno.return_value = 101
     
-    with (
-        patch('bin.parallelr.subprocess.Popen', return_value=mock_process),
-        patch('bin.parallelr.HAS_PSUTIL', False),
-        patch('bin.parallelr.HAS_FCNTL', False)
-    ):
+    with patch('bin.parallelr.subprocess.Popen', return_value=mock_process), \
+         patch('bin.parallelr.HAS_PSUTIL', False), \
+         patch('bin.parallelr.HAS_FCNTL', False):
         result = executor.execute()
 
     # Verify execution succeeded
@@ -184,11 +182,9 @@ def test_posix_process_group_with_setsid(tmp_path):
     # Mock subprocess.Popen to capture kwargs
     popen_mock = MagicMock(return_value=mock_process)
 
-    with (
-        patch('bin.parallelr.subprocess.Popen', popen_mock),
-        patch('bin.parallelr.HAS_PSUTIL', False),
-        patch('bin.parallelr.HAS_FCNTL', False)
-    ):
+    with patch('bin.parallelr.subprocess.Popen', popen_mock), \
+         patch('bin.parallelr.HAS_PSUTIL', False), \
+         patch('bin.parallelr.HAS_FCNTL', False):
         result = executor.execute()
 
     # Verify Popen was called with preexec_fn
