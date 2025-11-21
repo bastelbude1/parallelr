@@ -6,7 +6,7 @@ A robust parallel task execution framework with simplified configuration
 and practical security measures.
 """
 
-__version__ = "1.0.10"
+__version__ = "1.0.11"
 
 import os
 import sys
@@ -451,19 +451,30 @@ class Configuration:
         """Register this process in the PID file."""
         pidfile = self.get_pidfile_path()
         try:
-            existing_pids = set()
-            if pidfile.exists():
-                with open(str(pidfile), 'r') as f:
+            # Open in a+ to ensure creation, readable/writable
+            with open(str(pidfile), 'a+') as f:
+                if HAS_FCNTL:
+                    fcntl.flock(f.fileno(), fcntl.LOCK_EX)
+                
+                try:
+                    f.seek(0)
+                    existing_pids = set()
                     for line in f:
                         pid = line.strip()
                         if pid.isdigit():
                             existing_pids.add(int(pid))
 
-            existing_pids.add(process_id)
+                    existing_pids.add(process_id)
 
-            with open(str(pidfile), 'w') as f:
-                for pid in sorted(existing_pids):
-                    f.write(f"{pid}\n")
+                    f.seek(0)
+                    f.truncate()
+                    for pid in sorted(existing_pids):
+                        f.write(f"{pid}\n")
+                    f.flush()
+                    os.fsync(f.fileno())
+                finally:
+                    if HAS_FCNTL:
+                        fcntl.flock(f.fileno(), fcntl.LOCK_UN)
         except Exception as e:
             logging.getLogger(__name__).warning("Could not register process: %s", e)
 
@@ -474,21 +485,35 @@ class Configuration:
             if not pidfile.exists():
                 return
                 
-            existing_pids = set()
-            with open(str(pidfile), 'r') as f:
-                for line in f:
-                    pid = line.strip()
-                    if pid.isdigit():
-                        existing_pids.add(int(pid))
-            
-            existing_pids.discard(process_id)
-            
-            if existing_pids:
-                with open(str(pidfile), 'w') as f:
+            with open(str(pidfile), 'r+') as f:
+                if HAS_FCNTL:
+                    fcntl.flock(f.fileno(), fcntl.LOCK_EX)
+                
+                try:
+                    existing_pids = set()
+                    for line in f:
+                        pid = line.strip()
+                        if pid.isdigit():
+                            existing_pids.add(int(pid))
+                    
+                    existing_pids.discard(process_id)
+                    
+                    f.seek(0)
+                    f.truncate()
                     for pid in sorted(existing_pids):
                         f.write(f"{pid}\n")
-            else:
-                pidfile.unlink()
+                    f.flush()
+                    os.fsync(f.fileno())
+                finally:
+                    if HAS_FCNTL:
+                        fcntl.flock(f.fileno(), fcntl.LOCK_UN)
+            
+            # Cleanup if empty (race condition here is benign)
+            if pidfile.stat().st_size == 0:
+                try:
+                    pidfile.unlink()
+                except OSError:
+                    pass
 
         except Exception as e:
             logging.getLogger(__name__).warning("Could not unregister process: %s", e)
@@ -926,6 +951,13 @@ class SecureTaskExecutor:
                     fcntl.fcntl(stderr_fd, fcntl.F_SETFL, fl | os.O_NONBLOCK)
                 timeout_time = time.time() + self.timeout
 
+                # Why manual loop instead of communicate()?
+                # 1. Real-time Monitoring: We need to periodically check memory/CPU usage (self._monitor_process)
+                #    while the process is running. subprocess.communicate() blocks until completion.
+                # 2. Deadlock Prevention: We use non-blocking I/O with select() to read stdout/stderr
+                #    as they become available. This prevents buffer filling deadlocks that can occur
+                #    if we wait for the process to finish before reading.
+                # 3. Timeout Handling: We check the timeout explicitly in the loop to kill stuck processes.
                 while self._process.poll() is None:
                     if time.time() > timeout_time:
                         raise subprocess.TimeoutExpired(command_args, self.timeout)
