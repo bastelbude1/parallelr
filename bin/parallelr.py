@@ -1837,8 +1837,6 @@ class ParallelTaskManager:
 
                 if result.status == TaskStatus.TIMEOUT:
                     self.logger.warning(f"Task timed out after {self.timeout}s: {task_file}")
-                else:
-                    self.logger.warning(f"Task failed: {task_file} - {result.error_message}")
 
                 if self.config.limits.stop_limits_enabled and self._check_error_limits():
                     self.shutdown_requested = True
