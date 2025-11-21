@@ -1,6 +1,6 @@
 # parallelr - Parallel Task Executor
 
-**Version 1.0.5**
+**Version 1.0.6**
 
 [![CI](https://github.com/bastelbude1/parallelr/actions/workflows/ci.yml/badge.svg)](https://github.com/bastelbude1/parallelr/actions/workflows/ci.yml)
 [![codecov](https://codecov.io/gh/bastelbude1/parallelr/branch/master/graph/badge.svg)](https://codecov.io/gh/bastelbude1/parallelr)

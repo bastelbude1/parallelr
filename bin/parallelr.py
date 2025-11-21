@@ -6,7 +6,7 @@ A robust parallel task execution framework with simplified configuration
 and practical security measures.
 """
 
-__version__ = "1.0.5"
+__version__ = "1.0.6"
 
 import os
 import sys
@@ -700,6 +700,7 @@ class SecureTaskExecutor:
         self.total_tasks = total_tasks
         self.env_var = env_var  # For building display string
         self._process = None
+        self._psutil_process = None  # Reusable psutil.Process for CPU monitoring
         self._cancelled = False
 
     def _validate_task_file_security(self, task_file):
@@ -765,17 +766,22 @@ class SecureTaskExecutor:
         return args
 
     def _monitor_process(self):
-        """Monitor process resource usage."""
+        """Monitor process resource usage.
+
+        Reuses the same psutil.Process object that was primed during initialization.
+        This ensures CPU monitoring returns accurate values (first call to cpu_percent()
+        always returns 0, so we prime it once and reuse the same object).
+        """
         if not HAS_PSUTIL:
             return 0.0, 0.0
 
-        if not self._process:
+        if not self._process or not self._psutil_process:
             return 0.0, 0.0
 
         try:
-            process = psutil.Process(self._process.pid)
-            memory_mb = process.memory_info().rss / 1024 / 1024
-            cpu_percent = process.cpu_percent(interval=0)  # Non-blocking
+            # Reuse the primed psutil.Process object (not creating a new one!)
+            memory_mb = self._psutil_process.memory_info().rss / 1024 / 1024
+            cpu_percent = self._psutil_process.cpu_percent(interval=0)  # Non-blocking
             return memory_mb, cpu_percent
         except (psutil.NoSuchProcess, psutil.AccessDenied, ProcessLookupError):
             # Process ended or no permission
@@ -870,12 +876,13 @@ class SecureTaskExecutor:
             self._process = subprocess.Popen(command_args, **popen_kwargs)
 
             # Prime CPU monitoring (first call returns 0, subsequent calls return actual %)
+            # Store the psutil.Process object to reuse it throughout monitoring
             if HAS_PSUTIL:
                 try:
-                    process = psutil.Process(self._process.pid)
-                    process.cpu_percent()  # Initialize CPU monitoring
+                    self._psutil_process = psutil.Process(self._process.pid)
+                    self._psutil_process.cpu_percent()  # Initialize CPU monitoring
                 except (psutil.NoSuchProcess, psutil.AccessDenied):
-                    pass
+                    self._psutil_process = None
 
             try:
                 # Real-time output capture with timeout handling
