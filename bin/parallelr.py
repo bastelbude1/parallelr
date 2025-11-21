@@ -2627,7 +2627,7 @@ def parse_arguments():
                            "Must start with a letter or underscore and contain only alphanumeric characters or underscores.")
 
     # Validate separator is only used with arguments file
-    if hasattr(args, 'separator') and args.separator and not args.arguments_file:
+    if args.separator and not args.arguments_file:
         parser.error("-S/--separator can only be used with -A/--arguments-file")
 
     # Special handling for ptasker mode
@@ -2913,7 +2913,7 @@ def main():
         if args.timeout and args.timeout <= 0:
             raise ParallelTaskExecutorError("Timeout must be positive")
 
-        if args.sleep:
+        if args.sleep is not None:
             if args.sleep < 0:
                 raise ParallelTaskExecutorError("Task start delay cannot be negative")
             if args.sleep > 60.0:
@@ -2933,10 +2933,10 @@ def main():
             file_extension=args.file_extension,
             arguments_file=args.arguments_file,
             env_var=args.env_var,
-            separator=args.separator if hasattr(args, 'separator') else None,
-            debug=args.debug if hasattr(args, 'debug') else False,
-            no_search=args.no_search if hasattr(args, 'no_search') else False,
-            yes_to_prompts=args.yes_to_prompts if hasattr(args, 'yes_to_prompts') else False
+            separator=args.separator,
+            debug=args.debug,
+            no_search=args.no_search,
+            yes_to_prompts=args.yes_to_prompts
         )
         
         if args.daemon:
