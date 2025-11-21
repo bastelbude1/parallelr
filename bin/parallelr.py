@@ -2403,6 +2403,27 @@ def generate_project_id():
     unique_id = secrets.token_hex(3)  # 6 hex chars
     return f"parallelr_{unique_id}"
 
+def _configure_ptasker_mode(args):
+    """Configure arguments for ptasker mode."""
+    # Skip configuration for non-execution commands
+    if (args.list_workers or args.kill is not None or
+            args.validate_config or args.show_config or args.check_dependencies):
+        return
+
+    # Generate or use provided project name
+    if not args.project:
+        args.project = generate_project_id()
+        print(f"Auto-generated project: {args.project}")
+
+    # Auto-generate command for TASKER
+    args.Command = f"tasker @TASK@ -p {args.project} -r"
+    print(f"Using command: {args.Command}")
+
+    # If arguments file is provided, automatically set HOSTNAME as env var
+    if args.arguments_file and not args.env_var:
+        args.env_var = 'HOSTNAME'
+        print("Auto-setting environment variable: HOSTNAME")
+
 def parse_arguments():
     """Parse and validate command line arguments."""
     ptasker_mode = is_ptasker_mode()
@@ -2592,21 +2613,8 @@ Examples:
         parser.error("-S/--separator can only be used with -A/--arguments-file")
 
     # Special handling for ptasker mode
-    if ptasker_mode and not (args.list_workers or args.kill is not None or
-                             args.validate_config or args.show_config or args.check_dependencies):
-        # Generate or use provided project name
-        if not args.project:
-            args.project = generate_project_id()
-            print(f"Auto-generated project: {args.project}")
-
-        # Auto-generate command for TASKER
-        args.Command = f"tasker @TASK@ -p {args.project} -r"
-        print(f"Using command: {args.Command}")
-
-        # If arguments file is provided, automatically set HOSTNAME as env var
-        if args.arguments_file and not args.env_var:
-            args.env_var = 'HOSTNAME'
-            print("Auto-setting environment variable: HOSTNAME")
+    if ptasker_mode:
+        _configure_ptasker_mode(args)
 
     if args.list_workers or args.kill is not None:
         return args
