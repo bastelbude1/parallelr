@@ -26,7 +26,7 @@ This project follows **Semantic Versioning** for release management:
 1. `bin/parallelr.py` - Update `__version__` variable (around line 9)
 2. `README.md` - Update version header (around line 3)
 
-**Current Version**: `1.0.4`
+**Current Version**: `1.0.5`
 
 ## ⚠️ CRITICAL: Python 3.6.8 Compatibility Requirement
 
