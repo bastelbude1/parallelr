@@ -6,7 +6,7 @@ A robust parallel task execution framework with simplified configuration
 and practical security measures.
 """
 
-__version__ = "1.0.6"
+__version__ = "1.0.7"
 
 import os
 import sys
@@ -796,6 +796,24 @@ class SecureTaskExecutor:
             return f"[{self.task_number}/{self.total_tasks}]"
         return ""
 
+    def _process_output(self, result, stdout_lines, stderr_lines):
+        """Process captured output, applying truncation limits and updating result."""
+        stdout = ''.join(stdout_lines)
+        stderr = ''.join(stderr_lines)
+        max_capture = self.config.limits.max_output_capture
+
+        if stdout and len(stdout) > max_capture:
+            result.stdout_truncated = True
+            result.stdout = stdout[-max_capture:]
+        else:
+            result.stdout = stdout
+
+        if stderr and len(stderr) > max_capture:
+            result.stderr_truncated = True
+            result.stderr = stderr[-max_capture:]
+        else:
+            result.stderr = stderr
+
     def execute(self):
         """Execute task with basic security and monitoring."""
         start_time = datetime.now()
@@ -956,22 +974,7 @@ class SecureTaskExecutor:
                 result.exit_code = self._process.returncode
 
                 # Combine captured output - capture LAST N chars (errors appear at end)
-                stdout = ''.join(stdout_lines)
-                stderr = ''.join(stderr_lines)
-                max_capture = self.config.limits.max_output_capture
-
-                # Track truncation for accurate reporting
-                if stdout and len(stdout) > max_capture:
-                    result.stdout_truncated = True
-                    result.stdout = stdout[-max_capture:]
-                else:
-                    result.stdout = stdout
-
-                if stderr and len(stderr) > max_capture:
-                    result.stderr_truncated = True
-                    result.stderr = stderr[-max_capture:]
-                else:
-                    result.stderr = stderr
+                self._process_output(result, stdout_lines, stderr_lines)
 
                 # Update final metrics before logging
                 result.duration = (datetime.now() - result.start_time).total_seconds()
@@ -996,22 +999,7 @@ class SecureTaskExecutor:
                 result.error_message = "Timeout after {}s".format(self.timeout)
 
                 # Capture any output before terminating - capture LAST N chars
-                stdout = ''.join(stdout_lines)
-                stderr = ''.join(stderr_lines)
-                max_capture = self.config.limits.max_output_capture
-
-                # Track truncation for accurate reporting
-                if stdout and len(stdout) > max_capture:
-                    result.stdout_truncated = True
-                    result.stdout = stdout[-max_capture:]
-                else:
-                    result.stdout = stdout
-
-                if stderr and len(stderr) > max_capture:
-                    result.stderr_truncated = True
-                    result.stderr = stderr[-max_capture:]
-                else:
-                    result.stderr = stderr
+                self._process_output(result, stdout_lines, stderr_lines)
 
                 self._terminate_process()
         
@@ -1022,11 +1010,7 @@ class SecureTaskExecutor:
             result.status = TaskStatus.ERROR
             result.error_message = f"Error: {e}"
             # Capture any partial output - capture LAST N chars (errors at end)
-            stdout = ''.join(stdout_lines)
-            stderr = ''.join(stderr_lines)
-            max_capture = self.config.limits.max_output_capture
-            result.stdout = stdout[-max_capture:] if stdout else ""
-            result.stderr = stderr[-max_capture:] if stderr else ""
+            self._process_output(result, stdout_lines, stderr_lines)
         
         finally:
             result.end_time = datetime.now()
