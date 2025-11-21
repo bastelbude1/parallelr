@@ -28,18 +28,19 @@ class TestPTaskerConfig(unittest.TestCase):
 
     def test_configure_ptasker_auto_generate_project(self):
         """Test auto-generation of project name."""
-        with patch('builtins.print') as mock_print:
+        with patch('builtins.print'):
             _configure_ptasker_mode(self.args)
             
             self.assertTrue(self.args.project.startswith('parallelr_'))
-            self.assertEqual(len(self.args.project), 16)  # parallelr_ + 6 chars
+            # 'parallelr_' (10) + 6 generated chars = 16
+            self.assertEqual(len(self.args.project), 16)
             self.assertEqual(self.args.Command, f"tasker @TASK@ -p {self.args.project} -r")
 
     def test_configure_ptasker_use_provided_project(self):
         """Test using provided project name."""
         self.args.project = "my_project"
         
-        with patch('builtins.print') as mock_print:
+        with patch('builtins.print'):
             _configure_ptasker_mode(self.args)
             
             self.assertEqual(self.args.project, "my_project")
@@ -49,7 +50,7 @@ class TestPTaskerConfig(unittest.TestCase):
         """Test auto-setting env var when arguments file is present."""
         self.args.arguments_file = "args.txt"
         
-        with patch('builtins.print') as mock_print:
+        with patch('builtins.print'):
             _configure_ptasker_mode(self.args)
             
             self.assertEqual(self.args.env_var, "HOSTNAME")
@@ -59,7 +60,7 @@ class TestPTaskerConfig(unittest.TestCase):
         self.args.arguments_file = "args.txt"
         self.args.env_var = "CUSTOM_VAR"
         
-        with patch('builtins.print') as mock_print:
+        with patch('builtins.print'):
             _configure_ptasker_mode(self.args)
             
             self.assertEqual(self.args.env_var, "CUSTOM_VAR")
