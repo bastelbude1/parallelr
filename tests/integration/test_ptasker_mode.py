@@ -205,3 +205,46 @@ def test_regular_parallelr_help_shows_optional_flag():
         "Help text should indicate -T is optional with -A in regular parallelr"
     assert "Omit -T with -A to execute commands directly" in result.stdout, \
         "Help text should explain -T can be omitted in arguments mode"
+
+@pytest.mark.integration
+@pytest.mark.skipif(
+    os.name == 'nt' and not os.getenv('ENABLE_SYMLINKS'),
+    reason="Requires admin rights or developer mode on Windows. Set ENABLE_SYMLINKS=1 to run."
+)
+def test_ptasker_implicit_hostname_env(tmp_path):
+    """
+    Test that ptasker automatically sets HOSTNAME env var if not provided.
+    
+    Note: Requires symlink support (admin/developer mode on Windows).
+    """
+    # Create a ptasker symlink
+    ptasker_link = tmp_path / "ptasker"
+    ptasker_link.symlink_to(PARALLELR_BIN)
+    
+    # Create files
+    args_file = tmp_path / "args.txt"
+    args_file.write_text("arg1\n")
+    
+    template_file = tmp_path / "template.sh"
+    template_file.write_text("#!/bin/bash\necho test\n")
+    template_file.chmod(0o755)
+    
+    # Run ptasker
+    result = subprocess.run(  # noqa: S603
+        [PYTHON_FOR_PARALLELR, str(ptasker_link),
+         '-A', str(args_file),
+         '-T', str(template_file),
+         '-p', 'test_proj'], # Dry run by default if -r not passed? No, default is dry-run.
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        universal_newlines=True,
+        timeout=10
+    )
+    
+    assert result.returncode == 0, f"Execution failed: {result.stderr}"
+    
+    output = result.stdout + result.stderr
+    
+    # Verify log message from _configure_ptasker_mode
+    assert "Auto-setting environment variable: HOSTNAME" in output, \
+        "Expected 'Auto-setting environment variable: HOSTNAME' in output"

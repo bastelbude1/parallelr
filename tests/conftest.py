@@ -268,3 +268,6 @@ def pytest_configure(config):
     config.addinivalue_line(
         "markers", "smoke: marks tests as smoke tests (quick validation)"
     )
+    config.addinivalue_line(
+        "markers", "e2e: marks tests as end-to-end tests"
+    )

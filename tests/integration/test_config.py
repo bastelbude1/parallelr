@@ -452,3 +452,46 @@ def test_config_missing_user_file_uses_defaults(isolated_env):
     actual_workers = int(workers_match.group(1))
     assert actual_workers == expected_default_workers, \
         f"Expected Workers={expected_default_workers} from script config, got {actual_workers}"
+
+@pytest.mark.integration
+def test_cli_overrides_user_config(temp_dir, isolated_env):
+    """
+    Test that CLI arguments override user configuration values during execution.
+    
+    User config: max_workers=2
+    CLI: -m 10
+    Result should be 10.
+    """
+    # Create user config directory
+    user_config_dir = isolated_env['home'] / 'parallelr' / 'cfg'
+    user_config_dir.mkdir(parents=True)
+    
+    # Create user config with max_workers=2
+    user_config = user_config_dir / 'parallelr.yaml'
+    user_config.write_text("limits:\n  max_workers: 2\n")
+    
+    # Create dummy task
+    task_file = temp_dir / "task.sh"
+    task_file.write_text("#!/bin/bash\necho test\n")
+    task_file.chmod(0o755)
+    
+    # Run execution with -m 10 (CLI override)
+    result = run_parallelr([
+        '-T', str(task_file),
+        '-C', 'bash @TASK@',
+        '-r',
+        '-m', '10'
+    ], isolated_env)
+    
+    assert result.returncode == 0, f"Command failed: {result.stderr}"
+    
+    # Verify output shows 10 (CLI) not 2 (User)
+    output = result.stdout + result.stderr
+    
+    # Look for "Workers: 10" in the execution log header
+    workers_match = re.search(r'Workers:\s+(\d+)', output)
+    assert workers_match, f"Could not find 'Workers:' pattern in output:\n{output}"
+    
+    actual_workers = int(workers_match.group(1))
+    assert actual_workers == 10, \
+        f"Expected Workers=10 from CLI override, got {actual_workers}. Output:\n{output}"
