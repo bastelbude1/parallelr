@@ -4,7 +4,7 @@ import sys
 import os
 from datetime import datetime
 
-from parallelr import SecureTaskExecutor, TaskResult, TaskStatus, Configuration
+from parallelr import SecureTaskExecutor, TaskResult
 
 class TestExecutorOutput(unittest.TestCase):
     def setUp(self):
@@ -72,6 +72,7 @@ class TestExecutorOutput(unittest.TestCase):
         self.assertEqual(len(result.stdout), 100)
         self.assertEqual(result.stdout, exact_line)
         self.assertFalse(result.stdout_truncated)
+        self.assertFalse(result.stderr_truncated)
 
     def test_process_output_empty(self):
         """Test processing empty output."""
@@ -82,6 +83,7 @@ class TestExecutorOutput(unittest.TestCase):
         self.assertEqual(result.stdout, "")
         self.assertEqual(result.stderr, "")
         self.assertFalse(result.stdout_truncated)
+        self.assertFalse(result.stderr_truncated)
 
 if __name__ == '__main__':
     unittest.main()
