@@ -6,7 +6,7 @@ A robust parallel task execution framework with simplified configuration
 and practical security measures.
 """
 
-__version__ = "1.0.6"
+__version__ = "1.0.7"
 
 import os
 import sys
@@ -796,6 +796,24 @@ class SecureTaskExecutor:
             return f"[{self.task_number}/{self.total_tasks}]"
         return ""
 
+    def _process_output(self, result, stdout_lines, stderr_lines):
+        """Process captured output, applying truncation limits and updating result."""
+        stdout = ''.join(stdout_lines)
+        stderr = ''.join(stderr_lines)
+        max_capture = self.config.limits.max_output_capture
+
+        if stdout and len(stdout) > max_capture:
+            result.stdout_truncated = True
+            result.stdout = stdout[-max_capture:]
+        else:
+            result.stdout = stdout
+
+        if stderr and len(stderr) > max_capture:
+            result.stderr_truncated = True
+            result.stderr = stderr[-max_capture:]
+        else:
+            result.stderr = stderr
+
     def execute(self):
         """Execute task with basic security and monitoring."""
         start_time = datetime.now()
@@ -956,22 +974,7 @@ class SecureTaskExecutor:
                 result.exit_code = self._process.returncode
 
                 # Combine captured output - capture LAST N chars (errors appear at end)
-                stdout = ''.join(stdout_lines)
-                stderr = ''.join(stderr_lines)
-                max_capture = self.config.limits.max_output_capture
-
-                # Track truncation for accurate reporting
-                if stdout and len(stdout) > max_capture:
-                    result.stdout_truncated = True
-                    result.stdout = stdout[-max_capture:]
-                else:
-                    result.stdout = stdout
-
-                if stderr and len(stderr) > max_capture:
-                    result.stderr_truncated = True
-                    result.stderr = stderr[-max_capture:]
-                else:
-                    result.stderr = stderr
+                self._process_output(result, stdout_lines, stderr_lines)
 
                 # Update final metrics before logging
                 result.duration = (datetime.now() - result.start_time).total_seconds()
@@ -996,22 +999,7 @@ class SecureTaskExecutor:
                 result.error_message = "Timeout after {}s".format(self.timeout)
 
                 # Capture any output before terminating - capture LAST N chars
-                stdout = ''.join(stdout_lines)
-                stderr = ''.join(stderr_lines)
-                max_capture = self.config.limits.max_output_capture
-
-                # Track truncation for accurate reporting
-                if stdout and len(stdout) > max_capture:
-                    result.stdout_truncated = True
-                    result.stdout = stdout[-max_capture:]
-                else:
-                    result.stdout = stdout
-
-                if stderr and len(stderr) > max_capture:
-                    result.stderr_truncated = True
-                    result.stderr = stderr[-max_capture:]
-                else:
-                    result.stderr = stderr
+                self._process_output(result, stdout_lines, stderr_lines)
 
                 self._terminate_process()
         
@@ -1022,11 +1010,7 @@ class SecureTaskExecutor:
             result.status = TaskStatus.ERROR
             result.error_message = f"Error: {e}"
             # Capture any partial output - capture LAST N chars (errors at end)
-            stdout = ''.join(stdout_lines)
-            stderr = ''.join(stderr_lines)
-            max_capture = self.config.limits.max_output_capture
-            result.stdout = stdout[-max_capture:] if stdout else ""
-            result.stderr = stderr[-max_capture:] if stderr else ""
+            self._process_output(result, stdout_lines, stderr_lines)
         
         finally:
             result.end_time = datetime.now()
@@ -2419,6 +2403,27 @@ def generate_project_id():
     unique_id = secrets.token_hex(3)  # 6 hex chars
     return f"parallelr_{unique_id}"
 
+def _configure_ptasker_mode(args):
+    """Configure arguments for ptasker mode."""
+    # Skip configuration for non-execution commands
+    if (args.list_workers or args.kill is not None or
+            args.validate_config or args.show_config or args.check_dependencies):
+        return
+
+    # Generate or use provided project name
+    if not args.project:
+        args.project = generate_project_id()
+        print(f"Auto-generated project: {args.project}")
+
+    # Auto-generate command for TASKER
+    args.Command = f"tasker @TASK@ -p {args.project} -r"
+    print(f"Using command: {args.Command}")
+
+    # If arguments file is provided, automatically set HOSTNAME as env var
+    if args.arguments_file and not args.env_var:
+        args.env_var = 'HOSTNAME'
+        print("Auto-setting environment variable: HOSTNAME")
+
 def parse_arguments():
     """Parse and validate command line arguments."""
     ptasker_mode = is_ptasker_mode()
@@ -2608,21 +2613,8 @@ Examples:
         parser.error("-S/--separator can only be used with -A/--arguments-file")
 
     # Special handling for ptasker mode
-    if ptasker_mode and not (args.list_workers or args.kill is not None or
-                             args.validate_config or args.show_config or args.check_dependencies):
-        # Generate or use provided project name
-        if not args.project:
-            args.project = generate_project_id()
-            print(f"Auto-generated project: {args.project}")
-
-        # Auto-generate command for TASKER
-        args.Command = f"tasker @TASK@ -p {args.project} -r"
-        print(f"Using command: {args.Command}")
-
-        # If arguments file is provided, automatically set HOSTNAME as env var
-        if args.arguments_file and not args.env_var:
-            args.env_var = 'HOSTNAME'
-            print("Auto-setting environment variable: HOSTNAME")
+    if ptasker_mode:
+        _configure_ptasker_mode(args)
 
     if args.list_workers or args.kill is not None:
         return args
