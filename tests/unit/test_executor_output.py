@@ -4,8 +4,6 @@ import sys
 import os
 from datetime import datetime
 
-# Adjust path to import parallelr
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../../bin')))
 from parallelr import SecureTaskExecutor, TaskResult, TaskStatus, Configuration
 
 class TestExecutorOutput(unittest.TestCase):
