@@ -6,7 +6,7 @@ A robust parallel task execution framework with simplified configuration
 and practical security measures.
 """
 
-__version__ = "1.0.9"
+__version__ = "1.0.10"
 
 import os
 import sys
@@ -852,16 +852,18 @@ class SecureTaskExecutor:
         try:
             self._validate_task_file_security(self.task_file)
             command_args = self._build_secure_command(self.task_file)
-            result.command = ' '.join(command_args)
+            base_command = ' '.join(command_args)
 
             # Log command in one-line format matching dry run mode
             # Build env prefix if we have environment variables
             env_prefix = build_env_prefix(self.env_var, self.task_arguments) if self.env_var and self.task_arguments else ""
 
+            # Set result.command to full command string including env prefix
+            result.command = f"{env_prefix}{base_command}"
+
             # Format: [X/N]: ENV_VAR=value command
             progress_str = self._get_progress_str()
-            command_with_env = f"{env_prefix}{result.command}"
-            self.logger.info(f"{progress_str}: {command_with_env}")
+            self.logger.info(f"{progress_str}: {result.command}")
 
             result.status = TaskStatus.RUNNING
             
