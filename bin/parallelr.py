@@ -6,7 +6,7 @@ A robust parallel task execution framework with simplified configuration
 and practical security measures.
 """
 
-__version__ = "1.0.8"
+__version__ = "1.0.9"
 
 import os
 import sys
@@ -2416,31 +2416,8 @@ def generate_project_id():
     unique_id = secrets.token_hex(3)  # 6 hex chars
     return f"parallelr_{unique_id}"
 
-def _configure_ptasker_mode(args):
-    """Configure arguments for ptasker mode."""
-    # Skip configuration for non-execution commands
-    if (args.list_workers or args.kill is not None or
-            args.validate_config or args.show_config or args.check_dependencies):
-        return
-
-    # Generate or use provided project name
-    if not args.project:
-        args.project = generate_project_id()
-        print(f"Auto-generated project: {args.project}")
-
-    # Auto-generate command for TASKER
-    args.Command = f"tasker @TASK@ -p {args.project} -r"
-    print(f"Using command: {args.Command}")
-
-    # If arguments file is provided, automatically set HOSTNAME as env var
-    if args.arguments_file and not args.env_var:
-        args.env_var = 'HOSTNAME'
-        print("Auto-setting environment variable: HOSTNAME")
-
-def parse_arguments():
-    """Parse and validate command line arguments."""
-    ptasker_mode = is_ptasker_mode()
-
+def _create_argument_parser(ptasker_mode: bool) -> argparse.ArgumentParser:
+    """Create and configure the argument parser."""
     if ptasker_mode:
         description = "Parallel Task Executor for TASKER - Simplified Interface"
         epilog = """
@@ -2604,7 +2581,35 @@ Examples:
     parser.add_argument('-y', '--yes', action='store_true',
                        dest='yes_to_prompts',
                        help='Automatically confirm prompts (for automation/CI pipelines)')
+    
+    return parser
 
+def _configure_ptasker_mode(args):
+    """Configure arguments for ptasker mode."""
+    # Skip configuration for non-execution commands
+    if (args.list_workers or args.kill is not None or
+            args.validate_config or args.show_config or args.check_dependencies):
+        return
+
+    # Generate or use provided project name
+    if not args.project:
+        args.project = generate_project_id()
+        print(f"Auto-generated project: {args.project}")
+
+    # Auto-generate command for TASKER
+    args.Command = f"tasker @TASK@ -p {args.project} -r"
+    print(f"Using command: {args.Command}")
+
+    # If arguments file is provided, automatically set HOSTNAME as env var
+    if args.arguments_file and not args.env_var:
+        args.env_var = 'HOSTNAME'
+        print("Auto-setting environment variable: HOSTNAME")
+
+def parse_arguments():
+    """Parse and validate command line arguments."""
+    ptasker_mode = is_ptasker_mode()
+
+    parser = _create_argument_parser(ptasker_mode)
     args = parser.parse_args()
 
     # Validate environment variable name(s) if provided
