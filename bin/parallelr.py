@@ -507,13 +507,6 @@ class Configuration:
                 finally:
                     if HAS_FCNTL:
                         fcntl.flock(f.fileno(), fcntl.LOCK_UN)
-            
-            # Cleanup if empty (race condition here is benign)
-            if pidfile.stat().st_size == 0:
-                try:
-                    pidfile.unlink()
-                except OSError:
-                    pass
 
         except Exception as e:
             logging.getLogger(__name__).warning("Could not unregister process: %s", e)
@@ -988,6 +981,8 @@ class SecureTaskExecutor:
                                     break
                     else:
                         # Windows fallback: just sleep briefly
+                        # WARNING: This does not drain pipes during execution.
+                        # Large output may fill the buffer and cause deadlock on Windows.
                         time.sleep(0.1)
 
                 # Read any remaining output

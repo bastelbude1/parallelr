@@ -194,10 +194,10 @@ def test_unregister_process_removes_pid(config_with_temp_home):
     # Register and then unregister
     config.register_process(test_pid)
     config.unregister_process(test_pid)
-
-    # PID file should be removed (no PIDs left)
-    assert not pid_file.exists()
-
+    
+    # PID file should exist but be empty
+    assert pid_file.exists()
+    assert pid_file.stat().st_size == 0
 
 @pytest.mark.unit
 def test_unregister_process_preserves_other_pids(config_with_temp_home):
