@@ -6,7 +6,7 @@ A robust parallel task execution framework with simplified configuration
 and practical security measures.
 """
 
-__version__ = "1.0.4"
+__version__ = "1.0.5"
 
 import os
 import sys
@@ -162,7 +162,7 @@ class LimitsConfig:
         self.max_workers = 20
         self.timeout_seconds = 600
         self.wait_time = 0.1
-        self.task_start_delay = 0.0  # Delay between starting new tasks (seconds)
+        self.task_start_delay = 0.5  # Delay between starting new tasks (seconds) - prevents thundering herd
         self.max_output_capture = 1000
         self.max_allowed_workers = 100
         self.max_allowed_timeout = 3600

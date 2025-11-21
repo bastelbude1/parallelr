@@ -1,6 +1,6 @@
 # parallelr - Parallel Task Executor
 
-**Version 1.0.4**
+**Version 1.0.5**
 
 [![CI](https://github.com/bastelbude1/parallelr/actions/workflows/ci.yml/badge.svg)](https://github.com/bastelbude1/parallelr/actions/workflows/ci.yml)
 [![codecov](https://codecov.io/gh/bastelbude1/parallelr/branch/master/graph/badge.svg)](https://codecov.io/gh/bastelbude1/parallelr)
@@ -140,7 +140,7 @@ parallelr --check-dependencies
 | `-r, --run` | Execute tasks (without this flag, runs in dry-run mode). **Dry-run mode** shows full command with environment variables (e.g., `HOSTNAME=value cmd`). **Execution mode** sets environment variables internally and passes them to subprocesses. |
 | `-m, --max N` | Maximum parallel workers (default: 20, max: 100, overrides config) |
 | `-t, --timeout N` | Task timeout in seconds (default: 600, max: 3600, overrides config) |
-| `-s, --sleep N` | Delay between starting new tasks (0-60 seconds, default: 0). Use to throttle resource consumption |
+| `-s, --sleep N` | Delay between starting new tasks (0-60 seconds, default: 0.5). Prevents thundering herd. Use `-s 0` to disable |
 | `--file-extension EXT` | Filter task files by extension(s). Single: `txt`, Multiple: `txt,log,dat` |
 | `-A, --arguments-file FILE` | File containing arguments, one per line. Each line becomes a parallel task |
 | `-E, --env-var NAME` | Environment variable name to set with argument value (e.g., HOSTNAME) |
@@ -502,7 +502,7 @@ limits:
   max_workers: 20              # Number of parallel workers
   timeout_seconds: 600         # Task timeout (10 minutes)
   wait_time: 0.1               # Polling interval when all workers busy (config file only, 0.01-10.0 seconds)
-  task_start_delay: 0.0       # Delay between starting new tasks (0-60 seconds)
+  task_start_delay: 0.5       # Delay between starting new tasks (0-60 seconds, prevents thundering herd)
   max_output_capture: 1000     # Maximum characters of stdout/stderr to capture (last N chars)
 
   # System-enforced maximums (script config only)
@@ -529,9 +529,9 @@ limits:
   - `>2.0`: Not recommended - workers may sit idle waiting for next poll
   - **Note**: Config file only - not available as command line argument
 
-- **task_start_delay**: Delay in seconds between starting new tasks. Use this to throttle resource consumption when running many small tasks. Range: 0-60 seconds.
-  - `0`: No delay - tasks start as fast as possible (default)
-  - `0.1-1.0`: Light throttling for API rate limits or I/O management
+- **task_start_delay**: Delay in seconds between starting new tasks. **Default: 0.5 seconds** to prevent thundering herd problem. Range: 0-60 seconds.
+  - `0`: No delay - tasks start as fast as possible (use `-s 0` to disable default delay)
+  - `0.1-1.0`: Light throttling for API rate limits or I/O management (default is 0.5)
   - `1.0-5.0`: Moderate throttling for database connections or network bandwidth
   - `>5.0`: Heavy throttling for very resource-intensive tasks
   - **Use cases**: API rate limiting, gradual connection pooling, filesystem I/O throttling, load ramp-up

@@ -7,6 +7,7 @@ limits:
   max_workers: 20              # Default number of parallel workers
   timeout_seconds: 600         # Default task timeout in seconds (10 minutes)
   wait_time: 0.1               # Polling interval in seconds
+  task_start_delay: 0.5        # Delay between starting tasks in seconds (prevents thundering herd)
   max_output_capture: 1000     # Maximum characters of output to capture (last N chars - errors at end)
 
   # Maximum values users are allowed to override
