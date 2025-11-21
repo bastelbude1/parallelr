@@ -16,11 +16,15 @@ class TestTaskManager(unittest.TestCase):
         self.mock_config.limits.min_tasks_for_rate_check = 4
         self.mock_config.get_log_directory.return_value = Path("/tmp")
         self.mock_config.get_custom_timestamp.return_value = "2025"
+        # Configure logging mock to return strings/ints
+        self.mock_config.logging.level = "INFO"
+        self.mock_config.logging.max_log_size_mb = 10
+        self.mock_config.logging.backup_count = 5
         
-        with patch('bin.parallelr.Configuration.from_script', return_value=self.mock_config), \
-             patch('bin.parallelr.Configuration.validate'), \
-             patch('bin.parallelr.Configuration.register_process'), \
-             patch('bin.parallelr.Configuration.cleanup_stale_pids'):
+        with patch('parallelr.Configuration.from_script', return_value=self.mock_config), \
+             patch('parallelr.Configuration.validate'), \
+             patch('parallelr.Configuration.register_process'), \
+             patch('parallelr.Configuration.cleanup_stale_pids'):
             
             self.manager = ParallelTaskManager(
                 max_workers=1,
@@ -28,7 +32,7 @@ class TestTaskManager(unittest.TestCase):
                 task_start_delay=0,
                 tasks_paths=[],
                 command_template="echo",
-                script_path="/tmp/script.py",
+                script_path="mock_script.py",
                 dry_run=True,
                 enable_stop_limits=True # Explicitly enable
             )

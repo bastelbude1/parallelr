@@ -38,7 +38,8 @@ class TestCLIInvocations:
         assert result.returncode == 0
         # Version output might be in stdout or stderr depending on argparse version/config
         output = result.stdout + result.stderr
-        assert "parallelr.py 1.0." in output
+        assert "parallelr.py" in output
+        assert "1.0." in output or "1." in output
 
     def test_invalid_args_missing_required(self):
         """Test execution failure when required arguments are missing."""

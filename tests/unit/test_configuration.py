@@ -9,11 +9,11 @@ from parallelr import Configuration, ConfigurationError
 
 class TestConfiguration(unittest.TestCase):
     def setUp(self):
-        self.script_path = "/tmp/mock_script.py"
+        self.script_path = "mock_script.py"
         
     def test_defaults(self):
         """Test default configuration values."""
-        with patch('bin.parallelr.Path.exists', return_value=False):
+        with patch('parallelr.Path.exists', return_value=False):
             config = Configuration(self.script_path)
             
             self.assertEqual(config.limits.max_workers, 20)
@@ -23,8 +23,8 @@ class TestConfiguration(unittest.TestCase):
     def test_validation_clamping(self):
         """Test that user values are clamped to maximums."""
         # Prevent loading from disk
-        with patch('bin.parallelr.Configuration._load_script_config'), \
-             patch('bin.parallelr.Configuration._load_user_config'):
+        with patch('parallelr.Configuration._load_script_config'), \
+             patch('parallelr.Configuration._load_user_config'):
             
             config = Configuration(self.script_path)
             
@@ -47,7 +47,7 @@ class TestConfiguration(unittest.TestCase):
 
     def test_validation_errors(self):
         """Test validation of invalid values."""
-        with patch('bin.parallelr.Path.exists', return_value=False):
+        with patch('parallelr.Path.exists', return_value=False):
             config = Configuration(self.script_path)
             
             # Set invalid values
